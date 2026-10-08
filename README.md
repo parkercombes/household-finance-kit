@@ -72,7 +72,7 @@ python scripts/privacy_scan.py --root .
 
 The design includes these planned commands. They are listed here to show direction, not current functionality.
 
-- Planned (M1): `hfk dev fixture` for generating synthetic Tiller workbooks.
+- Available now (M1): `hfk dev fixture --out PATH` generates a synthetic Tiller workbook for tests and demos.
 - Planned (M2): `hfk doctor` for config validation and loud data-quality checks.
 - Planned (M3): `hfk scorecard --month YYYY-MM` for monthly plan-vs-actual by bucket.
 - Planned (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan edit`.
@@ -86,7 +86,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | Milestone | Status | Summary |
 |---|---:|---|
 | M0 | Done | Foundations: design brief, docs, skeleton, CI, privacy scan, Tiller guard hook |
-| M1 | Planned | Reader, Ledger types, synthetic workbook fixture |
+| M1 | Done | Reader, Ledger types, synthetic workbook fixture |
 | M2 | Planned | Config loading, validation, and `hfk doctor` |
 | M3 | Planned | Ownership, bucket mapping, monthly scorecard |
 | M4 | Planned | Category targets, balances, net worth, renewals, rebaseline, plan editor |
