@@ -349,3 +349,38 @@ Plan history is preserved in the file itself, so past months stay reproducible a
 dates, and categories; M3-06 reports the conflicts. The example plan shows a dated amount
 change. Existing private plans that use `type` need a one-word rename, which `doctor`
 should name explicitly.
+
+## ADR-0011: The Group-to-Bucket Map Is Declared, Never Inferred
+
+Status: accepted
+Date: 2026-10-08
+
+### Context
+
+`mapping_source: tiller_group` says a category takes its bucket from its Tiller `Group`,
+but the design never said how a group name such as `Housing` reaches a bucket such as
+`Fixed Essential` when the names differ, which they always do. The example override even
+mapped `Housing`, a group, as if it were a category. Left open, an implementer would
+either match strings when they happen to agree, which is a silent default, or hard-code
+a household's group names into the engine, which breaks attribute-based buckets.
+
+### Decision
+
+The map is always declared in `declarations.yaml`. Under `tiller_group`, a `groups`
+section maps every expense group present in the ledger to a declared bucket and a category
+inherits its group's bucket. Under `explicit`, a `categories` section maps every expense
+category directly and `groups` is ignored. Resolution order for a category is `splits`,
+then `overrides`, then the map; a category in both `splits` and `overrides` is a conflict.
+Groups in `non_spend_groups` and categories whose Tiller `Type` is Income or Transfer
+are excluded from spend and need no entry. A missing entry for a group or category that
+appears in the ledger is a `doctor` orphan error naming it. Profiles supply bucket
+definitions only, since group names are household-specific. The engine never maps by
+name similarity, even when a group and a bucket share a name.
+
+### Consequences
+
+Setup needs one more short section, which `hfk doctor` can list group by group when it
+is missing. The example declarations now carry a `groups` map that covers the synthetic
+fixture, with overrides for `Utilities` and `Dining` as real exceptions to their groups.
+M2-02 loads the map, M2-05 reports unmapped groups, and M3-02 and M3-03 implement the
+resolution order.

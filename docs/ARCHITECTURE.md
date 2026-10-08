@@ -128,6 +128,8 @@ Presets live in `profiles/`, including the planned simple, four-bucket, and fift
 
 `mapping_source` controls how categories map into buckets. The default is `tiller_group`, so Tiller remains the place users edit their taxonomy. An `explicit` mapping source is allowed when a household wants all mappings declared outside Tiller.
 
+Bucket names and Tiller group names are different vocabularies, so the map between them is always declared. Under `tiller_group`, a `groups` section maps every expense group in the ledger to a bucket, and a category inherits its group's bucket. Under `explicit`, a `categories` section maps every expense category directly. A category resolves through `splits`, then `overrides`, then the map; a category in both `splits` and `overrides` is a conflict. The engine never guesses a bucket from a group name that happens to resemble one.
+
 Overrides and splits are first-class judgment calls and each must include a reason. An override maps one category to a bucket when the plan and source taxonomy disagree. A split allocates one category across multiple buckets using weights. The reason is not decoration; it prevents future maintainers and LLM agents from "cleaning up" intentional decisions.
 
 Orphan categories are categories with no bucket mapping, often caused by renaming a category in Tiller and leaving history under the old name. `hfk doctor` must fail on orphans, name each category, and print the fix. It must not silently remap old history.
@@ -160,7 +162,7 @@ For workbook errors, the message should name the workbook, sheet, and header or 
 
 Bad: `invalid config`
 
-Good: `declarations.yaml: splits.Home Goods.reason is required. Add a short reason explaining why this category is split across buckets.`
+Good: `declarations.yaml: splits.Fuel.reason is required. Add a short reason explaining why this category is split across buckets.`
 
 Diagnostics should be deterministic and suitable for tests. Do not rely on traceback text as the user-facing explanation.
 

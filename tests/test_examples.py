@@ -105,3 +105,57 @@ def test_sharing_rules_have_reasons_and_weights_sum_to_one() -> None:
         assert rule["match"]
         assert set(rule["match"]) <= {"account", "description", "category"}
         assert cents(sum(Decimal(str(w)) for w in rule["weights"].values())) == cents(1)
+
+
+def test_example_declarations_map_every_fixture_expense_group(tmp_path: Path) -> None:
+    from hfk.source.fixture import build_fixture
+    from hfk.source.tiller import read_tiller
+
+    declarations = load_yaml(ROOT / "examples" / "declarations.example.yaml")
+    assert isinstance(declarations, dict)
+    assert declarations["mapping_source"] == "tiller_group"
+
+    declared = {bucket["name"] for bucket in declarations["buckets"]}
+    groups = declarations["groups"]
+    assert set(groups.values()) <= declared
+
+    ledger = read_tiller(build_fixture(tmp_path / "fixture.xlsx"))
+    categories = {c.name: c for c in ledger.categories}
+    expense_groups = {c.group for c in ledger.categories if c.type == "Expense"}
+    expense_groups -= set(declarations["non_spend_groups"])
+    assert expense_groups <= set(groups), f"unmapped groups: {expense_groups - set(groups)}"
+
+    overrides = declarations["overrides"]
+    splits = declarations["splits"]
+    assert not set(overrides) & set(splits), "a category is in both overrides and splits"
+    for name, override in overrides.items():
+        assert name in categories, f"override {name!r} is not a fixture category"
+        assert override["bucket"] in declared
+        assert override["reason"]
+    for name, split in splits.items():
+        assert name in categories, f"split {name!r} is not a fixture category"
+        assert set(split["weights"]) <= declared
+        assert cents(sum(Decimal(str(w)) for w in split["weights"].values())) == cents(1)
+        assert split["reason"]
+
+
+def test_example_plan_categories_resolve_to_their_line_bucket() -> None:
+    declarations = load_yaml(ROOT / "examples" / "declarations.example.yaml")
+    plan = load_yaml(ROOT / "examples" / "plan.example.yaml")
+    assert isinstance(declarations, dict) and isinstance(plan, dict)
+
+    from hfk.source.fixture import _category_rows
+
+    group_of = {row["Category"]: row["Group"] for row in _category_rows()}
+    for line in plan["plan"]["lines"]:
+        for category in line.get("categories", []):
+            if category in declarations["splits"]:
+                buckets = set(declarations["splits"][category]["weights"])
+            elif category in declarations["overrides"]:
+                buckets = {declarations["overrides"][category]["bucket"]}
+            else:
+                buckets = {declarations["groups"][group_of[category]]}
+            assert line["bucket"] in buckets, (
+                f"plan line {line['desc']!r} ({line['who']}) is {line['bucket']} but "
+                f"{category} resolves to {sorted(buckets)}"
+            )

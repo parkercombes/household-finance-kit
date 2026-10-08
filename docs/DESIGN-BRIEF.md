@@ -165,11 +165,17 @@ buckets:                       # or `profile: four-bucket` to import a preset
   - {name: Fixed Discretionary,    essential: false, fixed: true}
   - {name: Variable Discretionary, essential: false, fixed: false}
 mapping_source: tiller_group   # tiller_group (default) | explicit
+groups:                        # tiller_group: every expense Group in the ledger -> bucket
+  Housing: Fixed Essential
+  Food: Variable Essential
+  Transportation: Variable Essential
+  Subscriptions: Fixed Discretionary
+# categories: {Rent: Fixed Essential, ...}   # explicit: every expense category -> bucket
 non_spend_groups: [Income, Transfers]      # extra to Tiller Type Income/Transfer
-overrides:                     # category -> bucket where plan and Tiller disagree
-  "Housing": {bucket: Variable Essential, reason: "plan lumps rent+utilities"}
+overrides:                     # category -> bucket, an exception to its group's bucket
+  "Utilities": {bucket: Variable Essential, reason: "varies by season; rest of Housing is fixed"}
 splits:                        # categories straddling two buckets
-  "Home Goods": {weights: {Variable Essential: 0.5, Variable Discretionary: 0.5}, reason: "..."}
+  "Fuel": {weights: {Variable Essential: 0.5, Variable Discretionary: 0.5}, reason: "..."}
 sharing:                       # per-transaction share overrides; account weights are the default
   - match: {account: "Alex Checking", description: "City Utilities*"}
     weights: {alex: 0.5, sam: 0.5}
@@ -190,9 +196,19 @@ Level 1: two buckets (essential/discretionary). Level 2: four buckets. Presets l
 `profiles/`. Mapping source defaults to Tiller's `Group` column so Tiller remains the
 place users edit their taxonomy; `overrides`/`splits` layer on top.
 
+**Mapping.** Bucket names and Tiller group names are different vocabularies, so the map
+between them is always declared, never inferred from matching strings (ADR-0011). With
+`tiller_group`, `groups` maps every expense group present in the ledger to a bucket and a
+category inherits its group's bucket. With `explicit`, `categories` maps every expense
+category directly and `groups` is ignored. A category resolves in this order: `splits`,
+then `overrides`, then the group or category map; a category in both `splits` and
+`overrides` is a conflict. Groups in `non_spend_groups` and categories whose Tiller `Type`
+is Income or Transfer are excluded from spend and need no mapping. Profiles supply bucket
+definitions only; the map is household-specific.
+
 **Orphans.** Renaming a Tiller category leaves history under the old name. `hfk doctor`
-fails on any category with no bucket mapping, names it, and prints the fix. Never silently
-remapped.
+fails on any category with no bucket mapping, or any expense group with no `groups` entry
+under `tiller_group`, names it, and prints the fix. Never silently remapped.
 
 **Sharing rules.** A rule matches on any combination of `account` (exact), `description`
 (case-insensitive glob), and `category` (exact); every key given must match. Its `weights`
