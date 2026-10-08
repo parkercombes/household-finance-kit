@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -11,10 +12,7 @@ from hfk.source.fixture import build_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHONPATH = str(ROOT / "src")
-PYTHON = (
-    "/private/tmp/claude-501/-Users-bpc/f9f8878c-626f-44b9-a38e-62958c402f3d/"
-    "scratchpad/venv/bin/python"
-)
+PYTHON = sys.executable
 SCHEMA = ROOT / "docs" / "TILLER-SCHEMA.md"
 
 
