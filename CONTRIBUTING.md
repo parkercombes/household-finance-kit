@@ -18,7 +18,7 @@ python -m ruff check .
 python scripts/privacy_scan.py --root .
 ```
 
-M0 contains the foundation only: docs, skeleton package, CLI stubs, privacy scan, Tiller guard hook, CI, examples, presets, and tests. Analysis commands such as scorecard, balances, settle-up, and retirement are planned by milestone and should not be represented as working until their roadmap acceptance commands pass.
+Implementation status is recorded once, in the [README milestone table](README.md#milestones). Analysis commands such as scorecard, balances, settle-up, and retirement are planned by milestone and should not be represented as working until their roadmap acceptance commands pass.
 
 ## Branch And PR Flow
 

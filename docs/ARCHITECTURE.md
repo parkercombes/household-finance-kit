@@ -10,14 +10,7 @@ This document explains the architecture of `hfk`, the household-finance-kit tool
 
 The project is deliberately conservative. A wrong finance report can look plausible, so the architecture favors explicit configuration, loud validation, frozen normalized data, and deterministic calculations over convenience guesses. The core rule is: read source data, normalize it, validate the user's declared intent, calculate from those inputs, and render output without changing the source workbook.
 
-Current implementation state: M0 foundations only. The repository is being assembled as a new public project. Today the real commands are:
-
-- `pip install -e .`
-- `hfk --version`
-- `python -m pytest -q`
-- `python scripts/privacy_scan.py --root .`
-
-The Tiller reader, ledger model, config validation, scorecard, balances, renewals, extensions, Sheets adapter, and full renderers are planned, not implemented.
+Implementation status is recorded once, in the milestone table in [README](../README.md#milestones), with item-level detail in [ROADMAP](ROADMAP.md). Other documents link there instead of restating it. The layer descriptions below cover both implemented and planned layers; the package map marks which is which.
 
 ## Two-repo model
 
@@ -179,33 +172,21 @@ See [EXTENSIONS.md](EXTENSIONS.md) for the extension API contract and extension-
 
 ## Package map
 
-The package names below are the approved architecture from the design brief. During this M0 documentation run, `src/` may be absent or partial because the skeleton is being written concurrently; treat implementation status below as authoritative for planning, not as proof that a module already exists locally.
+The package names below are the approved architecture from the design brief. Status here mirrors the README milestone table; update both in the same change.
 
 | Path | Layer | Implementation status |
 |---|---|---|
-| `src/hfk/source` | Source adapter | Planned M1 for Tiller workbook reader; planned M9 for Google Sheets adapter |
-| `src/hfk/ledger` | Ledger | Planned M1 frozen dataclasses and helpers |
+| `src/hfk/source` | Source adapter | Done (M1): Tiller workbook reader and synthetic fixture generator; planned M9 for Google Sheets adapter |
+| `src/hfk/ledger` | Ledger | Done (M1): frozen dataclasses and helpers |
 | `src/hfk/config` | Config | Planned M2 YAML loading and validation |
 | `src/hfk/engine` | Engine | Planned M2 doctor basics; M3 ownership, buckets, scorecard; M4 targets, balances, renewals |
 | `src/hfk/ext` | Extensions | Planned M6 extension discovery and API support |
 | `src/hfk/render` | Presentation | Planned M5 text, CSV, and HTML renderers |
-| `src/hfk/cli.py` | Presentation | M0 stub CLI only; planned commands become functional across M1-M8 |
+| `src/hfk/cli.py` | Presentation | `--version` and `dev fixture` work; analysis subcommands are stubs that become functional across M2-M8 |
 
 ## Implemented vs planned
 
-| Milestone | Status on 2026-10-08 | Notes |
-|---|---|---|
-| M0 Foundations | In progress / foundation only | Design brief, docs, skeleton, privacy scan, hook, examples, profiles, CI, and small pytest suite are the intended M0 deliverables. CLI subcommands are stubs that print `not implemented yet` and exit with code 2. |
-| M1 Reader + fixture | Planned | Tiller source adapter, ledger types, and synthetic workbook generator. |
-| M2 Config + doctor | Planned | YAML loaders, validation, and first `hfk doctor` checks. |
-| M3 Ownership + buckets + scorecard | Planned | Decimal shares, bucket mapping, and monthly scorecard. |
-| M4 Targets, balances, renewals | Planned | Category targets, paced views, balance history, net worth, renewals, sinking fund, rebaseline, plan editor. |
-| M5 Instance + CLI polish | Planned | `hfk init`, hook wiring, renderers, and polished CLI flows. |
-| M6 Extension API | Planned | Entry-point discovery, extension config sections, and doctor hooks. |
-| M7 `settle_up` extension | Planned | Two-person settlement reports. |
-| M8 `retirement` extension | Planned | R1 schema; R2 income streams; R3 expenses; R4 tax data and staleness gate; R5 report; R6 disclaimers and fixtures. |
-| M9 Google Sheets adapter | Planned | Alternative source adapter with the same ledger output. |
-| M10+ Community | Planned | Future extension ecosystem such as reimbursements, pension add-ons, home-purchase modelling, and local read-only web front door. |
+See the [README milestone table](../README.md#milestones). It is the only place milestone status is recorded.
 
 ## Testing strategy
 

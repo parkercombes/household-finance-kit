@@ -5,7 +5,8 @@ Last verified: 2026-10-08
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M1-01`; M0 is complete enough for development, but repository publication is blocked on the maintainer's decision.
+The next item is `M2-01`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+`tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
 Use [DESIGN-BRIEF](docs/DESIGN-BRIEF.md) as the source of truth when a roadmap line is unclear.
@@ -19,7 +20,7 @@ Use [DESIGN-BRIEF](docs/DESIGN-BRIEF.md) as the source of truth when a roadmap l
 
 ## Current state
 
-Only M0 exists today. The repository has the approved design brief, public skeleton, `pyproject.toml`, `src/hfk/` package, stub CLI subcommands that print `not implemented yet` and exit with code 2, `scripts/privacy_scan.py`, `hooks/tiller_guard.py`, CI, examples, profiles, and a small pytest suite. Every feature in M1 and later is planned work, not working behavior. Do not describe the Tiller reader, ledger, config validation, scorecard, balances, settle-up, retirement extension, or Google Sheets adapter as available until the relevant roadmap item is `done`.
+Milestone status is recorded once, in the [README milestone table](../README.md#milestones); item status lives in the tables below. Do not describe a feature as available anywhere until its roadmap item is `done`.
 
 ## M0 Foundations
 

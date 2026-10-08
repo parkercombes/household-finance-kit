@@ -8,7 +8,9 @@ Last verified: 2026-10-08
 
 ## Current Status
 
-`hfk` is at **M0 Foundations**. The repository currently contains the approved design brief, documentation, package skeleton, CLI stubs, privacy scan, Tiller read-only guard hook, CI workflow, example configs, bucket presets, and a small pytest suite. The CLI subcommands for analysis are not implemented yet; planned commands intentionally print `not implemented yet` and exit with code 2 until their milestones land.
+M0 Foundations and M1 Reader + Fixture are done; M2 Config + Doctor is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+
+Working today: `hfk --version`, `hfk dev fixture`, and the read-only Tiller reader and ledger model (`hfk.source`, `hfk.ledger`). Analysis subcommands print `not implemented yet` and exit with code 2 until their milestones land.
 
 ## Who It Is For
 

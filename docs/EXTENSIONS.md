@@ -2,7 +2,7 @@
 
 Last verified: 2026-10-08
 
-This document describes the planned extension API for `hfk`. It is a contract proposal for milestone M6 and later. Nothing in this file works today in M0: the current CLI subcommands are stubs, and the source adapter, ledger, config loader, engine, and extension system are not implemented yet. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
+This document describes the planned extension API for `hfk`. It is a contract proposal for milestone M6 and later. Nothing in this file works yet: the extension system, config loader, and engine are planned. See the [README milestone table](../README.md#milestones) for what is implemented. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
 
 ## What an extension is
 
@@ -205,7 +205,7 @@ Extensions should test against the synthetic fixture planned for M1 and avoid re
 - Renderer output using fictional data only.
 - Privacy scan before publishing.
 
-The public repo's real commands today are limited to `pip install -e .`, `hfk --version`, `python -m pytest -q`, and `python scripts/privacy_scan.py --root .`. Extension-specific command tests are planned for M6 and later.
+Extension-specific command tests are planned for M6 and later; see the [README milestone table](../README.md#milestones) for current status.
 
 ## Stability and versioning
 

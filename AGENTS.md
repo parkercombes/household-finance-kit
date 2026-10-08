@@ -2,7 +2,7 @@
 
 Last verified: 2026-10-08
 
-This is the LLM entry point for `household-finance-kit` (`hfk`). Read it before changing code, docs, tests, examples, hooks, or workflows. The repository is public, the real user data belongs only in private instances, and the current implementation state is **M0 Foundations only**.
+This is the LLM entry point for `household-finance-kit` (`hfk`). Read it before changing code, docs, tests, examples, hooks, or workflows. The repository is public, and real user data belongs only in private instances. Implementation status is recorded once, in the [README milestone table](README.md#milestones); do not restate it in other docs.
 
 ## Start Here
 
