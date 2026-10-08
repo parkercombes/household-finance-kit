@@ -73,11 +73,12 @@ Goal: allocate ledger amounts to people, map categories into user-defined bucket
 | `M3-03` | Implement overrides and splits with resolution order splits, then overrides, then the map; detect conflicting constraints, including a category in both; keep every judgement call traceable to declarations data. | `todo` | `M3-02` | Run `python -m pytest -q tests/test_buckets.py::test_overrides_splits_and_conflicts`; expected: valid splits sum correctly and conflicts stop with a clear error. |
 | `M3-04` | Implement `hfk scorecard --month YYYY-MM` for actual-vs-plan per bucket using the selected owner's share and the plan lines effective in the requested closed month. | `todo` | `M2-03`, `M3-01`, `M3-03` | Run `hfk scorecard --home examples/instance --month 2025-03`; expected: exits 0 and prints bucket actuals and plan totals from the synthetic fixture. |
 | `M3-06` | Add doctor checks for plan-line and sharing-rule conflicts: a listed category that does not map to its line's bucket, one person's category on two lines effective in the same month, and overlapping sharing rules with different weights. | `todo` | `M2-03`, `M2-04`, `M3-01`, `M3-03` | Run `python -m pytest -q tests/test_doctor.py::test_plan_and_sharing_conflicts`; expected: each conflict names the file, line or rule, and fix, and analysis stops. |
+| `M3-07` | Add a local-only parity check: run the scorecard for one closed month against a private instance and compare bucket totals to the household's existing hand-built or scripted statement. Not run in CI; the private instance records the result. | `todo` | `M3-04` | Run `hfk scorecard --home <private instance> --month YYYY-MM` locally and compare to the existing statement for that month; expected: every bucket total matches within one cent, or each difference is explained by a declared judgement call. |
 | `M3-05` | Add scorecard regression tests for cents tolerance, non-spend exclusion, `history_start`, and no silent remapping of renamed categories. | `todo` | `M3-04` | Run `python -m pytest -q tests/test_scorecard.py`; expected: all scorecard edge cases pass on synthetic data. |
 
 ## M4 Targets, Balances, Renewals
 
-Goal: expand core analysis beyond the scorecard to targets, positions, annual obligations, rebaselining, and plan editing.
+Goal: expand core analysis beyond the scorecard to targets, positions, annual obligations, rebaselining, and plan validation.
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
@@ -86,7 +87,7 @@ Goal: expand core analysis beyond the scorecard to targets, positions, annual ob
 | `M4-03` | Implement `hfk networth` using balance history, account classes, declared unsynced account dates, and `history_start`. | `todo` | `M4-02`, `M2-01` | Run `python -m pytest -q tests/test_networth.py`; expected: net worth totals match fixture expectations and never count null balances as zero. |
 | `M4-04` | Implement `hfk renewals` for annual obligations by month and sinking-fund adequacy. | `todo` | `M2-03`, `M3-01` | Run `python -m pytest -q tests/test_renewals.py`; expected: annual bills are scheduled by due month and monthly sinking-fund amounts reconcile to plan lines. |
 | `M4-05` | Implement `hfk rebaseline` to propose targets from history while flagging lumpy or spiky categories instead of silently smoothing them. | `todo` | `M3-04`, `M4-01` | Run `python -m pytest -q tests/test_rebaseline.py`; expected: stable categories get proposed targets and spiky categories are flagged. |
-| `M4-06` | Implement `hfk plan edit` as a local `127.0.0.1` editor that validates and writes only `plan.yaml`. | `todo` | `M2-03`, `M4-04` | Run `python -m pytest -q tests/test_plan_editor.py`; expected: editor writes only the plan file and rejects invalid annual math. |
+| `M4-06` | Implement `hfk plan check` to validate `plan.yaml` against `declarations.yaml` (declared buckets, effective-month ranges, categories, annual math) and print each problem with file, line, and fix, writing nothing. | `todo` | `M2-03`, `M4-04` | Run `python -m pytest -q tests/test_plan_check.py`; expected: a valid example plan passes and each invalid case names the line and the fix. |
 
 ## M5 Instance + CLI Polish
 
@@ -94,7 +95,7 @@ Goal: make the toolkit usable as a private instance workflow with initialization
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M5-01` | Implement `hfk init <dir>` to create a private instance skeleton with config files, `shared-items/`, `extensions/`, gitignored `data/` and `out/`, and safe examples. | `todo` | `M2-03`, `M4-06` | Run `python -m pytest -q tests/test_init.py`; expected: generated instance tree matches the design brief and contains no real data. |
+| `M5-01` | Implement `hfk init <dir>` to create a private instance skeleton with config files, `shared-items/`, gitignored `data/` and `out/`, and safe examples. | `todo` | `M2-03`, `M4-06` | Run `python -m pytest -q tests/test_init.py`; expected: generated instance tree matches the design brief and contains no real data. |
 | `M5-02` | Wire the Tiller read-only hook into initialized instances without writing into the public toolkit's own data paths. | `todo` | `M5-01`, `M0-05` | Run `python -m pytest -q tests/test_init.py::test_init_wires_tiller_guard`; expected: `.claude/settings.json` points to the guard and workbook patterns remain gitignored. |
 | `M5-03` | Implement text rendering for scorecard, categories, balances, net worth, renewals, and later extension reports. | `todo` | `M3-04`, `M4-04` | Run `python -m pytest -q tests/test_render_text.py`; expected: text snapshots are stable and readable in a terminal. |
 | `M5-04` | Implement CSV rendering for tabular reports without changing arithmetic or adding presentation-only totals. | `todo` | `M5-03` | Run `python -m pytest -q tests/test_render_csv.py`; expected: CSV rows match engine objects and round only at presentation boundaries. |
@@ -160,6 +161,7 @@ Goal: document and preserve clean boundaries for useful extensions that are outs
 | `M10-02` | Document employer pension add-ons as separate public, private, or community packages, not built into the generic retirement extension. | `todo` | `M8-06` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms employer-specific pension schedules are extension candidates only. |
 | `M10-03` | Document home purchase modelling as a separate extension candidate, not part of core budgeting or retirement mechanics. | `todo` | `M6-05` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms home purchase modelling is named as out-of-core. |
 | `M10-04` | Document the local read-only web front door as a later candidate bound to `127.0.0.1`, not a hosted service. | `todo` | `M5-05` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms any web front door is local and read-only. |
+| `M10-06` | Implement `hfk plan edit` as a local `127.0.0.1`-bound editor that appends and ends plan lines rather than editing them in place, validates through `hfk plan check`, and writes only `plan.yaml`. | `todo` | `M4-06`, `M10-04` | Run `python -m pytest -q tests/test_plan_editor.py`; expected: the editor writes only the plan file, preserves ended lines, and rejects what `plan check` rejects. |
 | `M10-05` | Leave settle-up for more than two people to other implementers and document the boundary clearly. | `todo` | `M7-01` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms core `settle_up` remains exactly two people while N-person ownership stays in the core engine. |
 
 ## Open questions

@@ -11,14 +11,17 @@ from typing import Any
 
 import openpyxl
 
-from hfk.ledger import BalanceRow, Category, Ledger, Transaction, money
+from hfk.ledger import Account, BalanceRow, Category, Ledger, Transaction, money
+from hfk.ledger.models import CATEGORY_TYPES
 
 REQUIRED_COLUMNS = {
     "Transactions": ("Date", "Description", "Category", "Amount", "Account"),
     "Categories": ("Category", "Group", "Type"),
     "Balance History": ("Date", "Account", "Balance"),
 }
-CATEGORY_TYPES = frozenset({"Expense", "Income", "Transfer"})
+# Tiller writes "Hide" in Categories.Hide From Reports; the others are tolerated spellings.
+HIDDEN_TRUE = frozenset({"hide", "hidden", "true", "yes", "y", "1", "x"})
+HIDDEN_FALSE = frozenset({"", "show", "false", "no", "n", "0"})
 
 
 class TillerFormatError(ValueError):
@@ -55,13 +58,38 @@ def read_tiller(path: str | Path) -> Ledger:
 
     workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
     try:
+        transactions = _read_transactions(workbook)
+        balances = _read_balances(workbook)
         return Ledger(
-            transactions=_read_transactions(workbook),
+            transactions=transactions,
             categories=_read_categories(workbook),
-            balances=_read_balances(workbook),
+            balances=balances,
+            accounts=_accounts(transactions, balances),
         )
     finally:
         workbook.close()
+
+
+def _accounts(
+    transactions: tuple[Transaction, ...], balances: tuple[BalanceRow, ...]
+) -> tuple[Account, ...]:
+    """Derive accounts from the rows that mention them; first non-empty metadata wins."""
+
+    seen: dict[str, dict[str, str | None]] = {}
+    rows: list[tuple[str, str | None, str | None]] = [
+        (row.account, row.account_id, row.institution) for row in transactions
+    ]
+    rows.extend((row.account, row.account_id, row.institution) for row in balances)
+    for name, account_id, institution in rows:
+        entry = seen.setdefault(name, {"account_id": None, "institution": None})
+        if entry["account_id"] is None and account_id:
+            entry["account_id"] = account_id
+        if entry["institution"] is None and institution:
+            entry["institution"] = institution
+    return tuple(
+        Account(name=name, account_id=entry["account_id"], institution=entry["institution"])
+        for name, entry in sorted(seen.items())
+    )
 
 
 def load_ledger(path_or_dir: str | Path) -> Ledger:
@@ -111,7 +139,7 @@ def _read_categories(workbook: Any) -> tuple[Category, ...]:
                 name=_required_text(row, headers, "Categories", row_number, "Category"),
                 group=_required_text(row, headers, "Categories", row_number, "Group"),
                 type=category_type,
-                hidden=_truthy(_cell(row, headers, "Hide From Reports")),
+                hidden=_hidden_flag(row, headers, "Categories", row_number, "Hide From Reports"),
             )
         )
     return tuple(rows)
@@ -296,22 +324,31 @@ def _blank_row(row: tuple[Any, ...]) -> bool:
     return all(value is None or value == "" for value in row)
 
 
-def _truthy(value: Any) -> bool:
-    if value is None or value == "":
+def _hidden_flag(
+    row: tuple[Any, ...],
+    headers: dict[str, int],
+    sheet_name: str,
+    row_number: int,
+    column: str,
+) -> bool:
+    value = _cell(row, headers, column)
+    if value is None:
         return False
     if isinstance(value, bool):
         return value
-    if isinstance(value, Decimal):
-        return value != 0
-    if isinstance(value, int):
-        return value != 0
+    if isinstance(value, (int, Decimal)) and value in (0, 1):
+        return value == 1
 
     text = str(value).strip().lower()
-    if text in {"", "0", "false", "n", "no"}:
-        return False
-    if text in {"1", "true", "y", "yes", "x"}:
+    if text in HIDDEN_TRUE:
         return True
-    return bool(text)
+    if text in HIDDEN_FALSE:
+        return False
+    raise TillerFormatError(
+        "Unrecognised Tiller hide flag: "
+        f"sheet={sheet_name}, row={row_number}, column={column}, value={value!r}, "
+        f"expected one of Hide, Show, TRUE, FALSE, or blank"
+    )
 
 
 def _version_number(name: str) -> int:

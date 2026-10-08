@@ -234,6 +234,42 @@ def test_optional_fields_are_mapped_and_hidden_truthy_is_true(tmp_path: Path) ->
     assert balance.account_status == "Open"
 
 
+def test_accounts_are_derived_with_first_metadata(tmp_path: Path) -> None:
+    path = build_fixture(tmp_path / "fixture.xlsx")
+    ledger = read_tiller(path)
+
+    assert [account.name for account in ledger.accounts] == ledger.account_names()
+    by_name = {account.name: account for account in ledger.accounts}
+    assert by_name["Alex Checking"].account_id == "acct-alex-checking"
+    assert by_name["Alex Checking"].institution == "Example Bank"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [("Hide", True), ("hide", True), ("TRUE", True), ("Yes", True), (True, True),
+     ("Show", False), ("FALSE", False), ("No", False), ("", False), (False, False)],
+)
+def test_hide_from_reports_spellings(tmp_path: Path, value: object, expected: bool) -> None:
+    path = build_fixture(tmp_path / "fixture.xlsx")
+    _set_cell(path, "Categories", "Hide From Reports", 2, value)
+
+    assert read_tiller(path).categories[0].hidden is expected
+
+
+def test_hide_from_reports_rejects_unknown_values(tmp_path: Path) -> None:
+    path = build_fixture(tmp_path / "fixture.xlsx")
+    _set_cell(path, "Categories", "Hide From Reports", 2, "maybe")
+
+    with pytest.raises(TillerFormatError) as error:
+        read_tiller(path)
+
+    message = str(error.value)
+    assert "sheet=Categories" in message
+    assert "row=2" in message
+    assert "column=Hide From Reports" in message
+    assert "'maybe'" in message
+
+
 def test_lock_file_is_ignored(tmp_path: Path) -> None:
     valid = build_fixture(tmp_path / "Tiller Test v1.xlsx")
     (tmp_path / "~$Tiller Test v2.xlsx").write_text("not a workbook", encoding="utf-8")

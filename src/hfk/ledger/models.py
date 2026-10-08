@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
+from functools import cached_property
 
 CENT = Decimal("0.01")
 CATEGORY_TYPES = frozenset({"Expense", "Income", "Transfer"})
@@ -82,6 +83,14 @@ class Ledger:
     transactions: tuple[Transaction, ...]
     categories: tuple[Category, ...]
     balances: tuple[BalanceRow, ...]
+    accounts: tuple[Account, ...] = ()
+
+    @cached_property
+    def _category_index(self) -> dict[str, Category]:
+        index: dict[str, Category] = {}
+        for category in self.categories:
+            index.setdefault(category.name, category)
+        return index
 
     def months(self) -> list[tuple[int, int]]:
         return sorted({(transaction.date.year, transaction.date.month) for transaction in self.transactions})
@@ -94,10 +103,7 @@ class Ledger:
         )
 
     def category(self, name: str) -> Category | None:
-        for category in self.categories:
-            if category.name == name:
-                return category
-        return None
+        return self._category_index.get(name)
 
     def category_type(self, name: str) -> str | None:
         category = self.category(name)
@@ -106,7 +112,8 @@ class Ledger:
         return category.type
 
     def account_names(self) -> list[str]:
-        names = {transaction.account for transaction in self.transactions}
+        names = {account.name for account in self.accounts}
+        names.update(transaction.account for transaction in self.transactions)
         names.update(balance.account for balance in self.balances)
         return sorted(names)
 

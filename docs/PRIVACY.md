@@ -33,7 +33,14 @@ Privacy is not a single control. hfk relies on simple repo rules, automated scan
 | Local gitignored `.privacy-denylist` file | Lets each user list private names, employers, account tails, and other household-specific terms without putting those terms in the public repository. |
 | Optional pre-commit hook | Runs privacy checks before a commit is created, giving contributors a fast local guardrail. |
 | CI workflow | Runs the privacy scan for shared changes so pull requests get a second check outside one developer's machine. |
-| Tiller read-only hook `hooks/tiller_guard.py` | Helps keep Tiller workbook access read-only and reduces the chance that tooling accidentally mutates source financial files. |
+| Tiller read-only hook `hooks/tiller_guard.py` | A tripwire for agent sessions: blocks shell commands and file edits whose text names a Tiller workbook and looks like a write. See the limits below. |
+| Static read-only test `tests/test_read_only_invariant.py` | Fails if any toolkit module other than the fixture generator contains a workbook save call, so the reader cannot grow a write path unnoticed. |
+
+## Limits of the guard hook
+
+The hook only sees the text of a command or a file path. It fires when that text names a file matching `tiller*.xls[xm]` and contains a save call, a write-style verb, a redirect, or a copy or move whose destination is that file. It does not see a path held in a variable, a workbook with a different name, or a save inside a script the command merely runs. The `# guardrail-ok` marker disables it for one command and is visible in the command itself. Treat the hook as a tripwire that catches the common accident, not as a boundary.
+
+The boundary is the reader: `hfk.source` opens workbooks with `read_only=True` and the toolkit contains no save path for them, which the static test checks on every run.
 
 ## The privacy scan
 

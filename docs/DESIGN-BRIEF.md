@@ -59,10 +59,9 @@ Two kinds of repo, strictly separated:
 my-finances/               # private git repo
   household.yaml           # people, files, account ownership (tracked in git; contains no balances)
   declarations.yaml        # judgement calls: buckets, overrides, splits, targets
-  plan.yaml                # the budget plan (lines the user edits with `hfk plan edit`)
+  plan.yaml                # the budget plan (validated by `hfk plan check`)
   shared-items/            # settle-up extension: YYYY-MM.yaml off-ledger shared items
   retirement.yaml          # retirement extension input
-  extensions/              # optional local extension code
   data/                    # GITIGNORED: Tiller workbook(s), statements, snapshots
   out/                     # GITIGNORED: generated reports
   .claude/settings.json    # tiller read-only hook wiring
@@ -248,8 +247,9 @@ Each line is one person's share of one budget item (ADR-0010).
 - `annual_bill` is the owner's share of an annual renewal; `monthly` must equal
   `annual_bill / 12` (validated).
 
-`hfk plan edit` is a local 127.0.0.1-bound editor that validates and writes only
-`plan.yaml`.
+`hfk plan check` validates the file against `declarations.yaml` and names each problem.
+`hfk plan edit` (M10) is a local 127.0.0.1-bound editor that appends and ends lines rather
+than editing them in place, and writes only `plan.yaml`.
 
 ## 7. Engine capabilities (core)
 
@@ -262,7 +262,7 @@ Each line is one person's share of one budget item (ADR-0010).
 - `hfk rebaseline` — proposes new targets from history, flags lumpy/spiky categories.
 - `hfk doctor` — config validation, unmapped categories, closed-account liveness, stale
   data, history_start clamps.
-- `hfk init`, `hfk plan edit`, `hfk dev fixture` (generate synthetic Tiller workbook).
+- `hfk init`, `hfk plan check`, `hfk dev fixture` (generate synthetic Tiller workbook).
 - Hard invariant: any analysis window is clamped to `history_start`.
 
 ## 8. Extensions (see docs/EXTENSIONS.md)
@@ -342,7 +342,7 @@ A generic income-vs-need model, input `retirement.yaml` (no Excel dependency):
 - **M2 Config + doctor** — household/declarations/plan loading, validation, `hfk doctor`.
 - **M3 Ownership + buckets + scorecard** — shares, bucket mapping, monthly scorecard.
 - **M4 Targets, balances, renewals** — category targets (paced), balances/net worth,
-  renewals/sinking fund, rebaseline, plan editor.
+  renewals/sinking fund, rebaseline, `plan check`.
 - **M5 Instance + CLI polish** — `hfk init`, hook wiring, text/CSV/HTML renderers.
 - **M6 Extension API** — entry-point discovery, config-section hooks, doctor hooks.
 - **M7 settle_up extension** (two people).
@@ -350,4 +350,4 @@ A generic income-vs-need model, input `retirement.yaml` (no Excel dependency):
   staleness gate; R5 report; R6 disclaimers and fixtures.
 - **M9 Google Sheets adapter.**
 - **M10+ Community**: FSA/reimbursements, employer pension add-ons, home purchase,
-  local web front door.
+  local web front door, `hfk plan edit`.

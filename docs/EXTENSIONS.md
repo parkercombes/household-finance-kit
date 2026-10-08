@@ -192,7 +192,7 @@ Out of scope for the built-in extension:
 
 Some models belong outside the public toolkit. Employer-specific pension schedules, home-purchase modeling, reimbursement workflows, and local household conventions can live in separate packages. They may be public community packages when they contain no private data, or private repos when they encode employer rules or household-specific assumptions.
 
-A private extension can be kept in a private Git repository and installed into the same Python environment as `hfk`. The private instance enables it by name in config. The public toolkit should never import that private package directly and should never include its data in tests, examples, or docs.
+A private extension can be kept in a private Git repository and installed into the same Python environment as `hfk`. The private instance enables it by name in config. There is no instance-local `extensions/` directory: discovery is entry points only (ADR-0006), so a private extension is installed, not dropped into the instance. The public toolkit should never import that private package directly and should never include its data in tests, examples, or docs.
 
 ## Testing extensions
 

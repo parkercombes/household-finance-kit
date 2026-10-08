@@ -84,7 +84,7 @@ Private instance home (--home or HFK_HOME)
                          out/report.txt, .csv, .html
 ```
 
-The workbook is an input only. Reports are generated outputs. Configuration files are user-owned inputs except for explicit commands that are designed to write a specific config file, such as the planned `hfk plan edit` writing only `plan.yaml`.
+The workbook is an input only. Reports are generated outputs. Configuration files are user-owned inputs except for explicit commands that are designed to write a specific config file, such as the planned `hfk plan edit` (M10) writing only `plan.yaml`. The toolkit contains no save path for workbooks; `tests/test_read_only_invariant.py` checks that statically.
 
 ## Ownership and shares
 

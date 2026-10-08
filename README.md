@@ -46,7 +46,6 @@ my-finances/
   plan.yaml
   shared-items/
   retirement.yaml
-  extensions/
   data/
   out/
   .claude/settings.json
@@ -77,7 +76,7 @@ The design includes these planned commands. They are listed here to show directi
 - Available now (M1): `hfk dev fixture --out PATH` generates a synthetic Tiller workbook for tests and demos.
 - Planned (M2): `hfk doctor` for config validation and loud data-quality checks.
 - Planned (M3): `hfk scorecard --month YYYY-MM` for monthly plan-vs-actual by bucket.
-- Planned (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan edit`.
+- Planned (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
 - Planned (M5): `hfk init <dir>` for creating a private instance skeleton.
 - Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
 
@@ -91,13 +90,13 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M1 | Done | Reader, Ledger types, synthetic workbook fixture |
 | M2 | Planned | Config loading, validation, and `hfk doctor` |
 | M3 | Planned | Ownership, bucket mapping, monthly scorecard |
-| M4 | Planned | Category targets, balances, net worth, renewals, rebaseline, plan editor |
+| M4 | Planned | Category targets, balances, net worth, renewals, rebaseline, plan check |
 | M5 | Planned | Instance creation, hook wiring, renderers, CLI polish |
 | M6 | Planned | Extension API and discovery |
 | M7 | Planned | `settle_up` extension for exactly two people |
 | M8 | Planned | `retirement` extension, R1 through R6 |
 | M9 | Planned | Google Sheets source adapter |
-| M10 | Planned | Community extensions and local web front door |
+| M10 | Planned | Community extensions, local web front door, plan editor |
 
 ## What It Will Do
 

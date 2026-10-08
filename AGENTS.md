@@ -104,7 +104,7 @@ The six design layers are:
 | Extensions | `hfk.ext` | Entry-point plugins such as `settle_up` and `retirement` |
 | Presentation | `hfk.cli`, `hfk.render` | CLI and text, CSV, HTML output |
 
-Private instances are separate from this repo and may contain `household.yaml`, `declarations.yaml`, `plan.yaml`, `shared-items/`, `retirement.yaml`, `extensions/`, `data/`, `out/`, `.claude/settings.json`, and a `.gitignore`. Never copy private instance data into the public toolkit.
+Private instances are separate from this repo and may contain `household.yaml`, `declarations.yaml`, `plan.yaml`, `shared-items/`, `retirement.yaml`, `data/`, `out/`, `.claude/settings.json`, and a `.gitignore`. Never copy private instance data into the public toolkit.
 
 ## Things That Look Right But Are Wrong
 

@@ -78,7 +78,7 @@ The reader maps optional `Transaction ID`, `Account ID`, `Institution`, and `Ful
 | `Category` | Yes | Category name used by transaction rows. |
 | `Group` | Yes | Category group. Planned config can map buckets from Tiller group by default. |
 | `Type` | Yes | Must be one of `Expense`, `Income`, or `Transfer`. |
-| `Hide From Reports` | No | Truthy values map to `Category.hidden=True`. |
+| `Hide From Reports` | No | Tiller writes `Hide`. `Hide`, `TRUE`, `Yes` map to `Category.hidden=True`; blank, `Show`, `FALSE`, `No` map to `False`; any other value is an error naming the row. |
 | Monthly columns | No | Tiller includes month columns after the core fields. They are tolerated but not part of the required `hfk` contract in the design brief. |
 
 `Category Type` values are `Expense`, `Income`, and `Transfer`; in the workbook header this field is named `Type`. The reader treats other values as a validation error because bucket mapping and non-spend filtering depend on this distinction.
