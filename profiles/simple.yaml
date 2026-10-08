@@ -1,0 +1,6 @@
+# Last verified: 2026-10-08
+name: simple
+description: Two-bucket starter profile for essential and discretionary spending.
+buckets:
+  - {name: Essential, essential: true, fixed: false}
+  - {name: Discretionary, essential: false, fixed: false}

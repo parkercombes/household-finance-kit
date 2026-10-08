@@ -1,0 +1,17 @@
+# Last verified: 2026-10-08
+schema_version: 1
+buckets:
+  - {name: Fixed Essential, essential: true, fixed: true}
+  - {name: Variable Essential, essential: true, fixed: false}
+  - {name: Fixed Discretionary, essential: false, fixed: true}
+  - {name: Variable Discretionary, essential: false, fixed: false}
+mapping_source: tiller_group
+non_spend_groups: [Income, Transfers]
+overrides:
+  "Housing": {bucket: Variable Essential, reason: "Plan groups home costs together for review."}
+splits:
+  "Home Goods":
+    weights: {Variable Essential: 0.5, Variable Discretionary: 0.5}
+    reason: "Some household purchases are required and some are optional."
+category_targets: {}
+closed_accounts: {}

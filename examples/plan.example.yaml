@@ -1,0 +1,11 @@
+# Last verified: 2026-10-08
+schema_version: 1
+plan:
+  lines:
+    - {desc: "Example Rent", who: alex, type: Fixed Essential, monthly: 1200.00}
+    - {desc: "Example Utilities", who: sam, type: Variable Essential, monthly: 180.00}
+    - {desc: "Example Grocer", who: alex, type: Variable Essential, monthly: 500.00}
+    - {desc: "Example Transit", who: sam, type: Variable Essential, monthly: 80.00}
+    - {desc: "Example Streaming", who: alex, type: Fixed Discretionary, monthly: 20.00}
+    - {desc: "Example Cloud Renewal", who: alex, type: Fixed Discretionary, monthly: 10.00, annual_bill: 120.00, annual_full: 120.00, account: "Alex Checking", due: {month: 7, day: 1}}
+    - {desc: "Example Cafe", who: sam, type: Variable Discretionary, monthly: 60.00}
