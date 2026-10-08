@@ -17,7 +17,6 @@ STUBS = {
     "rebaseline": "M4",
     "init": "M5",
     "plan": "M4",
-    "dev": "M1",
     "settle": "M7",
     "retirement": "M8",
 }
@@ -59,3 +58,11 @@ def test_every_stub_returns_two_and_mentions_milestone() -> None:
         assert result.stdout == ""
         assert f"hfk {name}: not implemented yet" in result.stderr
         assert f"milestone {milestone}" in result.stderr
+
+
+def test_dev_without_subcommand_prints_help_to_stderr() -> None:
+    result = run_hfk("dev")
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "usage: hfk dev" in result.stderr

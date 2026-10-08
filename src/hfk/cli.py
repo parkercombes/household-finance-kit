@@ -12,6 +12,7 @@ import sys
 from collections.abc import Sequence
 
 from hfk import __version__
+from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
     "doctor": "M2",
@@ -23,7 +24,6 @@ _STUB_MILESTONES = {
     "rebaseline": "M4",
     "init": "M5",
     "plan": "M4",
-    "dev": "M1",
     "settle": "M7",
     "retirement": "M8",
 }
@@ -36,6 +36,17 @@ def _stub(name: str) -> int:
         file=sys.stderr,
     )
     return 2
+
+
+def _dev_help(parser: argparse.ArgumentParser) -> int:
+    parser.print_help(sys.stderr)
+    return 2
+
+
+def _dev_fixture(args: argparse.Namespace) -> int:
+    output = build_fixture(args.out, months=args.months)
+    print(output)
+    return 0
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -51,6 +62,14 @@ def _build_parser() -> argparse.ArgumentParser:
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)
         subparser.set_defaults(func=lambda _args, command=name: _stub(command))
+
+    dev_parser = subparsers.add_parser("dev")
+    dev_subparsers = dev_parser.add_subparsers(dest="dev_command", metavar="command")
+    fixture_parser = dev_subparsers.add_parser("fixture")
+    fixture_parser.add_argument("--out", required=True, help="Output workbook path.")
+    fixture_parser.add_argument("--months", type=int, default=6, help="Number of months.")
+    fixture_parser.set_defaults(func=_dev_fixture)
+    dev_parser.set_defaults(func=lambda _args, dev_parser=dev_parser: _dev_help(dev_parser))
 
     return parser
 
