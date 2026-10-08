@@ -15,6 +15,7 @@ out/
 __pycache__/
 *.egg-info/
 .venv/
+uv.lock
 venv/
 .pytest_cache/
 .ruff_cache/
