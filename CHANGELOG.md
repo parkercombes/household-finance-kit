@@ -12,3 +12,5 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 - Added public-repo safety infrastructure: `scripts/privacy_scan.py`, the Tiller read-only guard hook at `hooks/tiller_guard.py`, and CI coverage for tests and privacy checks.
 - Recorded the two-repo model that keeps this public toolkit separate from private household instances containing workbooks, generated reports, and local financial decisions.
 - M1 Reader + Fixture: frozen `Decimal`-based ledger dataclasses (`hfk.ledger`), a read-only Tiller workbook reader that matches columns by header name and fails loudly on missing ones (`hfk.source`), and `hfk dev fixture` for synthetic workbooks.
+- ADR-0008: retirement projections use a single real-dollar money frame, with `cola` required on every income stream.
+- Consolidated `docs/DECISIONS.md` from seventeen ADRs to eight; principle restatements moved to a table at the top of the file.

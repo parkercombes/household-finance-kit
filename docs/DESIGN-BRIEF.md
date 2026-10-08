@@ -242,6 +242,7 @@ A generic income-vs-need model, input `retirement.yaml` (no Excel dependency):
   `account_drawdown`, `other`; each with start, end, amount, COLA.
 - **Expenses**: itemized monthly budget in today's dollars with inflation; baseline may
   be seeded from the user's own `plan.yaml` spend.
+- **Money frame**: all figures are real (today's) dollars; see ADR-0008 in `DECISIONS.md`.
 - **Rules carried over**: the claim-age scenarios are mutually exclusive "retire at that
   age" alternatives, not a timeline; income is flat for life after retirement unless a
   stream declares COLA; planning in today's dollars.

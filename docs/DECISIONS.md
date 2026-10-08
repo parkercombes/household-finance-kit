@@ -3,22 +3,45 @@
 Last verified: 2026-10-08
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
-`household-finance-kit` Python toolkit. It records durable choices from the approved
-design baseline in [docs/DESIGN-BRIEF.md](DESIGN-BRIEF.md), with cross-reference to
-the system shape in [docs/ARCHITECTURE.md](ARCHITECTURE.md) and the delivery sequence in
-[docs/ROADMAP.md](ROADMAP.md).
+`household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
+was rejected, so that a later maintainer or LLM agent does not "fix" it back. The product
+baseline is [docs/DESIGN-BRIEF.md](DESIGN-BRIEF.md); the system shape is in
+[docs/ARCHITECTURE.md](ARCHITECTURE.md); the delivery sequence is in
+[docs/ROADMAP.md](ROADMAP.md). Implementation status lives in the README milestone table,
+not here.
 
-As of 2026-10-08, only milestone M0 exists: the design brief, documentation, repository
-skeleton, stub CLI, privacy scan, Tiller read-only hook, CI workflow, examples, profiles,
-and a small pytest suite. The reader, ledger, config validation, scorecard, balances,
-settle-up, retirement, Google Sheets adapter, and other described capabilities are
-planned work in later milestones unless this log says otherwise.
+## Principles Carried From the Design Brief
+
+These are binding, but they are restatements of the design brief rather than decisions
+between alternatives, so they do not get their own ADR. Each one is covered by a hard rule
+in [AGENTS.md](../AGENTS.md) and by tests where code exists.
+
+| Principle | Where it is stated | Why it is not an ADR |
+| --- | --- | --- |
+| Tiller is the only data source for core | Brief section 1 | Scope definition, not a choice among importers |
+| Public toolkit, private instances | Brief sections 2 and 3 | Scope and privacy posture of the whole project |
+| Read Tiller columns by header name, never position | Brief section 5 | Correctness requirement; tested in `tests/test_reader.py` |
+| Buckets are attribute-based (`essential`, `fixed`), not named | Brief section 6 | Schema definition of `declarations.yaml` |
+| Off-ledger shared costs are versioned YAML, not macro tabs | Brief section 8a | Follows from "never writes to Tiller" |
+| Retirement is an extension, not core | Brief sections 4 and 8b | Follows from the extension layer existing |
+| Money is `Decimal`; cents are canonical, one cent tolerance | Brief section 2 principle 4 | Correctness requirement; tested in `tests/test_ledger.py` |
+| Privacy scan uses a local, gitignored denylist | Brief section 9 | Privacy mechanism, not a design fork |
+| Unofficial, not affiliated with Tiller, MIT licensed | Brief section 1 | Licensing and trademark statement |
+
+## Consolidation Note
+
+On 2026-10-08 this log was consolidated from seventeen entries to eight. The nine entries
+above were folded into the principles table; the eight below were kept verbatim and
+renumbered in their original order. Old numbers, for anyone reading the M0 commit:
+0002 became 0001, 0005 became 0002, 0007 became 0003, 0008 became 0004, 0011 became
+0005, 0013 became 0006, 0014 became 0007, 0017 became 0008.
 
 ## How to Add an ADR
 
 Add a new ADR when a decision changes project shape, data boundaries, privacy posture,
-extension behavior, or user-facing semantics. Use the next number in sequence and this
-heading form:
+extension behavior, or user-facing semantics, and when a real alternative was rejected.
+If the entry would only restate the design brief, add a row to the principles table
+instead. Use the next number in sequence and this heading form:
 
 ```md
 ## ADR-0000: Short title
@@ -49,34 +72,7 @@ project learns something new, create a new ADR that supersedes the old one, then
 old ADR as superseded and link both records. Corrections that do not change the decision,
 such as spelling fixes or links, are acceptable.
 
-## ADR-0001: Tiller Is the Only Data Source
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-`hfk` is designed for households that already use a Tiller spreadsheet. The approved
-input sheets are `Transactions`, `Categories`, and `Balance History`, with `Accounts`
-optional. The design brief deliberately avoids adding parallel importers, bank feeds,
-manual ledgers, or a second budgeting database. The only other user-owned inputs are
-small YAML files: `household.yaml`, `declarations.yaml`, and `plan.yaml`.
-
-### Decision
-
-Tiller is the only financial data source for core `hfk`. The Source adapter layer reads
-the user's Tiller workbook and normalizes it into a `Ledger`. Core features operate on
-that normalized ledger plus the private YAML files owned by the user's instance.
-
-### Consequences
-
-The project can keep a narrow trust boundary and a simpler explanation for non-programmer
-users: Tiller remains where transaction, category, account, and balance data come from.
-This limits scope and prevents the toolkit from becoming a general personal-finance
-aggregator. Users without Tiller are outside v1 scope. Synthetic fixtures remain important
-so tests and examples do not require real workbooks.
-
-## ADR-0002: Tiller Workbook Is Read-Only
+## ADR-0001: Tiller Workbook Is Read-Only
 
 Status: accepted
 Date: 2026-10-08
@@ -101,58 +97,7 @@ need output must write separate report files or private instance files, never th
 workbook. Planned commands such as scorecards, balances, and settle-up reports must be
 designed around read-only input and generated output.
 
-## ADR-0003: Public Toolkit, Private Instances
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-The project is intended to be published as a public open-source repository. Household
-financial data, account details, category judgements, and generated reports are private.
-The design brief separates a public toolkit repository from a private instance directory
-or repository.
-
-### Decision
-
-The toolkit repository contains code, docs, example configs, presets, test fixtures, CI,
-and privacy tooling only. User data lives in a separate private instance with
-`household.yaml`, `declarations.yaml`, `plan.yaml`, optional extension inputs,
-gitignored `data/`, and gitignored `out/`.
-
-### Consequences
-
-The public repository must never contain real personal facts, real balances, account
-numbers, emails, employer names, or private product details. Examples use only Alex, Sam,
-Example Bank, and round example numbers. Implementation must never assume the toolkit
-directory is a user's finance home; the instance is located by `--home`, `HFK_HOME`, or
-the current directory as defined by the design.
-
-## ADR-0004: Read Tiller Columns by Header Name
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-Tiller can add columns over time, and users may have workbooks with optional columns.
-Column order is a brittle integration point. The design brief identifies required and
-optional headers for `Transactions`, `Categories`, and `Balance History`.
-
-### Decision
-
-The Source adapter reads columns by header name, never by column position. Extra columns
-are tolerated. Missing required columns are loud errors that name the sheet and missing
-column.
-
-### Consequences
-
-The reader can survive harmless workbook evolution while still protecting users from
-plausible but wrong analysis when required data is absent. Tests for the planned M1 reader
-should include reordered columns, tolerated extra columns, and explicit failures for
-missing required headers.
-
-## ADR-0005: Fail Loudly, Feature-Owned Optional Config
+## ADR-0002: Fail Loudly, Feature-Owned Optional Config
 
 Status: accepted
 Date: 2026-10-08
@@ -177,32 +122,7 @@ quietly wrong budget numbers. M2 config validation and `hfk doctor` must treat m
 required keys, unmapped categories, stale data, and undeclared closed accounts as user
 action items rather than guesses.
 
-## ADR-0006: Attribute-Based Buckets
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-The design supports several adoption levels: simple Tiller group analysis, two buckets,
-four buckets, and presets such as `simple`, `four-bucket`, and `fifty-thirty-twenty`.
-Users may rename buckets or use different naming schemes.
-
-### Decision
-
-Bucket behavior is based on attributes such as `essential` and `fixed`, not hard-coded
-bucket names. Fixed buckets are checked against the plan with tight tolerance. Variable
-buckets can be paced mid-month. Essential and discretionary attributes support views that
-separate necessary from optional spending.
-
-### Consequences
-
-Users can use names that make sense to them without changing engine behavior. The engine
-must read bucket attributes from declarations or presets and must not rely on strings
-such as "Fixed Essential" except as examples. Orphan categories and invalid mappings are
-errors for `hfk doctor`.
-
-## ADR-0007: Account Ownership Uses Owner or Shared Weights
+## ADR-0003: Account Ownership Uses Owner or Shared Weights
 
 Status: accepted
 Date: 2026-10-08
@@ -226,7 +146,7 @@ more than two people. Engine code in planned M3 must validate that weights are p
 valid, and sum to 1.0 where sharing is declared. This model is broader than the settle-up
 extension, which remains limited to exactly two people.
 
-## ADR-0008: Settle-Up Is Limited to Exactly Two People
+## ADR-0004: Settle-Up Is Limited to Exactly Two People
 
 Status: accepted
 Date: 2026-10-08
@@ -249,54 +169,7 @@ The extension remains explainable and testable for the initial household use cas
 does not attempt to solve housemate, group-trip, or multi-party reimbursement flows.
 The broader account ownership model still supports N-person budgeting outside settle-up.
 
-## ADR-0009: Shared Costs Use Versioned YAML and On-Ledger Rules
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-Some shared costs appear in Tiller, while others may be paid outside the tracked
-workbook. The design replaces macro-built spreadsheet tabs with a reproducible private
-instance format that can be validated and tested.
-
-### Decision
-
-On-ledger sharing is represented by settle-up sharing rules. Off-ledger shared costs
-live in versioned `shared-items/YYYY-MM.yaml` files with label, amount, paid_by, weights,
-and bucket. Macro-built spreadsheet tabs are not a system of record for `hfk`.
-
-### Consequences
-
-Shared-cost inputs are reviewable, versioned, and private. The same model works for
-future Google Sheets users because it does not depend on workbook macros. Users may
-still emit a paste-ready block for a personal spreadsheet, but `hfk` does not maintain
-that tab or write to Tiller.
-
-## ADR-0010: Retirement Is an Extension
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-Retirement income-vs-need modelling has different inputs, disclaimers, tax data, and
-scope boundaries from core budgeting. The design says retirement uses `retirement.yaml`
-and has no Excel dependency.
-
-### Decision
-
-Retirement modelling is a separate `retirement` extension with its own input file. It is
-not part of core budgeting, ledger reading, or plan-vs-actual analysis.
-
-### Consequences
-
-Core `hfk` stays focused on budget mechanics from Tiller plus household YAML files.
-The retirement extension can evolve its own schema, fixtures, report, disclaimers, and
-tax-data checks in M8. Documentation and output must be clear that retirement projection
-is arithmetic, not financial advice.
-
-## ADR-0011: Tax Tables Are Versioned Data with a Staleness Gate
+## ADR-0005: Tax Tables Are Versioned Data with a Staleness Gate
 
 Status: accepted
 Date: 2026-10-08
@@ -319,30 +192,7 @@ surface the tax year used and must stop when the configured freshness rule is vi
 Updating data files becomes a normal maintenance task rather than an implicit code
 change.
 
-## ADR-0012: Money Is Decimal and Cents Are Canonical
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-Budgeting and settle-up calculations need exact cents. Floating-point arithmetic can
-produce small representation errors that are unacceptable when reports must reconcile to
-the cent.
-
-### Decision
-
-Money values in the Ledger and engine are represented as `Decimal`. Cents are canonical,
-with at most one cent tolerance where the design allows comparison tolerance.
-
-### Consequences
-
-Parsing must convert workbook and YAML money values into `Decimal` before calculation.
-Reports should round or format only at presentation boundaries. Tests should assert
-cent-level behavior, especially for ownership weights, annual renewals, and settle-up
-net transfers.
-
-## ADR-0013: Extensions Use Python Entry Points
+## ADR-0006: Extensions Use Python Entry Points
 
 Status: accepted
 Date: 2026-10-08
@@ -366,7 +216,7 @@ separately. The first planned extensions are `settle_up` and `retirement`. The E
 API in M6 must keep imports one-way: extensions may import engine, ledger, and config;
 core must not import extension packages directly.
 
-## ADR-0014: V1 Source Is Exported Excel, Google Sheets Later
+## ADR-0007: V1 Source Is Exported Excel, Google Sheets Later
 
 Status: accepted
 Date: 2026-10-08
@@ -388,48 +238,49 @@ M1 can focus on deterministic local file parsing and synthetic workbook tests. T
 adapter boundary must still be shaped so M9 can add Google Sheets without changing the
 Ledger, Config, Engine, Extensions, or Presentation layers.
 
-## ADR-0015: Privacy Scan Uses a Local Gitignored Denylist
+## ADR-0008: Retirement Projections Use One Money Frame, Real Dollars
 
 Status: accepted
 Date: 2026-10-08
 
 ### Context
 
-The public repository must contain no real personal names, employers, balances, account
-numbers, email addresses, private finance brands, or files such as workbooks and PDFs.
-Some sensitive terms are personal to the maintainer and should never be committed even
-inside a public denylist.
+The retirement design in [DESIGN-BRIEF](DESIGN-BRIEF.md) section 8b describes three
+things at once: income streams are "flat for life unless a stream declares COLA", expenses
+are "in today's dollars with inflation", and planning is "in today's dollars". Read
+literally, that mixes two frames. Flat nominal income and inflated nominal expenses live
+in a nominal frame; today's-dollar planning lives in a real frame. Mixing them produces a
+believable income-vs-need gap that is wrong by the cumulative inflation between now and
+the year shown. That is exactly the plausible-but-wrong failure this project exists to
+prevent, and it must be settled before M8 writes any arithmetic.
 
 ### Decision
 
-The toolkit includes `scripts/privacy_scan.py` and supports a local gitignored denylist
-file, `.privacy-denylist`. The scan blocks risky file types, account-number-like
-patterns, email addresses except allowed examples, and every term in the local denylist.
+Every retirement figure, input and output, is in real dollars, meaning today's purchasing
+power. There is no nominal frame in the extension.
+
+- Expenses are declared in today's dollars and stay flat in real terms. A single expense
+  may declare its own real growth rate above inflation, such as healthcare, with a
+  `reason`. The household `inflation` assumption is never applied to expenses as a whole.
+- Each income stream declares how it tracks inflation through `cola`:
+  `full` keeps the stream flat in real terms; `none` keeps it flat in nominal terms, so
+  its real value erodes by the household `inflation` assumption each year; a numeric
+  rate is a nominal annual growth rate and is converted to real using the same
+  assumption. `cola` is required on every stream, with no default.
+- The household `inflation` assumption is required whenever any stream is not `full`,
+  and it exists only to convert nominal-tracking streams into real dollars.
+- Reports label every money column as "today's dollars" and state the inflation
+  assumption used. A nominal column is not produced.
+
+This clarifies section 8b rather than reversing it: "flat for life" still means a stream
+does not step up with age or with claim-age scenarios, and "today's dollars" is now the
+only frame.
 
 ### Consequences
 
-Personal names and private terms can be protected without appearing in the public repo.
-CI and optional pre-commit usage can run the same scan. Public examples must remain
-fictional and generic, using Alex, Sam, Example Bank, and round numbers.
-
-## ADR-0016: Project Is Unofficial and MIT Licensed
-
-Status: accepted
-Date: 2026-10-08
-
-### Context
-
-`hfk` reads Tiller spreadsheets but is not made by Tiller. The project is intended to be
-public, reusable, and open source.
-
-### Decision
-
-`household-finance-kit` is an unofficial project that is not affiliated with, endorsed
-by, or sponsored by Tiller. The toolkit is MIT licensed.
-
-### Consequences
-
-Documentation and presentation must avoid implying official status. The project can be
-published and reused under the MIT license while preserving the private-instance boundary
-for user data. References to Tiller identify the workbook format the user already owns,
-not a partnership or endorsement.
+A stream with `cola: none` loses purchasing power on the report, which is the correct
+real-dollar picture of a fixed pension. Users cannot compare the output directly to a
+nominal bank statement in a future year, and the report must say so. M8 fixtures need at
+least one `full`, one `none`, and one numeric `cola` stream, plus one expense with its
+own real growth rate, with hand-checked expected values. Section 8b of the design brief
+gains a pointer to this record so the two cannot drift.
