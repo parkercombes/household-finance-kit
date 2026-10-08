@@ -13,5 +13,8 @@ splits:
   "Home Goods":
     weights: {Variable Essential: 0.5, Variable Discretionary: 0.5}
     reason: "Some household purchases are required and some are optional."
-category_targets: {}
+sharing:
+  - match: {account: "Alex Checking", description: "City Utilities*"}
+    weights: {alex: 0.5, sam: 0.5}
+    reason: "Utilities are a joint bill paid from Alex's account."
 closed_accounts: {}

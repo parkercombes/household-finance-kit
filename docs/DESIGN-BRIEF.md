@@ -151,7 +151,10 @@ extensions: [settle_up, retirement]  # opt-in
 **Ownership model.** Every account is either `owner: <slug>` or `shared: {slug: weight}`.
 An owner's *share* of a transaction is `amount * weight`. This one rule covers a solo
 user, a 50/50 couple, an income-proportional 60/40 split, and housemates. (Settle-up is
-limited to exactly two people; the ownership model itself is N-person.)
+limited to exactly two people; the ownership model itself is N-person.) Account weights
+are only the default: `sharing` rules in `declarations.yaml` override them per transaction.
+One engine function computes shares from both, and every core report and every extension
+reads shares from it (ADR-0009).
 
 ### declarations.yaml (every judgement call, each with a `reason`)
 ```yaml
@@ -167,7 +170,13 @@ overrides:                     # category -> bucket where plan and Tiller disagr
   "Housing": {bucket: Variable Essential, reason: "plan lumps rent+utilities"}
 splits:                        # categories straddling two buckets
   "Home Goods": {weights: {Variable Essential: 0.5, Variable Discretionary: 0.5}, reason: "..."}
-category_targets: {}           # plan lines mapped to categories, with `paced` flag
+sharing:                       # per-transaction share overrides; account weights are the default
+  - match: {account: "Alex Checking", description: "City Utilities*"}
+    weights: {alex: 0.5, sam: 0.5}
+    reason: "joint bill paid from Alex's account"
+  - match: {category: "Sam Only"}
+    weights: {sam: 1.0}
+    reason: "charges Sam keeps whole on the joint card"
 closed_accounts: {}            # name -> {closed: date, note}
 ```
 **Bucket model.** Buckets are defined by attributes (`essential`, `fixed`), not hard-coded
@@ -185,23 +194,52 @@ place users edit their taxonomy; `overrides`/`splits` layer on top.
 fails on any category with no bucket mapping, names it, and prints the fix. Never silently
 remapped.
 
+**Sharing rules.** A rule matches on any combination of `account` (exact), `description`
+(case-insensitive glob), and `category` (exact); every key given must match. Its `weights`
+sum to 1.0 and replace the account weights for that transaction. Rules are not ordered and
+never merged: if two rules with different weights match one transaction, `hfk doctor`
+reports the conflict and analysis stops. Because the scorecard, the categories view, and
+settle-up all read shares from the same function, a joint bill paid from one person's
+account lands on both people everywhere, not only in settle-up.
+
 ### plan.yaml
 ```yaml
 schema_version: 1
 plan:
+  effective_from: 2025-01         # default start month for every line
   lines:
-    - {desc: "Streaming", who: alex, type: Fixed Discretionary, monthly: 15.99}
-    - {desc: "Domain renewal", who: alex, type: Fixed Discretionary, monthly: 1.67,
+    - {desc: "Streaming", who: alex, bucket: Fixed Discretionary, monthly: 15.99,
+       categories: [Streaming]}
+    - {desc: "Groceries", who: alex, bucket: Variable Essential, monthly: 250.00,
+       categories: [Groceries], paced: true, effective_until: 2025-06}
+    - {desc: "Groceries", who: alex, bucket: Variable Essential, monthly: 275.00,
+       categories: [Groceries], paced: true, effective_from: 2025-07}
+    - {desc: "Domain renewal", who: alex, bucket: Fixed Discretionary, monthly: 1.67,
        annual_bill: 20.00, annual_full: 20.00, account: "Alex Card", due: {month: 7, day: 6}}
 ```
-`annual_bill` is the owner's share of an annual renewal; `monthly` must equal
-`annual_bill / 12` (validated). `hfk plan edit` is a local 127.0.0.1-bound editor that
-validates and writes only `plan.yaml`.
+Each line is one person's share of one budget item (ADR-0010).
+- `bucket` must name a declared bucket from `buckets` or the imported profile. The key is
+  `bucket`, not `type`, because `Type` already means Expense/Income/Transfer in Tiller.
+- Lines are dated. A line applies to month M when `effective_from <= M <= effective_until`
+  (months as `YYYY-MM`, inclusive; `effective_until` optional; `plan.effective_from` is the
+  default start). A report for a past month uses the lines effective in that month, never
+  today's plan. To change an amount, end the old line and add a new one.
+- Optional `categories` ties a line to Tiller categories for `hfk categories`. For one
+  person, a category may appear on at most one line effective in a given month, and each
+  listed category must map to the line's `bucket`; either violation is a `doctor` conflict.
+  Lines without `categories` count only in the bucket total.
+- `paced` marks a variable line for mid-month pacing.
+- `annual_bill` is the owner's share of an annual renewal; `monthly` must equal
+  `annual_bill / 12` (validated).
+
+`hfk plan edit` is a local 127.0.0.1-bound editor that validates and writes only
+`plan.yaml`.
 
 ## 7. Engine capabilities (core)
 
 - `hfk scorecard --month YYYY-MM` — actual vs plan per bucket, owner's share only.
-- `hfk categories --month YYYY-MM` — targets vs actual per category, paced where declared.
+- `hfk categories --month YYYY-MM` — plan lines with `categories` vs actual, paced where
+  declared.
 - `hfk balances`, `hfk networth` — position from `Balance History`; null amounts allowed
   and reported as gaps, never as zero; declared unsynced accounts carry their own dates.
 - `hfk renewals` — annual obligations by month, sinking-fund adequacy.
@@ -224,9 +262,9 @@ in a spreadsheet tab with macros. `hfk settle YYYY-MM` outputs category totals o
 shared account(s), per-person paid vs owed, and the net transfer, as text/CSV/HTML.
 - Exactly two people. Weighted split (default 50/50). Anything larger is out of scope and
   documented as open for others.
-- **Sharing rules** (on-ledger): a rule can declare that transactions matching a
-  description pattern on a given account are shared for settle-up (e.g. a bill paid from
-  one person's account that is really joint).
+- **On-ledger shares** come from the core share function (account weights plus the
+  `sharing` rules in `declarations.yaml`, section 6). Settle-up declares no sharing rules
+  of its own, so its numbers agree with the scorecard by construction.
 - **Shared items** (off-ledger): costs not in Tiller (a partner's untracked card, a
   utility paid elsewhere) go in `shared-items/YYYY-MM.yaml` with label, amount, paid_by,
   weights, bucket. Validated, tracked in the private instance, works for Sheets users.

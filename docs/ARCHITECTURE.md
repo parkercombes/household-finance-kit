@@ -97,6 +97,8 @@ The model is N-person even though the first settle-up extension is limited to ex
 
 A transaction share is computed from the transaction amount and the account's ownership weights using `Decimal` money. If an account is owned by Alex, Alex's weight is `Decimal("1")` and everyone else has `Decimal("0")`. If an account is shared 50/50, each weight is `Decimal("0.5")`. A transaction amount of `Decimal("-100.00")` on that shared account gives Alex `Decimal("-50.00")` and Sam `Decimal("-50.00")`.
 
+Account weights are only the default. `sharing` rules in `declarations.yaml` match a transaction by account, description glob, or category and replace its weights, each with a written reason. The engine exposes one share function that applies both, and every core report and every extension reads shares from it. That is what keeps settle-up and the scorecard from disagreeing about a joint bill paid from one person's account. Two rules with different weights matching the same transaction is a conflict that stops analysis; rules are never ordered or merged.
+
 Shares are arithmetic, not advice. The engine does not decide whether a person should pay more or less. It applies the declared account model, validates that weights sum to one, and reports conflicts loudly.
 
 ## Buckets

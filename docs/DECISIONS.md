@@ -284,3 +284,68 @@ nominal bank statement in a future year, and the report must say so. M8 fixtures
 least one `full`, one `none`, and one numeric `cola` stream, plus one expense with its
 own real growth rate, with hand-checked expected values. Section 8b of the design brief
 gains a pointer to this record so the two cannot drift.
+
+## ADR-0009: Sharing Rules Live in Core Declarations
+
+Status: accepted
+Date: 2026-10-08
+
+### Context
+
+The original design put per-transaction sharing rules ("a bill paid from Alex's account
+that is really joint") inside the `settle_up` extension, while core reports used account
+ownership weights alone. Under that split the M3 scorecard would charge Alex 100% of a
+joint utility bill and the M7 settle-up would charge 50%, for the same month, from the
+same workbook. Two believable numbers that disagree is the failure this project is built
+to prevent, and it would have been baked in before either feature existed.
+
+### Decision
+
+Sharing rules are a core `declarations.yaml` section, `sharing`. A rule matches on any
+combination of exact `account`, case-insensitive `description` glob, and exact `category`,
+carries `weights` that sum to 1.0, and requires a `reason`. The engine exposes one share
+function: account ownership weights by default, replaced by the matching rule's weights.
+Every core report and every extension reads shares from that function. Rules are not
+ordered and never merged; two rules with different weights matching one transaction is a
+`doctor` conflict that stops analysis. Off-ledger shared items remain in `settle_up`
+because they are not in the workbook.
+
+### Consequences
+
+The scorecard, the categories view, and settle-up agree by construction. M3-01 grows to
+include rule matching, M7-02 shrinks to consuming the core function, and M3-06 adds the
+conflict check. A household that previously expressed "shared" through a Tiller category
+can declare that with a `category` match rather than code.
+
+## ADR-0010: Plan Lines Are Bucket-Keyed, Dated, and Carry Their Own Categories
+
+Status: accepted
+Date: 2026-10-08
+
+### Context
+
+The original `plan.yaml` line used `type: Fixed Discretionary`, where `Type` already
+means Expense, Income, or Transfer in the Tiller workbook. Lines had no dates, so a report
+for a past month would be scored against today's plan, and rebaseline, history views, and
+the to-the-cent regression against a hand-built statement would drift as soon as a line
+changed. Plan-to-category linkage was split between `plan.yaml` and a
+`category_targets` section in `declarations.yaml`, two files describing one thing.
+
+### Decision
+
+Each plan line is one person's share of one budget item. The bucket key is `bucket` and
+must name a declared bucket. Lines are dated with `effective_from` and optional
+`effective_until` as inclusive `YYYY-MM` months, with `plan.effective_from` as the default
+start; a report for month M uses only the lines effective in M. To change an amount, end
+the old line and add a new one. A line may list `categories`, which ties it to Tiller
+categories for `hfk categories`; for one person a category may appear on at most one line
+effective in a month, and every listed category must map to the line's bucket. The
+`category_targets` section is removed from `declarations.yaml`.
+
+### Consequences
+
+Plan history is preserved in the file itself, so past months stay reproducible and
+`hfk plan edit` must append-and-end rather than edit in place. M2-03 validates `bucket`,
+dates, and categories; M3-06 reports the conflicts. The example plan shows a dated amount
+change. Existing private plans that use `type` need a one-word rename, which `doctor`
+should name explicitly.
