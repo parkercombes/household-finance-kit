@@ -14,7 +14,7 @@ from hfk.config import (
     load_household,
     load_plan,
 )
-from hfk.ledger import Ledger
+from hfk.ledger import Category, Ledger
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 
 DIAGNOSTIC_LEVELS = frozenset({"error", "warning"})
@@ -85,6 +85,9 @@ def run_doctor(
 
     if household is not None and ledger is not None:
         _check_accounts(household, declarations, ledger, diagnostics)
+        if declarations is not None:
+            _check_category_orphans(declarations, ledger, diagnostics)
+            _check_closed_accounts(household, declarations, ledger, diagnostics)
         _check_stale_data(ledger, workbook_path, today, stale_after_days, diagnostics)
         _check_history_start(household, ledger, diagnostics)
 
@@ -208,6 +211,128 @@ def _check_accounts(
                 "household.yaml",
                 f'declared account "{name}" does not appear in the workbook',
                 "remove it or check the workbook",
+            )
+        )
+
+
+def _check_category_orphans(
+    declarations: Declarations, ledger: Ledger, diagnostics: list[Diagnostic]
+) -> None:
+    visible_categories = [category for category in ledger.categories if not category.hidden]
+    ordered_names = _category_names_in_ledger_order(visible_categories, ledger)
+    groups = dict(declarations.groups)
+    categories = dict(declarations.categories)
+    non_spend_groups = set(declarations.non_spend_groups)
+    reported_groups: set[str] = set()
+
+    for name in ordered_names:
+        category = ledger.category(name)
+        if category is None:
+            if not _has_category_judgment(declarations, name):
+                diagnostics.append(
+                    Diagnostic(
+                        "error",
+                        "category-orphan",
+                        "declarations.yaml",
+                        f'category "{name}" appears in transactions but not in the '
+                        "Categories sheet",
+                        f'add "{name}" back to the Categories sheet in Tiller, or add '
+                        f'overrides."{name}" with a bucket and reason in declarations.yaml; '
+                        "history is never remapped silently",
+                    )
+                )
+            continue
+
+        if _category_excluded_from_spend(category, non_spend_groups):
+            continue
+        if _has_category_judgment(declarations, name):
+            continue
+        if declarations.mapping_source == "tiller_group":
+            if category.group in groups or category.group in reported_groups:
+                continue
+            reported_groups.add(category.group)
+            diagnostics.append(
+                Diagnostic(
+                    "error",
+                    "group-unmapped",
+                    "declarations.yaml",
+                    f'group "{category.group}" (category "{name}") has no bucket',
+                    f'add groups."{category.group}": <bucket> in declarations.yaml, '
+                    "or list it under non_spend_groups",
+                )
+            )
+            continue
+
+        if name not in categories:
+            diagnostics.append(
+                Diagnostic(
+                    "error",
+                    "category-unmapped",
+                    "declarations.yaml",
+                    f'category "{name}" has no bucket',
+                    f'add categories."{name}": <bucket> in declarations.yaml',
+                )
+            )
+
+
+def _category_names_in_ledger_order(categories: list[Category], ledger: Ledger) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for category in categories:
+        name = category.name
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+    for transaction in ledger.transactions:
+        if transaction.category not in seen:
+            seen.add(transaction.category)
+            names.append(transaction.category)
+    return tuple(names)
+
+
+def _has_category_judgment(declarations: Declarations, name: str) -> bool:
+    return declarations.split(name) is not None or declarations.override(name) is not None
+
+
+def _category_excluded_from_spend(category: Category, non_spend_groups: set[str]) -> bool:
+    return category.type in {"Income", "Transfer"} or category.group in non_spend_groups
+
+
+def _check_closed_accounts(
+    household: Household,
+    declarations: Declarations,
+    ledger: Ledger,
+    diagnostics: list[Diagnostic],
+) -> None:
+    open_accounts = {account.name for account in household.accounts}
+    transactions_by_account: dict[str, list[date]] = {}
+    for transaction in ledger.transactions:
+        transactions_by_account.setdefault(transaction.account, []).append(transaction.date)
+
+    for account in declarations.closed_accounts:
+        if account.name in open_accounts:
+            diagnostics.append(
+                Diagnostic(
+                    "error",
+                    "account-closed-and-open",
+                    "declarations.yaml",
+                    f'account "{account.name}" is declared as open and closed',
+                    "declare the account in exactly one place",
+                )
+            )
+
+        latest = max(transactions_by_account.get(account.name, ()), default=None)
+        if latest is None or latest <= account.closed:
+            continue
+        diagnostics.append(
+            Diagnostic(
+                "error",
+                "closed-account-active",
+                "declarations.yaml",
+                f'account "{account.name}" closed {account.closed.isoformat()} but has '
+                f"activity through {latest.isoformat()}",
+                f"move it back under accounts in household.yaml, or set closed to "
+                f"{latest.isoformat()} or later",
             )
         )
 

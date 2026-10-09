@@ -21,6 +21,8 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 - `M3-07` adds a local-only parity check of the scorecard against a household's existing statement.
 - Reader: `Ledger.accounts` is derived from transaction and balance rows; `Hide From Reports` accepts only Tiller's `Hide`/`Show` and boolean spellings and errors on anything else; category lookup is indexed.
 - `tests/test_read_only_invariant.py` statically checks that no toolkit module except the fixture generator can save a workbook. PRIVACY.md documents the guard hook's limits.
+- M2-06: `hfk doctor` reports closed accounts that still have later ledger activity and accounts declared as both open and closed.
+- M2-05: `hfk doctor` reports orphan transaction categories and unmapped expense groups or categories without inferring buckets.
 - M2-04: `hfk doctor` validates instance config, workbook availability, declared accounts, stale data, and `history_start` clamps with actionable diagnostics.
 - M2-03: `hfk.config` loads and validates `plan.yaml` schema, declared buckets, people, month ranges, categories, pacing flags, and annual renewal math.
 - M2-02: `hfk.config` loads and validates `declarations.yaml` bucket definitions, profile imports, mapping source maps, non-spend groups, overrides, splits, sharing rules, and closed accounts.
