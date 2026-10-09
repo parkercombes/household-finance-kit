@@ -88,7 +88,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 |---|---:|---|
 | M0 | Done | Foundations: design brief, docs, skeleton, CI, privacy scan, Tiller guard hook |
 | M1 | Done | Reader, Ledger types, synthetic workbook fixture |
-| M2 | In progress | Config loading, validation, and `hfk doctor` (M2-01 done) |
+| M2 | Done | Config loading, validation, and `hfk doctor` with orphan, stale-data, and closed-account checks |
 | M3 | Planned | Ownership, bucket mapping, monthly scorecard |
 | M4 | Planned | Category targets, balances, net worth, renewals, rebaseline, plan check |
 | M5 | Planned | Instance creation, hook wiring, renderers, CLI polish |
