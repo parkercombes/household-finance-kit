@@ -30,6 +30,13 @@ from hfk.engine.networth import (
     NetWorthReport,
     build_networth,
 )
+from hfk.engine.renewals import (
+    Renewal,
+    RenewalsError,
+    RenewalsReport,
+    ScheduleMonth,
+    build_renewals,
+)
 from hfk.engine.scorecard import BucketScore, Scorecard, ScorecardError, build_scorecard
 from hfk.engine.shares import (
     Share,
@@ -60,6 +67,10 @@ __all__ = [
     "NetWorthError",
     "NetWorthLine",
     "NetWorthReport",
+    "Renewal",
+    "RenewalsError",
+    "RenewalsReport",
+    "ScheduleMonth",
     "Scorecard",
     "ScorecardError",
     "Share",
@@ -71,6 +82,7 @@ __all__ = [
     "build_balances",
     "build_categories",
     "build_networth",
+    "build_renewals",
     "build_scorecard",
     "person_total",
     "resolve_category",

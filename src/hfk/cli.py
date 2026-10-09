@@ -22,11 +22,13 @@ from hfk.engine import (
     CategoriesError,
     NetWorthError,
     NetWorthLine,
+    RenewalsError,
     ScorecardError,
     ShareError,
     build_balances,
     build_categories,
     build_networth,
+    build_renewals,
     build_scorecard,
     run_doctor,
 )
@@ -34,7 +36,6 @@ from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "renewals": "M4",
     "rebaseline": "M4",
     "init": "M5",
     "plan": "M4",
@@ -308,6 +309,64 @@ def _networth_detail(line: NetWorthLine) -> str:
     return detail
 
 
+def _renewals(args: argparse.Namespace) -> int:
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        report = build_renewals(
+            plan=plan,
+            household=household,
+            month=args.month,
+            who=args.who,
+        )
+    except (ConfigError, RenewalsError) as error:
+        print(f"renewals: {error}", file=sys.stderr)
+        return 1
+
+    header = f"renewals for {report.month}"
+    if report.who is not None:
+        header += f"  who {report.who}"
+    print(header)
+    desc_width = max((len(row.desc) for row in report.renewals), default=0)
+    who_width = max((len(row.who) for row in report.renewals), default=0)
+    for row in report.renewals:
+        due_text = "-" if row.next_due is None else str(row.next_due)
+        accrued_text = "-" if row.accrued is None else _money(row.accrued)
+        projected_text = "-" if row.projected is None else _money(row.projected)
+        if row.shortfall is None:
+            status = "-"
+        elif row.shortfall == 0:
+            status = "ok"
+        else:
+            status = f"short {_money(row.shortfall)}"
+        line = (
+            f"{row.desc:<{desc_width}}  {row.who:<{who_width}}  due {due_text}  "
+            f"bill {_money(row.annual_bill)}  monthly {_money(row.monthly)}  "
+            f"accrued {accrued_text}  projected {projected_text}  {status}"
+        )
+        for flag in row.flags:
+            line += f"; {flag}"
+        print(line)
+    if report.schedule:
+        print("schedule:")
+        for entry in report.schedule:
+            print(f"  {entry.month}  {_money(entry.total)}  {', '.join(entry.items)}")
+    else:
+        print("schedule: nothing due in the next 12 months")
+    print(
+        f"set-aside monthly {_money(report.set_aside_monthly)}  "
+        f"accrued {_money(report.accrued_total)}  shortfall {_money(report.shortfall_total)}"
+    )
+    if report.shortfall_total == 0:
+        print("adequacy ok")
+    else:
+        plural = "renewal" if report.short_count == 1 else "renewals"
+        print(f"adequacy short {_money(report.shortfall_total)} across {report.short_count} {plural}")
+    return 0
+
+
 def _dev_fixture(args: argparse.Namespace) -> int:
     output = build_fixture(args.out, months=args.months)
     print(output)
@@ -396,6 +455,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     networth_parser.set_defaults(func=_networth)
+
+    renewals_parser = subparsers.add_parser("renewals")
+    renewals_parser.add_argument(
+        "--month",
+        type=_parse_month,
+        default=Month(date.today().year, date.today().month),  # noqa: DTZ011
+        help="Report month; the schedule and fund are shown as of that month.",
+    )
+    renewals_parser.add_argument("--who", help="Household person slug.")
+    renewals_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    renewals_parser.set_defaults(func=_renewals)
 
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)
