@@ -5,7 +5,7 @@ Last verified: 2026-10-08
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M2-01`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+The next item is `M2-02`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
 `tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -55,7 +55,7 @@ Goal: load and validate instance YAML files, then give users an actionable `hfk 
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M2-01` | Implement `household.yaml` loading with schema version, people, files, account ownership, `history_start`, and opt-in extension names. | `todo` | `M1-01` | Run `python -m pytest -q tests/test_config.py::test_household_loader_validates_required_fields`; expected: valid examples load and missing keys name the file and key path. |
+| `M2-01` | Implement `household.yaml` loading with schema version, people, files, account ownership, `history_start`, and opt-in extension names. | `done` | `M1-01` | Run `python -m pytest -q tests/test_config.py::test_household_loader_validates_required_fields`; expected: valid examples load and missing keys name the file and key path. |
 | `M2-02` | Implement `declarations.yaml` loading for bucket definitions, profile imports, mapping source, the `groups` or `categories` map, non-spend groups, overrides, splits, sharing rules, and closed accounts. | `todo` | `M2-01` | Run `python -m pytest -q tests/test_config.py::test_declarations_loader_requires_reasons`; expected: overrides, splits, and sharing rules without `reason`, and sharing weights that do not sum to 1.0, fail clearly. |
 | `M2-03` | Implement `plan.yaml` loading: `bucket` must name a declared bucket, `effective_from`/`effective_until` month ranges with `plan.effective_from` as the default start, optional `categories` and `paced`, and annual renewal validation that `monthly` equals `annual_bill / 12` within cents tolerance. | `todo` | `M2-01`, `M2-02` | Run `python -m pytest -q tests/test_config.py::test_plan_loader_validates_annual_bill_math tests/test_config.py::test_plan_loader_rejects_unknown_bucket`; expected: valid plans pass, incorrect monthly math fails, and a `bucket` not declared in `declarations.yaml` fails naming the line. |
 | `M2-04` | Implement `hfk doctor --home <dir>` for config validation, stale data checks, and `history_start` clamping checks. | `todo` | `M2-01`, `M2-02`, `M2-03`, `M1-03` | Run `hfk doctor --home examples/instance`; expected: exit 0 for the example instance once examples are wired to synthetic data. |
