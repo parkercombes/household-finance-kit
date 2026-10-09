@@ -22,12 +22,14 @@ from hfk.engine import (
     CategoriesError,
     NetWorthError,
     NetWorthLine,
+    RebaselineError,
     RenewalsError,
     ScorecardError,
     ShareError,
     build_balances,
     build_categories,
     build_networth,
+    build_rebaseline,
     build_renewals,
     build_scorecard,
     run_doctor,
@@ -36,7 +38,6 @@ from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "rebaseline": "M4",
     "init": "M5",
     "plan": "M4",
     "settle": "M7",
@@ -367,6 +368,81 @@ def _renewals(args: argparse.Namespace) -> int:
     return 0
 
 
+def _rebaseline(args: argparse.Namespace) -> int:
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        who = args.who
+        if who is None:
+            if len(household.slugs) != 1:
+                print(
+                    f"rebaseline: choose --who from: {', '.join(household.slugs)}",
+                    file=sys.stderr,
+                )
+                return 1
+            who = household.slugs[0]
+
+        workbook = find_workbook(home / "data", household.tiller_glob)
+        ledger = read_tiller(workbook)
+        today = args.today if args.today is not None else date.today()  # noqa: DTZ011
+        through = args.through if args.through is not None else _month_before(today)
+        report = build_rebaseline(
+            ledger=ledger,
+            household=household,
+            declarations=declarations,
+            plan=plan,
+            who=who,
+            through=through,
+            months=args.months,
+            today=today,
+        )
+    except (ConfigError, TillerFormatError, ShareError, BucketError, RebaselineError) as error:
+        print(f"rebaseline: {error}", file=sys.stderr)
+        return 1
+
+    print(
+        f"rebaseline for {report.who}  "
+        f"window {report.window_start}..{report.window_end}  months {report.months}"
+    )
+    if not report.lines:
+        print(f"no spend for {report.who} in the window")
+    else:
+        width = max(len(line.category) for line in report.lines)
+        for line in report.lines:
+            row = "  ".join(
+                (
+                    f"{line.category:<{width}}",
+                    f"months {line.nonzero_months}/{report.months}",
+                    f"mean {_money(line.mean)}",
+                    f"median {_money(line.median)}",
+                    f"max {_money(line.max)}",
+                    f"current {_amount_or_dash(line.current)}",
+                    f"proposed {_amount_or_dash(line.proposed)}",
+                    line.classification,
+                )
+            )
+            for flag in line.flags:
+                row += f"; {flag}"
+            print(row)
+    print(f"stable {report.stable}  lumpy {report.lumpy}  spiky {report.spiky}")
+    if report.clamped:
+        print(f"note: window clamped to history_start {report.history_start.isoformat()}")
+    return 0
+
+
+def _month_before(value: date) -> Month:
+    year, month = value.year, value.month - 1
+    if month == 0:
+        year, month = year - 1, 12
+    return Month(year, month)
+
+
+def _amount_or_dash(amount: object) -> str:
+    return "-" if amount is None else _money(amount)
+
+
 def _dev_fixture(args: argparse.Namespace) -> int:
     output = build_fixture(args.out, months=args.months)
     print(output)
@@ -470,6 +546,27 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     renewals_parser.set_defaults(func=_renewals)
+
+    rebaseline_parser = subparsers.add_parser("rebaseline")
+    rebaseline_parser.add_argument("--who", help="Household person slug.")
+    rebaseline_parser.add_argument(
+        "--months",
+        type=int,
+        default=6,
+        help="Number of closed months to analyze (at least 2).",
+    )
+    rebaseline_parser.add_argument(
+        "--through",
+        type=_parse_month,
+        help="Last month of the window (default: the month before today).",
+    )
+    rebaseline_parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
+    rebaseline_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    rebaseline_parser.set_defaults(func=_rebaseline)
 
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)

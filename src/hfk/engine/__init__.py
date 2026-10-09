@@ -30,6 +30,12 @@ from hfk.engine.networth import (
     NetWorthReport,
     build_networth,
 )
+from hfk.engine.rebaseline import (
+    CategoryBaseline,
+    RebaselineError,
+    RebaselineReport,
+    build_rebaseline,
+)
 from hfk.engine.renewals import (
     Renewal,
     RenewalsError,
@@ -60,6 +66,7 @@ __all__ = [
     "BucketScore",
     "CategoriesError",
     "CategoriesReport",
+    "CategoryBaseline",
     "CategoryLine",
     "CategoryResolution",
     "Diagnostic",
@@ -67,6 +74,8 @@ __all__ = [
     "NetWorthError",
     "NetWorthLine",
     "NetWorthReport",
+    "RebaselineError",
+    "RebaselineReport",
     "Renewal",
     "RenewalsError",
     "RenewalsReport",
@@ -82,6 +91,7 @@ __all__ = [
     "build_balances",
     "build_categories",
     "build_networth",
+    "build_rebaseline",
     "build_renewals",
     "build_scorecard",
     "person_total",
