@@ -14,11 +14,12 @@ from datetime import date
 from pathlib import Path
 
 from hfk import __version__
-from hfk.engine import run_doctor
+from hfk.config import ConfigError, Month, load_declarations, load_household, load_plan
+from hfk.engine import BucketError, ScorecardError, ShareError, build_scorecard, run_doctor
+from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "scorecard": "M3",
     "categories": "M4",
     "balances": "M4",
     "networth": "M4",
@@ -52,6 +53,13 @@ def _parse_date(value: str) -> date:
         raise argparse.ArgumentTypeError("write dates as YYYY-MM-DD") from exc
 
 
+def _parse_month(value: str) -> Month:
+    try:
+        return Month.parse(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("write months as YYYY-MM") from exc
+
+
 def _doctor(args: argparse.Namespace) -> int:
     report = run_doctor(
         Path(args.home),
@@ -64,10 +72,61 @@ def _doctor(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _scorecard(args: argparse.Namespace) -> int:
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        who = args.who
+        if who is None:
+            if len(household.slugs) != 1:
+                print(
+                    f"scorecard: choose --who from: {', '.join(household.slugs)}",
+                    file=sys.stderr,
+                )
+                return 1
+            who = household.slugs[0]
+
+        workbook = find_workbook(home / "data", household.tiller_glob)
+        ledger = read_tiller(workbook)
+        scorecard = build_scorecard(
+            ledger=ledger,
+            household=household,
+            declarations=declarations,
+            plan=plan,
+            month=args.month,
+            who=who,
+            today=args.today if args.today is not None else date.today(),  # noqa: DTZ011
+        )
+    except (ConfigError, TillerFormatError, ShareError, BucketError, ScorecardError) as error:
+        print(f"scorecard: {error}", file=sys.stderr)
+        return 1
+
+    print(f"scorecard {scorecard.month} for {scorecard.who} (closed month, shares per declarations)")
+    width = max((len(bucket.bucket) for bucket in scorecard.buckets), default=len("total"))
+    for bucket in scorecard.buckets:
+        print(
+            f"{bucket.bucket:<{width}}  plan {_money(bucket.planned)}  "
+            f"actual {_money(bucket.actual)}  left {_money(bucket.variance)}"
+        )
+    print(
+        f"total  plan {_money(scorecard.planned_total)}  actual {_money(scorecard.actual_total)}  "
+        f"left {_money(scorecard.planned_total - scorecard.actual_total)}"
+    )
+    if scorecard.clamped:
+        print(f"note: window clamped to history_start {scorecard.window_start.isoformat()}")
+    return 0
+
+
 def _dev_fixture(args: argparse.Namespace) -> int:
     output = build_fixture(args.out, months=args.months)
     print(output)
     return 0
+
+
+def _money(amount: object) -> str:
+    return f"{amount:.2f}"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -89,6 +148,17 @@ def _build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
     doctor_parser.add_argument("--stale-days", type=int, default=14, help="Stale data threshold.")
     doctor_parser.set_defaults(func=_doctor)
+
+    scorecard_parser = subparsers.add_parser("scorecard")
+    scorecard_parser.add_argument("--month", required=True, type=_parse_month, help="Closed month.")
+    scorecard_parser.add_argument("--who", help="Household person slug.")
+    scorecard_parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
+    scorecard_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    scorecard_parser.set_defaults(func=_scorecard)
 
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)
