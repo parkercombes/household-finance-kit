@@ -26,6 +26,7 @@ from .household import (
     load_household,
 )
 from .plan import PLAN_FILE, Month, Plan, PlanLine, load_plan, plan_path
+from .plan_check import PlanCheckReport, PlanProblem, check_plan
 
 __all__ = [
     "DECLARATIONS_FILE",
@@ -41,9 +42,12 @@ __all__ = [
     "Override",
     "Person",
     "Plan",
+    "PlanCheckReport",
     "PlanLine",
+    "PlanProblem",
     "SharingRule",
     "Split",
+    "check_plan",
     "declarations_path",
     "household_path",
     "load_declarations",

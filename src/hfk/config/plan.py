@@ -145,6 +145,28 @@ def _lines(
     people: tuple[str, ...] | None,
     path: Path,
 ) -> tuple[PlanLine, ...]:
+    rows = _plan_rows(value, path)
+    declared_buckets = set(bucket_names)
+    known_people = None if people is None else set(people)
+    lines: list[PlanLine] = []
+    for index, row in enumerate(rows):
+        parents = ("plan", "lines", f"[{index}]")
+        lines.append(
+            _line_entry(
+                row,
+                parents=parents,
+                plan_effective_from=plan_effective_from,
+                bucket_names=bucket_names,
+                declared_buckets=declared_buckets,
+                people=people,
+                known_people=known_people,
+                path=path,
+            )
+        )
+    return tuple(lines)
+
+
+def _plan_rows(value: Any, path: Path) -> list[Any]:
     rows = require_list(value, path, "plan", "lines")
     if not rows:
         raise ConfigError(
@@ -153,33 +175,39 @@ def _lines(
             key="plan.lines",
             fix="add at least one budget line",
         )
-    declared_buckets = set(bucket_names)
-    known_people = None if people is None else set(people)
-    lines: list[PlanLine] = []
-    for index, row in enumerate(rows):
-        parents = ("plan", "lines", f"[{index}]")
-        entry = require_mapping(row, path, *parents)
-        if "type" in entry:
-            raise ConfigError(
-                "Plan lines use bucket, not type",
-                file=path,
-                key=key_path(*parents, "type"),
-                fix="rename type to bucket; Type already means Expense/Income/Transfer in Tiller",
-            )
-        reject_unknown_keys(entry, LINE_KEYS, path, *parents)
-        lines.append(
-            _line(
-                entry,
-                plan_effective_from=plan_effective_from,
-                bucket_names=bucket_names,
-                declared_buckets=declared_buckets,
-                people=people,
-                known_people=known_people,
-                path=path,
-                parents=parents,
-            )
+    return rows
+
+
+def _line_entry(
+    row: Any,
+    *,
+    parents: tuple[str, ...],
+    plan_effective_from: Month,
+    bucket_names: tuple[str, ...],
+    declared_buckets: set[str],
+    people: tuple[str, ...] | None,
+    known_people: set[str] | None,
+    path: Path,
+) -> PlanLine:
+    entry = require_mapping(row, path, *parents)
+    if "type" in entry:
+        raise ConfigError(
+            "Plan lines use bucket, not type",
+            file=path,
+            key=key_path(*parents, "type"),
+            fix="rename type to bucket; Type already means Expense/Income/Transfer in Tiller",
         )
-    return tuple(lines)
+    reject_unknown_keys(entry, LINE_KEYS, path, *parents)
+    return _line(
+        entry,
+        plan_effective_from=plan_effective_from,
+        bucket_names=bucket_names,
+        declared_buckets=declared_buckets,
+        people=people,
+        known_people=known_people,
+        path=path,
+        parents=parents,
+    )
 
 
 def _line(

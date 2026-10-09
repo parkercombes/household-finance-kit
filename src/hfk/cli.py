@@ -14,7 +14,14 @@ from datetime import date
 from pathlib import Path
 
 from hfk import __version__
-from hfk.config import ConfigError, Month, load_declarations, load_household, load_plan
+from hfk.config import (
+    ConfigError,
+    Month,
+    check_plan,
+    load_declarations,
+    load_household,
+    load_plan,
+)
 from hfk.engine import (
     AccountBalance,
     BalancesError,
@@ -39,7 +46,6 @@ from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
     "init": "M5",
-    "plan": "M4",
     "settle": "M7",
     "retirement": "M8",
 }
@@ -54,7 +60,7 @@ def _stub(name: str) -> int:
     return 2
 
 
-def _dev_help(parser: argparse.ArgumentParser) -> int:
+def _subcommand_help(parser: argparse.ArgumentParser) -> int:
     parser.print_help(sys.stderr)
     return 2
 
@@ -432,6 +438,29 @@ def _rebaseline(args: argparse.Namespace) -> int:
     return 0
 
 
+def _plan_check(args: argparse.Namespace) -> int:
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+    except ConfigError as error:
+        print(f"plan check: {error}", file=sys.stderr)
+        return 1
+
+    report = check_plan(home, declarations=declarations, people=household.slugs)
+    print(f"plan check {report.path}")
+    for problem in report.problems:
+        line = "-" if problem.line == 0 else str(problem.line)
+        print(f"  line {line}  {problem.key}  {problem.problem}; fix: {problem.fix}")
+    if report.ok:
+        print(f"ok: {report.line_count} lines")
+        return 0
+    count = len(report.problems)
+    plural = "problem" if count == 1 else "problems"
+    print(f"{count} {plural}")
+    return 1
+
+
 def _month_before(value: date) -> Month:
     year, month = value.year, value.month - 1
     if month == 0:
@@ -568,6 +597,19 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     rebaseline_parser.set_defaults(func=_rebaseline)
 
+    plan_parser = subparsers.add_parser("plan")
+    plan_subparsers = plan_parser.add_subparsers(dest="plan_command", metavar="command")
+    plan_check_parser = plan_subparsers.add_parser("check")
+    plan_check_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    plan_check_parser.set_defaults(func=_plan_check)
+    plan_parser.set_defaults(
+        func=lambda _args, plan_parser=plan_parser: _subcommand_help(plan_parser)
+    )
+
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)
         subparser.set_defaults(func=lambda _args, command=name: _stub(command))
@@ -578,7 +620,7 @@ def _build_parser() -> argparse.ArgumentParser:
     fixture_parser.add_argument("--out", required=True, help="Output workbook path.")
     fixture_parser.add_argument("--months", type=int, default=6, help="Number of months.")
     fixture_parser.set_defaults(func=_dev_fixture)
-    dev_parser.set_defaults(func=lambda _args, dev_parser=dev_parser: _dev_help(dev_parser))
+    dev_parser.set_defaults(func=lambda _args, dev_parser=dev_parser: _subcommand_help(dev_parser))
 
     return parser
 

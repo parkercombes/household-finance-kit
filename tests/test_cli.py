@@ -9,7 +9,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PYTHONPATH = str(ROOT / "src")
 STUBS = {
     "init": "M5",
-    "plan": "M4",
     "settle": "M7",
     "retirement": "M8",
 }
@@ -59,3 +58,11 @@ def test_dev_without_subcommand_prints_help_to_stderr() -> None:
     assert result.returncode == 2
     assert result.stdout == ""
     assert "usage: hfk dev" in result.stderr
+
+
+def test_plan_without_subcommand_prints_help_to_stderr() -> None:
+    result = run_hfk("plan")
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "usage: hfk plan" in result.stderr
