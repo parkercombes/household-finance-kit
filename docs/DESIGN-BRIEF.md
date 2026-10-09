@@ -145,6 +145,7 @@ accounts:
   "Joint Card":    {shared: {alex: 0.5, sam: 0.5}}   # weights sum to 1.0
   "Sam Checking":  {owner: sam}
   "Savings":       {owner: alex, kind: savings}
+  "House":         {shared: {alex: 0.5, sam: 0.5}, unsynced: true}   # hand-typed house value, not synced by Tiller
 extensions: [settle_up, retirement]  # opt-in
 ```
 **Ownership model.** Every account is either `owner: <slug>` or `shared: {slug: weight}`.

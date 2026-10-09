@@ -30,7 +30,7 @@ from hfk.config.errors import ConfigError, key_path
 HOUSEHOLD_FILE = "household.yaml"
 SLUG = re.compile(r"^[a-z][a-z0-9_]*$")
 TOP_LEVEL_KEYS = ("schema_version", "people", "files", "history_start", "accounts", "extensions")
-ACCOUNT_KEYS = ("owner", "shared", "kind")
+ACCOUNT_KEYS = ("owner", "shared", "kind", "unsynced")
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,7 @@ class AccountOwnership:
     name: str
     weights: tuple[tuple[str, Decimal], ...]
     kind: str | None = None
+    unsynced: bool = False
 
     @property
     def owner(self) -> str | None:
@@ -210,6 +211,17 @@ def _accounts(value: Any, slugs: set[str], path: Path) -> tuple[AccountOwnership
         kind = None
         if "kind" in entry:
             kind = require_text(entry["kind"], path, *parents, "kind")
+        unsynced = False
+        if "unsynced" in entry:
+            raw_unsynced = entry["unsynced"]
+            if not isinstance(raw_unsynced, bool):
+                raise ConfigError(
+                    f"Invalid unsynced flag {raw_unsynced!r}",
+                    file=path,
+                    key=key_path(*parents, "unsynced"),
+                    fix="write unsynced as true or false",
+                )
+            unsynced = raw_unsynced
         has_owner = "owner" in entry
         has_shared = "shared" in entry
         if has_owner == has_shared:
@@ -225,7 +237,7 @@ def _accounts(value: Any, slugs: set[str], path: Path) -> tuple[AccountOwnership
             weights: tuple[tuple[str, Decimal], ...] = ((owner, Decimal(1)),)
         else:
             weights = _shared_weights(entry["shared"], slugs, path, *parents, "shared")
-        accounts.append(AccountOwnership(name=name, weights=weights, kind=kind))
+        accounts.append(AccountOwnership(name=name, weights=weights, kind=kind, unsynced=unsynced))
     return tuple(accounts)
 
 

@@ -24,6 +24,12 @@ from hfk.engine.categories import (
     build_categories,
 )
 from hfk.engine.doctor import Diagnostic, DoctorReport, run_doctor
+from hfk.engine.networth import (
+    NetWorthError,
+    NetWorthLine,
+    NetWorthReport,
+    build_networth,
+)
 from hfk.engine.scorecard import BucketScore, Scorecard, ScorecardError, build_scorecard
 from hfk.engine.shares import (
     Share,
@@ -51,6 +57,9 @@ __all__ = [
     "CategoryResolution",
     "Diagnostic",
     "DoctorReport",
+    "NetWorthError",
+    "NetWorthLine",
+    "NetWorthReport",
     "Scorecard",
     "ScorecardError",
     "Share",
@@ -61,6 +70,7 @@ __all__ = [
     "bucket_attributes",
     "build_balances",
     "build_categories",
+    "build_networth",
     "build_scorecard",
     "person_total",
     "resolve_category",

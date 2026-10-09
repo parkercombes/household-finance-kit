@@ -193,6 +193,32 @@ def test_shared_weights_are_exact_decimals(tmp_path: Path) -> None:
     assert sum(weight for _slug, weight in joint.weights) == Decimal(1)
 
 
+def test_household_unsynced_flag_loads_and_rejects_non_bool(tmp_path: Path) -> None:
+    data = example_data()
+    data["accounts"]["Savings"]["unsynced"] = True
+
+    household = load_household(write_household(tmp_path, data))
+
+    assert household.account("Savings").unsynced is True
+    assert household.account("Alex Checking").unsynced is False
+
+    data = example_data()
+    household = load_household(write_household(tmp_path, data))
+    assert household.account("Savings").unsynced is False
+
+    data = example_data()
+    data["accounts"]["Savings"]["unsynced"] = "yes"
+    path = write_household(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_household(path)
+
+    assert error.value.key == "accounts.Savings.unsynced"
+    assert error.value.file == path
+    assert error.value.fix == "write unsynced as true or false"
+    assert "unsynced" in str(error.value)
+
+
 def test_household_objects_are_frozen() -> None:
     household = load_household(EXAMPLE)
 

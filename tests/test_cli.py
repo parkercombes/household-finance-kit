@@ -8,7 +8,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PYTHONPATH = str(ROOT / "src")
 STUBS = {
-    "networth": "M4",
     "renewals": "M4",
     "rebaseline": "M4",
     "init": "M5",

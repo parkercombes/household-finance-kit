@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Last verified: 2026-10-08
+Last verified: 2026-10-09
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
 `household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
@@ -379,8 +379,52 @@ name similarity, even when a group and a bucket share a name.
 
 ### Consequences
 
-Setup needs one more short section, which `hfk doctor` can list group by group when it
-is missing. The example declarations now carry a `groups` map that covers the synthetic
+Setup needs one more short section, which `hfk doctor` can list group by group when
+it is missing. The example declarations now carry a `groups` map that covers the synthetic
 fixture, with overrides for `Utilities` and `Dining` as real exceptions to their groups.
 M2-02 loads the map, M2-05 reports unmapped groups, and M3-02 and M3-03 implement the
 resolution order.
+
+## ADR-0012: Net Worth Sums Observed Balances by Tiller Class; Unsynced Accounts Are Declared in household.yaml
+
+Status: accepted
+Date: 2026-10-09
+
+### Context
+
+Tiller's own net worth is a plain sum of balances in which liabilities are
+recorded as negative numbers. The design brief (section 7) forbids counting
+null balances as zero and says declared unsynced accounts carry their own
+dates. `hfk networth` (M4-03) needed those rules pinned before any arithmetic
+was written, because each open question is a place where a believable wrong
+total could appear.
+
+### Decision
+
+`build_networth` starts from the per-account balances `build_balances` already
+selects (same selection rule, same closed-account cutoff, same `history_start`
+clamping) and splits them by Tiller's `Class` metadata:
+
+- Gap and unclassified accounts are excluded from the totals and reported by
+  name (`incomplete`, plus a warning), never counted as zero and never
+  silently assigned a side; the fix belongs in the workbook.
+- Closed accounts stop counting at their declared closure date; on or after
+  that date the line is excluded with the flag `closed <ISO>` and shows the
+  last observation on or before the closure date.
+- Liabilities are summed exactly as recorded (negative), and a positive
+  liability is flagged rather than sign-flipped.
+- Synced accounts are flagged `stale (<days> days)` when their observation is
+  more than `stale_after_days` (default 14) before `--as-of`; the observation
+  itself is still counted because it is the truth the workbook holds.
+- An account whose Balance History is hand-typed rather than synced (a house
+  value, a pension statement) is declared per account in `household.yaml`
+  with `unsynced: true` and is never flagged stale, because its dates carry
+  their own cadence.
+- Undeclared accounts are still counted but flagged `undeclared`.
+
+### Consequences
+
+Net worth totals can be labelled incomplete, which is the honest statement
+that an unknown value was excluded rather than zeroed. The user's fixes are
+to set `Class` in Tiller, declare closed accounts in `declarations.yaml`, or
+declare unsynced accounts in `household.yaml` — never to edit arithmetic.

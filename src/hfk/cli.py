@@ -20,10 +20,13 @@ from hfk.engine import (
     BalancesError,
     BucketError,
     CategoriesError,
+    NetWorthError,
+    NetWorthLine,
     ScorecardError,
     ShareError,
     build_balances,
     build_categories,
+    build_networth,
     build_scorecard,
     run_doctor,
 )
@@ -31,7 +34,6 @@ from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "networth": "M4",
     "renewals": "M4",
     "rebaseline": "M4",
     "init": "M5",
@@ -249,6 +251,63 @@ def _balance_detail(row: AccountBalance) -> str:
     return detail
 
 
+def _networth(args: argparse.Namespace) -> int:
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        workbook = find_workbook(home / "data", household.tiller_glob)
+        ledger = read_tiller(workbook)
+        report = build_networth(
+            ledger=ledger,
+            household=household,
+            declarations=declarations,
+            as_of=args.as_of,
+            stale_after_days=args.stale_after_days,
+        )
+    except (ConfigError, TillerFormatError, NetWorthError) as error:
+        print(f"networth: {error}", file=sys.stderr)
+        return 1
+
+    print(f"net worth as of {report.as_of.isoformat()}")
+    account_width = max((len(line.account) for line in report.lines), default=0)
+    class_width = max((len(_networth_class(line)) for line in report.lines), default=1)
+    for line in report.lines:
+        amount = "gap" if line.gap else _money(line.balance)
+        print(
+            f"{line.account:<{account_width}}  {_networth_class(line):<{class_width}}  "
+            f"{amount}  {_networth_detail(line)}"
+        )
+    print(f"assets {_money(report.assets)}")
+    print(f"liabilities {_money(report.liabilities)}")
+    print(f"net worth {_money(report.net_worth)}")
+    print(f"counted {report.counted} of {len(report.lines)}  excluded {len(report.excluded)}")
+    if report.incomplete:
+        print(f"warning: incomplete net worth; excluded: {', '.join(report.incomplete)}")
+    if report.ignored_before_history_start:
+        print(
+            f"note: ignored {report.ignored_before_history_start} observations "
+            f"before history_start {household.history_start.isoformat()}"
+        )
+    return 0
+
+
+def _networth_class(line: NetWorthLine) -> str:
+    return "-" if line.account_class is None else line.account_class
+
+
+def _networth_detail(line: NetWorthLine) -> str:
+    if not line.gap:
+        detail = f"observed {line.observed.isoformat()}"
+    else:
+        detail = line.gap_reason or ""
+    for flag in line.flags:
+        detail += f"; {flag}"
+    if not line.counted:
+        detail += "; excluded"
+    return detail
+
+
 def _dev_fixture(args: argparse.Namespace) -> int:
     output = build_fixture(args.out, months=args.months)
     print(output)
@@ -315,6 +374,28 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     balances_parser.set_defaults(func=_balances)
+
+    networth_parser = subparsers.add_parser("networth")
+    networth_parser.add_argument(
+        "--as-of",
+        type=_parse_date,
+        default=date.today(),  # noqa: DTZ011
+        dest="as_of",
+        help="Report date; each account shows its latest observation on or before it.",
+    )
+    networth_parser.add_argument(
+        "--stale-after-days",
+        type=int,
+        default=14,
+        dest="stale_after_days",
+        help="Flag synced accounts whose latest observation is older than this many days.",
+    )
+    networth_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    networth_parser.set_defaults(func=_networth)
 
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)
