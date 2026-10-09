@@ -21,6 +21,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 - `M3-07` adds a local-only parity check of the scorecard against a household's existing statement.
 - Reader: `Ledger.accounts` is derived from transaction and balance rows; `Hide From Reports` accepts only Tiller's `Hide`/`Show` and boolean spellings and errors on anything else; category lookup is indexed.
 - `tests/test_read_only_invariant.py` statically checks that no toolkit module except the fixture generator can save a workbook. PRIVACY.md documents the guard hook's limits.
+- M3-01: `hfk.engine.shares` computes per-transaction person shares from account ownership defaults and matching sharing rules, with cent reconciliation and conflict errors.
 - Marked M2 done in the README milestone table and added roadmap item `M5-00` to package the bucket profiles as package data before `hfk init` ships.
 - M2-06: `hfk doctor` reports closed accounts that still have later ledger activity and accounts declared as both open and closed.
 - M2-05: `hfk doctor` reports orphan transaction categories and unmapped expense groups or categories without inferring buckets.

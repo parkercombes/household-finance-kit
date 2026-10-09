@@ -5,7 +5,7 @@ Last verified: 2026-10-08
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M3-01`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+The next item is `M3-02`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
 `tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -68,7 +68,7 @@ Goal: allocate ledger amounts to people, map categories into user-defined bucket
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M3-01` | Implement the share engine: account ownership weights as the default, overridden per transaction by matching `sharing` rules; two matching rules with different weights stop with an error. | `todo` | `M1-01`, `M2-01`, `M2-02` | Run `python -m pytest -q tests/test_ownership.py`; expected: owner and weighted shared amounts reconcile to the original ledger amount within one cent, and a sharing rule moves a joint bill paid from one account onto both people. |
+| `M3-01` | Implement the share engine: account ownership weights as the default, overridden per transaction by matching `sharing` rules; two matching rules with different weights stop with an error. | `done` | `M1-01`, `M2-01`, `M2-02` | Run `python -m pytest -q tests/test_ownership.py`; expected: owner and weighted shared amounts reconcile to the original ledger amount within one cent, and a sharing rule moves a joint bill paid from one account onto both people. |
 | `M3-02` | Implement bucket mapping: the `groups` map under `tiller_group`, the `categories` map under `explicit`, presets supplying bucket definitions only, and no inference from name similarity. | `todo` | `M2-02`, `M3-01` | Run `python -m pytest -q tests/test_buckets.py`; expected: simple, four-bucket, and fifty-thirty-twenty presets map the synthetic ledger through a declared `groups` map, and a group name that matches a bucket name is still unmapped without an entry. |
 | `M3-03` | Implement overrides and splits with resolution order splits, then overrides, then the map; detect conflicting constraints, including a category in both; keep every judgement call traceable to declarations data. | `todo` | `M3-02` | Run `python -m pytest -q tests/test_buckets.py::test_overrides_splits_and_conflicts`; expected: valid splits sum correctly and conflicts stop with a clear error. |
 | `M3-04` | Implement `hfk scorecard --month YYYY-MM` for actual-vs-plan per bucket using the selected owner's share and the plan lines effective in the requested closed month. | `todo` | `M2-03`, `M3-01`, `M3-03` | Run `hfk scorecard --home examples/instance --month 2025-03`; expected: exits 0 and prints bucket actuals and plan totals from the synthetic fixture. |
