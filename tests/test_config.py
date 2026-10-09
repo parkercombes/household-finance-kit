@@ -11,11 +11,21 @@ from typing import Any
 import pytest
 import yaml
 
-from hfk.config import ConfigError, Declarations, Household, load_declarations, load_household
+from hfk.config import (
+    ConfigError,
+    Declarations,
+    Household,
+    Month,
+    Plan,
+    load_declarations,
+    load_household,
+    load_plan,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "examples" / "household.example.yaml"
 DECLARATIONS_EXAMPLE = ROOT / "examples" / "declarations.example.yaml"
+PLAN_EXAMPLE = ROOT / "examples" / "plan.example.yaml"
 PROFILES = ROOT / "profiles"
 
 
@@ -37,6 +47,20 @@ def write_declarations(tmp_path: Path, data: dict[str, Any]) -> Path:
     path = tmp_path / "declarations.yaml"
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     return path
+
+
+def plan_data() -> dict[str, Any]:
+    return copy.deepcopy(yaml.safe_load(PLAN_EXAMPLE.read_text(encoding="utf-8")))
+
+
+def write_plan(tmp_path: Path, data: dict[str, Any]) -> Path:
+    path = tmp_path / "plan.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def example_declarations() -> Declarations:
+    return load_declarations(DECLARATIONS_EXAMPLE, people=("alex", "sam"))
 
 
 def test_example_household_loads() -> None:
@@ -359,3 +383,147 @@ def test_declarations_closed_accounts(tmp_path: Path) -> None:
         load_declarations(write_declarations(tmp_path, data))
 
     assert error.value.key == 'closed_accounts."Example Bank Card".closed'
+
+
+def test_plan_loader_validates_annual_bill_math(tmp_path: Path) -> None:
+    declarations = example_declarations()
+    plan = load_plan(PLAN_EXAMPLE, declarations=declarations, people=("alex", "sam"))
+    assert plan.lines[7].monthly == Decimal("10.00")
+
+    data = plan_data()
+    data["plan"]["lines"][7]["monthly"] = 11.00
+    path = write_plan(tmp_path, data)
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=declarations, people=("alex", "sam"))
+    assert error.value.key == "plan.lines[7].monthly"
+    assert error.value.file == path
+
+    data = plan_data()
+    data["plan"]["lines"][7]["annual_full"] = 119.00
+    path = write_plan(tmp_path, data)
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=declarations, people=("alex", "sam"))
+    assert error.value.key == "plan.lines[7].annual_full"
+    assert error.value.file == path
+
+
+def test_plan_loader_rejects_unknown_bucket(tmp_path: Path) -> None:
+    declarations = example_declarations()
+    data = plan_data()
+    data["plan"]["lines"][0]["bucket"] = "Savings Goal"
+    path = write_plan(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=declarations, people=("alex", "sam"))
+
+    assert error.value.key == "plan.lines[0].bucket"
+    assert error.value.file == path
+    message = str(error.value)
+    for bucket in declarations.bucket_names():
+        assert bucket in message
+
+
+def test_example_plan_loads() -> None:
+    plan = load_plan(PLAN_EXAMPLE, declarations=example_declarations(), people=("alex", "sam"))
+
+    assert isinstance(plan, Plan)
+    assert len(plan.lines) == 9
+    assert plan.effective_from == Month(2025, 1)
+    assert plan.lines[3].effective_until == Month(2025, 6)
+
+    alex_march = plan.lines_for(Month(2025, 3), "alex")
+    assert any(line.desc == "Example Grocer" and line.monthly == Decimal("500.00") for line in alex_march)
+    assert not any(
+        line.desc == "Example Grocer" and line.monthly == Decimal("550.00") for line in alex_march
+    )
+
+    alex_august = plan.lines_for(Month(2025, 8), "alex")
+    assert any(
+        line.desc == "Example Grocer" and line.monthly == Decimal("550.00") for line in alex_august
+    )
+    assert not any(
+        line.desc == "Example Grocer" and line.monthly == Decimal("500.00") for line in alex_august
+    )
+
+    streaming = plan.lines[6]
+    assert streaming.categories == ()
+    assert streaming.paced is False
+    assert plan.lines[7].due == (7, 1)
+
+
+@pytest.mark.parametrize("value", ["2025-13", "2025-1", date(2025, 1, 1), 202501])
+def test_plan_month_parsing(tmp_path: Path, value: Any) -> None:
+    assert Month.parse("2025-01") == Month(2025, 1)
+    assert str(Month(2025, 1)) == "2025-01"
+
+    data = plan_data()
+    data["plan"]["effective_from"] = value
+    path = write_plan(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=example_declarations(), people=("alex", "sam"))
+
+    assert error.value.key == "plan.effective_from"
+    assert error.value.file == path
+    assert error.value.fix == "write the month as YYYY-MM"
+
+
+def test_plan_line_date_rules(tmp_path: Path) -> None:
+    declarations = example_declarations()
+    data = plan_data()
+    data["plan"]["lines"][0]["effective_from"] = "2024-12"
+    path = write_plan(tmp_path, data)
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=declarations, people=("alex", "sam"))
+    assert error.value.key == "plan.lines[0].effective_from"
+    assert error.value.file == path
+
+    data = plan_data()
+    data["plan"]["lines"][0]["effective_from"] = "2025-05"
+    data["plan"]["lines"][0]["effective_until"] = "2025-04"
+    path = write_plan(tmp_path, data)
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=declarations, people=("alex", "sam"))
+    assert error.value.key == "plan.lines[0].effective_until"
+    assert error.value.file == path
+
+
+def test_plan_rejects_type_key(tmp_path: Path) -> None:
+    data = plan_data()
+    data["plan"]["lines"][0]["type"] = "Fixed Essential"
+    path = write_plan(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=example_declarations(), people=("alex", "sam"))
+
+    assert error.value.key == "plan.lines[0].type"
+    assert error.value.file == path
+    assert "bucket" in error.value.fix
+
+
+def test_plan_people_check(tmp_path: Path) -> None:
+    declarations = example_declarations()
+    data = plan_data()
+    data["plan"]["lines"][0]["who"] = "pat"
+    path = write_plan(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=declarations, people=("alex", "sam"))
+    assert error.value.key == "plan.lines[0].who"
+    assert error.value.file == path
+
+    plan = load_plan(path, declarations=declarations, people=None)
+    assert plan.lines[0].who == "pat"
+
+
+def test_plan_rejects_unknown_line_keys(tmp_path: Path) -> None:
+    data = plan_data()
+    data["plan"]["lines"][0]["extra"] = "remove me"
+    path = write_plan(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_plan(path, declarations=example_declarations(), people=("alex", "sam"))
+
+    assert error.value.key == "plan.lines[0].extra"
+    assert error.value.file == path
+    assert "extra" in str(error.value)

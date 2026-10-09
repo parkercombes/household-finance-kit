@@ -107,6 +107,17 @@ def require_list(value: Any, path: Path, *parents: str) -> list[Any]:
     return value
 
 
+def require_bool(value: Any, path: Path, *parents: str) -> bool:
+    if not isinstance(value, bool):
+        raise ConfigError(
+            "Expected true or false",
+            file=path,
+            key=key_path(*parents),
+            fix="use YAML true or false",
+        )
+    return value
+
+
 def require_text(value: Any, path: Path, *parents: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ConfigError(
