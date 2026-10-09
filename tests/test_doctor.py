@@ -341,3 +341,86 @@ def test_history_start_checks(tmp_path: Path) -> None:
     assert clamps
     count = int(clamps[0].message.split()[0])
     assert count > 0
+
+
+def test_plan_and_sharing_conflicts(tmp_path: Path) -> None:
+    def child_instance(name: str) -> Path:
+        home = tmp_path / name
+        home.mkdir()
+        return make_instance(home)
+
+    clean_home = child_instance("clean")
+    clean_report = run_doctor(clean_home, today=date(2026, 10, 1))
+    new_codes = {
+        "plan-category-bucket-mismatch",
+        "plan-category-duplicate",
+        "sharing-rule-conflict",
+    }
+    assert not any(diagnostic.code in new_codes for diagnostic in clean_report.errors())
+
+    mismatch_home = child_instance("mismatch")
+    plan_path = mismatch_home / "plan.yaml"
+    plan = load_yaml(plan_path)
+    plan["plan"]["lines"][0]["categories"].append("Utilities")
+    dump_yaml(plan_path, plan)
+    mismatch_report = run_doctor(mismatch_home, today=date(2026, 10, 1))
+    mismatches = [
+        diagnostic
+        for diagnostic in mismatch_report.errors()
+        if diagnostic.code == "plan-category-bucket-mismatch"
+    ]
+    assert any(
+        "Utilities" in diagnostic.message and "Variable Essential" in diagnostic.message
+        for diagnostic in mismatches
+    )
+
+    duplicate_home = child_instance("duplicate")
+    plan_path = duplicate_home / "plan.yaml"
+    plan = load_yaml(plan_path)
+    plan["plan"]["lines"].append(
+        {
+            "desc": "Example Grocer Extra",
+            "who": "alex",
+            "bucket": "Variable Essential",
+            "monthly": 50.00,
+            "categories": ["Groceries"],
+            "effective_from": "2025-01",
+        }
+    )
+    dump_yaml(plan_path, plan)
+    duplicate_report = run_doctor(duplicate_home, today=date(2026, 10, 1))
+    duplicates = [
+        diagnostic
+        for diagnostic in duplicate_report.errors()
+        if diagnostic.code == "plan-category-duplicate"
+    ]
+    assert any(
+        "Groceries" in diagnostic.message and "alex" in diagnostic.message
+        for diagnostic in duplicates
+    )
+
+    conflict_home = child_instance("sharing")
+    declarations_path = conflict_home / "declarations.yaml"
+    declarations = load_yaml(declarations_path)
+    declarations["sharing"].append(
+        {
+            "match": {"account": "Alex Checking", "description": "City Utilities*"},
+            "weights": {"alex": 0.7, "sam": 0.3},
+            "reason": "Utilities use a different example split.",
+        }
+    )
+    dump_yaml(declarations_path, declarations)
+    conflict_report = run_doctor(conflict_home, today=date(2026, 10, 1))
+    conflicts = [
+        diagnostic
+        for diagnostic in conflict_report.errors()
+        if diagnostic.code == "sharing-rule-conflict"
+    ]
+    assert len(conflicts) == 1
+    assert "Utilities are a joint bill paid from Alex's account." in conflicts[0].message
+    assert "Utilities use a different example split." in conflicts[0].message
+    assert "City Utilities" in conflicts[0].message
+
+    result = run_hfk("doctor", "--home", str(conflict_home), "--today", "2026-10-01")
+    assert result.returncode == 1
+    assert "conflicting sharing rules match first transaction" in result.stdout

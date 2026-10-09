@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -10,11 +11,16 @@ from hfk.config import (
     ConfigError,
     Declarations,
     Household,
+    Month,
+    Plan,
+    SharingRule,
     load_declarations,
     load_household,
     load_plan,
 )
-from hfk.ledger import Category, Ledger
+from hfk.engine.buckets import BucketError, resolve_category
+from hfk.engine.shares import ShareConflictError, ShareError, share_weights
+from hfk.ledger import Category, Ledger, Transaction
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 
 DIAGNOSTIC_LEVELS = frozenset({"error", "warning"})
@@ -65,6 +71,8 @@ def run_doctor(
     household = _load_household(home, diagnostics)
     people = household.slugs if household is not None else None
     declarations = _load_declarations(home, people=people, diagnostics=diagnostics)
+    plan: Plan | None = None
+    plan_duplicates_checked = False
     if declarations is None:
         diagnostics.append(
             Diagnostic(
@@ -76,7 +84,7 @@ def run_doctor(
             )
         )
     else:
-        _load_plan(home, declarations=declarations, people=people, diagnostics=diagnostics)
+        plan = _load_plan(home, declarations=declarations, people=people, diagnostics=diagnostics)
 
     workbook_path: Path | None = None
     ledger: Ledger | None = None
@@ -88,8 +96,16 @@ def run_doctor(
         if declarations is not None:
             _check_category_orphans(declarations, ledger, diagnostics)
             _check_closed_accounts(household, declarations, ledger, diagnostics)
+            if plan is not None:
+                _check_plan_category_buckets(plan, declarations, ledger, diagnostics)
+                _check_plan_category_duplicates(plan, diagnostics)
+                plan_duplicates_checked = True
+            _check_sharing_rule_conflicts(household, declarations, ledger, diagnostics)
         _check_stale_data(ledger, workbook_path, today, stale_after_days, diagnostics)
         _check_history_start(household, ledger, diagnostics)
+
+    if plan is not None and not plan_duplicates_checked:
+        _check_plan_category_duplicates(plan, diagnostics)
 
     return DoctorReport(tuple(diagnostics))
 
@@ -118,11 +134,12 @@ def _load_plan(
     declarations: Declarations,
     people: tuple[str, ...] | None,
     diagnostics: list[Diagnostic],
-) -> None:
+) -> Plan | None:
     try:
-        load_plan(home, declarations=declarations, people=people)
+        return load_plan(home, declarations=declarations, people=people)
     except ConfigError as error:
         diagnostics.append(_config_diagnostic(error))
+        return None
 
 
 def _config_diagnostic(error: ConfigError) -> Diagnostic:
@@ -335,6 +352,130 @@ def _check_closed_accounts(
                 f"{latest.isoformat()} or later",
             )
         )
+
+
+def _check_plan_category_buckets(
+    plan: Plan,
+    declarations: Declarations,
+    ledger: Ledger,
+    diagnostics: list[Diagnostic],
+) -> None:
+    for index, line in enumerate(plan.lines):
+        for category in line.categories:
+            try:
+                resolution = resolve_category(category, ledger, declarations)
+            except BucketError:
+                continue
+
+            mapped_buckets = tuple(portion.bucket for portion in resolution.portions)
+            if not resolution.excluded and line.bucket in mapped_buckets:
+                continue
+
+            mapped_text = "excluded from spend" if resolution.excluded else ", ".join(mapped_buckets)
+            fix_bucket = "a mapped spend bucket" if resolution.excluded else mapped_text
+            diagnostics.append(
+                Diagnostic(
+                    "error",
+                    "plan-category-bucket-mismatch",
+                    "plan.yaml",
+                    f'plan.lines[{index}].categories desc "{line.desc}" who "{line.who}" '
+                    f'lists category "{category}" on bucket "{line.bucket}", but it maps to '
+                    f"{mapped_text}",
+                    f"move the category to a line in {fix_bucket}, or change the declarations "
+                    "mapping, override, or split for it",
+                )
+            )
+
+
+def _check_plan_category_duplicates(plan: Plan, diagnostics: list[Diagnostic]) -> None:
+    rows: dict[tuple[str, str], list[tuple[int, Month, Month | None]]] = {}
+    for index, line in enumerate(plan.lines):
+        for category in line.categories:
+            rows.setdefault((line.who, category), []).append(
+                (index, line.effective_from, line.effective_until)
+            )
+
+    for (who, category), entries in rows.items():
+        for left_pos, left in enumerate(entries):
+            for right in entries[left_pos + 1 :]:
+                overlap = _first_overlapping_month(left[1], left[2], right[1], right[2])
+                if overlap is None:
+                    continue
+                diagnostics.append(
+                    Diagnostic(
+                        "error",
+                        "plan-category-duplicate",
+                        "plan.yaml",
+                        f'plan.lines[{left[0]}].categories and plan.lines[{right[0]}].categories '
+                        f'list category "{category}" for "{who}" with first overlapping month '
+                        f"{overlap}",
+                        "end one line with effective_until before the other starts, or remove "
+                        "the category from one of them",
+                    )
+                )
+
+
+def _first_overlapping_month(
+    left_from: Month,
+    left_until: Month | None,
+    right_from: Month,
+    right_until: Month | None,
+) -> Month | None:
+    start = max(left_from, right_from)
+    if left_until is None:
+        end = right_until
+    elif right_until is None:
+        end = left_until
+    else:
+        end = min(left_until, right_until)
+    if end is not None and end < start:
+        return None
+    return start
+
+
+def _check_sharing_rule_conflicts(
+    household: Household,
+    declarations: Declarations,
+    ledger: Ledger,
+    diagnostics: list[Diagnostic],
+) -> None:
+    reported: set[frozenset[str]] = set()
+    for transaction in ledger.transactions:
+        try:
+            share_weights(transaction, household, declarations)
+        except ShareConflictError:
+            reasons = frozenset(
+                rule.reason
+                for rule in declarations.sharing
+                if _sharing_rule_matches_transaction(rule, transaction)
+            )
+            if reasons in reported:
+                continue
+            reported.add(reasons)
+            diagnostics.append(
+                Diagnostic(
+                    "error",
+                    "sharing-rule-conflict",
+                    "declarations.yaml",
+                    "conflicting sharing rules match first transaction "
+                    f'{transaction.date.isoformat()} "{transaction.description}" on '
+                    f'"{transaction.account}": {", ".join(sorted(reasons))}',
+                    "narrow the match of one rule or give both the same weights; rules are never "
+                    "ordered or merged",
+                )
+            )
+        except ShareError:
+            continue
+
+
+def _sharing_rule_matches_transaction(rule: SharingRule, transaction: Transaction) -> bool:
+    if rule.account is not None and rule.account != transaction.account:
+        return False
+    if rule.category is not None and rule.category != transaction.category:
+        return False
+    return rule.description is None or fnmatch.fnmatchcase(
+        transaction.description.lower(), rule.description.lower()
+    )
 
 
 def _check_stale_data(
