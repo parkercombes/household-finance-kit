@@ -11,6 +11,12 @@ from hfk.engine.buckets import (
     resolve_category,
     resolve_ledger,
 )
+from hfk.engine.categories import (
+    CategoriesError,
+    CategoriesReport,
+    CategoryLine,
+    build_categories,
+)
 from hfk.engine.doctor import Diagnostic, DoctorReport, run_doctor
 from hfk.engine.scorecard import BucketScore, Scorecard, ScorecardError, build_scorecard
 from hfk.engine.shares import (
@@ -30,6 +36,9 @@ __all__ = [
     "BucketError",
     "BucketPortion",
     "BucketScore",
+    "CategoriesError",
+    "CategoriesReport",
+    "CategoryLine",
     "CategoryResolution",
     "Diagnostic",
     "DoctorReport",
@@ -41,6 +50,7 @@ __all__ = [
     "TransactionShares",
     "allocate",
     "bucket_attributes",
+    "build_categories",
     "build_scorecard",
     "person_total",
     "resolve_category",

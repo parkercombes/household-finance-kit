@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M4-01: `hfk categories --month YYYY-MM` reports one person's plan lines with `categories` against actual ledger spend; `paced` lines are prorated to the elapsed window mid-month and to `history_start` clamps while fixed lines keep their full monthly target, mid-month is an explicitly paced view rather than a projection, and duplicate categories, unstarted months, and a missing `--who` fail loudly.
 - Established M0 Foundations for the public toolkit: approved design brief, top-level documentation, repository skeleton, package layout, CLI stubs, example configuration files, bucket presets, and a small pytest suite.
 - Added public-repo safety infrastructure: `scripts/privacy_scan.py`, the Tiller read-only guard hook at `hooks/tiller_guard.py`, and CI coverage for tests and privacy checks.
 - Recorded the two-repo model that keeps this public toolkit separate from private household instances containing workbooks, generated reports, and local financial decisions.

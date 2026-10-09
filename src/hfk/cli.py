@@ -15,12 +15,19 @@ from pathlib import Path
 
 from hfk import __version__
 from hfk.config import ConfigError, Month, load_declarations, load_household, load_plan
-from hfk.engine import BucketError, ScorecardError, ShareError, build_scorecard, run_doctor
+from hfk.engine import (
+    BucketError,
+    CategoriesError,
+    ScorecardError,
+    ShareError,
+    build_categories,
+    build_scorecard,
+    run_doctor,
+)
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "categories": "M4",
     "balances": "M4",
     "networth": "M4",
     "renewals": "M4",
@@ -119,6 +126,68 @@ def _scorecard(args: argparse.Namespace) -> int:
     return 0
 
 
+def _categories(args: argparse.Namespace) -> int:
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        who = args.who
+        if who is None:
+            if len(household.slugs) != 1:
+                print(
+                    f"categories: choose --who from: {', '.join(household.slugs)}",
+                    file=sys.stderr,
+                )
+                return 1
+            who = household.slugs[0]
+
+        workbook = find_workbook(home / "data", household.tiller_glob)
+        ledger = read_tiller(workbook)
+        report = build_categories(
+            ledger=ledger,
+            household=household,
+            declarations=declarations,
+            plan=plan,
+            month=args.month,
+            who=who,
+            today=args.today if args.today is not None else date.today(),  # noqa: DTZ011
+        )
+    except (ConfigError, TillerFormatError, ShareError, BucketError, CategoriesError) as error:
+        print(f"categories: {error}", file=sys.stderr)
+        return 1
+
+    if report.closed:
+        print(
+            f"categories {report.month} for {report.who} "
+            f"(closed month, {report.window_days} of {report.days_in_month} days)"
+        )
+    else:
+        print(
+            f"categories {report.month} for {report.who} "
+            f"(through {report.window_end.isoformat()}, "
+            f"{report.window_days} of {report.days_in_month} days)"
+        )
+    if not report.lines:
+        print(f"no plan lines with categories for {report.who} in {report.month}")
+        return 0
+    width = max(len(line.desc) for line in report.lines)
+    for line in report.lines:
+        paced = "paced" if line.paced else "fixed"
+        print(
+            f"{line.desc:<{width}}  {paced}  "
+            f"target {_money(line.target)}  actual {_money(line.actual)}  "
+            f"left {_money(line.variance)}"
+        )
+    print(
+        f"total  target {_money(report.target_total)}  actual {_money(report.actual_total)}  "
+        f"left {_money(report.target_total - report.actual_total)}"
+    )
+    if report.clamped:
+        print(f"note: window clamped to history_start {report.window_start.isoformat()}")
+    return 0
+
+
 def _dev_fixture(args: argparse.Namespace) -> int:
     output = build_fixture(args.out, months=args.months)
     print(output)
@@ -159,6 +228,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     scorecard_parser.set_defaults(func=_scorecard)
+
+    categories_parser = subparsers.add_parser("categories")
+    categories_parser.add_argument("--month", required=True, type=_parse_month, help="Month to report.")
+    categories_parser.add_argument("--who", help="Household person slug.")
+    categories_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pacing.")
+    categories_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    categories_parser.set_defaults(func=_categories)
 
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)

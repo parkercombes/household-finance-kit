@@ -1,6 +1,6 @@
 # household-finance-kit Roadmap
 
-Last verified: 2026-10-08
+Last verified: 2026-10-09
 
 ## Start here when resuming
 
@@ -82,7 +82,7 @@ Goal: expand core analysis beyond the scorecard to targets, positions, annual ob
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M4-01` | Implement `hfk categories --month YYYY-MM` for plan lines with `categories` versus actuals, including paced mid-month treatment where declared. | `todo` | `M3-04`, `M2-03` | Run `python -m pytest -q tests/test_categories.py`; expected: paced and unpaced targets produce distinct, documented results. |
+| `M4-01` | Implement `hfk categories --month YYYY-MM` for plan lines with `categories` versus actuals, including paced mid-month treatment where declared. | `done` | `M3-04`, `M2-03` | Run `python -m pytest -q tests/test_categories.py`; expected: the example instance plus the synthetic workbook prints per-line target, actual, and left through the real CLI with exit 0, paced lines are prorated mid-month and inside a `history_start`-clamped window while fixed lines stay whole, and duplicate categories, unstarted months, and a missing `--who` fail loudly. |
 | `M4-02` | Implement `hfk balances` from `Balance History`, reporting null or missing balance amounts as gaps rather than zero. | `todo` | `M1-03`, `M2-04` | Run `python -m pytest -q tests/test_balances.py`; expected: latest balance rows are selected and gaps are reported. |
 | `M4-03` | Implement `hfk networth` using balance history, account classes, declared unsynced account dates, and `history_start`. | `todo` | `M4-02`, `M2-01` | Run `python -m pytest -q tests/test_networth.py`; expected: net worth totals match fixture expectations and never count null balances as zero. |
 | `M4-04` | Implement `hfk renewals` for annual obligations by month and sinking-fund adequacy. | `todo` | `M2-03`, `M3-01` | Run `python -m pytest -q tests/test_renewals.py`; expected: annual bills are scheduled by due month and monthly sinking-fund amounts reconcile to plan lines. |
