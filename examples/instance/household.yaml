@@ -1,0 +1,14 @@
+# Last verified: 2026-10-08
+schema_version: 1
+people:
+  - {slug: alex, name: Alex}
+  - {slug: sam, name: Sam}
+files:
+  tiller_glob: "Tiller*.xls*"
+history_start: 2025-01-01
+accounts:
+  "Alex Checking": {owner: alex}
+  "Sam Checking": {owner: sam}
+  "Joint Card": {shared: {alex: 0.5, sam: 0.5}}
+  "Savings": {owner: alex, kind: savings}
+extensions: [settle_up, retirement]

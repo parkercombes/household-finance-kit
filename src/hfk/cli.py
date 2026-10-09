@@ -10,12 +10,14 @@ import argparse
 import os
 import sys
 from collections.abc import Sequence
+from datetime import date
+from pathlib import Path
 
 from hfk import __version__
+from hfk.engine import run_doctor
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "doctor": "M2",
     "scorecard": "M3",
     "categories": "M4",
     "balances": "M4",
@@ -43,6 +45,25 @@ def _dev_help(parser: argparse.ArgumentParser) -> int:
     return 2
 
 
+def _parse_date(value: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("write dates as YYYY-MM-DD") from exc
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    report = run_doctor(
+        Path(args.home),
+        today=args.today,
+        stale_after_days=args.stale_days,
+    )
+    for diagnostic in report.diagnostics:
+        print(diagnostic.render())
+    print(f"doctor: {len(report.errors())} errors, {len(report.warnings())} warnings")
+    return 0 if report.ok else 1
+
+
 def _dev_fixture(args: argparse.Namespace) -> int:
     output = build_fixture(args.out, months=args.months)
     print(output)
@@ -54,11 +75,21 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--home",
         default=os.environ.get("HFK_HOME", "."),
-        help="Instance directory; accepted by M0 stubs but not read yet.",
+        help="Instance directory (default: HFK_HOME or current directory).",
     )
     parser.add_argument("--version", action="store_true", help="Print version and exit.")
 
     subparsers = parser.add_subparsers(dest="command", metavar="command")
+    doctor_parser = subparsers.add_parser("doctor")
+    doctor_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    doctor_parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
+    doctor_parser.add_argument("--stale-days", type=int, default=14, help="Stale data threshold.")
+    doctor_parser.set_defaults(func=_doctor)
+
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)
         subparser.set_defaults(func=lambda _args, command=name: _stub(command))
