@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M4-02: `hfk balances --as-of YYYY-MM-DD` reports every account's latest `Balance History` observation on or before the date, where a blank or missing observation is a gap with its last known value and date rather than zero or a silently promoted older number; observations before `history_start` are ignored and noted, closed accounts stop at their declared closure date, undeclared accounts are flagged, and an `--as-of` before `history_start` fails loudly.
 - M4-01: `hfk categories --month YYYY-MM` reports one person's plan lines with `categories` against actual ledger spend; `paced` lines are prorated to the elapsed window mid-month and to `history_start` clamps while fixed lines keep their full monthly target, mid-month is an explicitly paced view rather than a projection, and duplicate categories, unstarted months, and a missing `--who` fail loudly.
 - Established M0 Foundations for the public toolkit: approved design brief, top-level documentation, repository skeleton, package layout, CLI stubs, example configuration files, bucket presets, and a small pytest suite.
 - Added public-repo safety infrastructure: `scripts/privacy_scan.py`, the Tiller read-only guard hook at `hooks/tiller_guard.py`, and CI coverage for tests and privacy checks.

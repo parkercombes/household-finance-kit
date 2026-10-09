@@ -16,10 +16,13 @@ from pathlib import Path
 from hfk import __version__
 from hfk.config import ConfigError, Month, load_declarations, load_household, load_plan
 from hfk.engine import (
+    AccountBalance,
+    BalancesError,
     BucketError,
     CategoriesError,
     ScorecardError,
     ShareError,
+    build_balances,
     build_categories,
     build_scorecard,
     run_doctor,
@@ -28,7 +31,6 @@ from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "balances": "M4",
     "networth": "M4",
     "renewals": "M4",
     "rebaseline": "M4",
@@ -188,6 +190,65 @@ def _categories(args: argparse.Namespace) -> int:
     return 0
 
 
+def _balances(args: argparse.Namespace) -> int:
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        workbook = find_workbook(home / "data", household.tiller_glob)
+        ledger = read_tiller(workbook)
+        report = build_balances(
+            ledger=ledger,
+            household=household,
+            declarations=declarations,
+            as_of=args.as_of,
+        )
+    except (ConfigError, TillerFormatError, BalancesError) as error:
+        print(f"balances: {error}", file=sys.stderr)
+        return 1
+
+    print(f"balances as of {report.as_of.isoformat()}")
+    account_width = max((len(row.account) for row in report.accounts), default=0)
+    class_width = max((len(_balance_class(row)) for row in report.accounts), default=1)
+    for row in report.accounts:
+        amount = "gap" if row.gap else _money(row.balance)
+        print(
+            f"{row.account:<{account_width}}  {_balance_class(row):<{class_width}}  "
+            f"{amount}  {_balance_detail(row)}"
+        )
+    print(f"accounts {len(report.accounts)}  gaps {report.gap_count}")
+    if report.ignored_before_history_start:
+        print(
+            f"note: ignored {report.ignored_before_history_start} observations "
+            f"before history_start {household.history_start.isoformat()}"
+        )
+    return 0
+
+
+def _balance_class(row: AccountBalance) -> str:
+    return "-" if row.account_class is None else row.account_class
+
+
+def _balance_detail(row: AccountBalance) -> str:
+    if not row.gap:
+        detail = f"observed {row.observed.isoformat()}"
+    else:
+        detail = row.gap_reason or ""
+        if row.observed is not None:
+            if row.last_known is not None:
+                detail += (
+                    f"; last known {_money(row.last_known)} on "
+                    f"{row.last_known_date.isoformat()}"
+                )
+            else:
+                detail += "; no earlier value"
+    if row.closed is not None:
+        detail += f"; closed {row.closed.isoformat()}"
+    if not row.declared:
+        detail += "; undeclared"
+    return detail
+
+
 def _dev_fixture(args: argparse.Namespace) -> int:
     output = build_fixture(args.out, months=args.months)
     print(output)
@@ -239,6 +300,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     categories_parser.set_defaults(func=_categories)
+
+    balances_parser = subparsers.add_parser("balances")
+    balances_parser.add_argument(
+        "--as-of",
+        type=_parse_date,
+        default=date.today(),  # noqa: DTZ011
+        dest="as_of",
+        help="Report date; each account shows its latest observation on or before it.",
+    )
+    balances_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    balances_parser.set_defaults(func=_balances)
 
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)

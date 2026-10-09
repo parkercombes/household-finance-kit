@@ -1,5 +1,11 @@
 """Engine layer: pure calculations and diagnostics."""
 
+from hfk.engine.balances import (
+    AccountBalance,
+    BalancesError,
+    BalancesReport,
+    build_balances,
+)
 from hfk.engine.buckets import (
     BucketAmount,
     BucketConflictError,
@@ -31,6 +37,9 @@ from hfk.engine.shares import (
 )
 
 __all__ = [
+    "AccountBalance",
+    "BalancesError",
+    "BalancesReport",
     "BucketAmount",
     "BucketConflictError",
     "BucketError",
@@ -50,6 +59,7 @@ __all__ = [
     "TransactionShares",
     "allocate",
     "bucket_attributes",
+    "build_balances",
     "build_categories",
     "build_scorecard",
     "person_total",
