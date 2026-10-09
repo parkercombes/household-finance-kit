@@ -11,10 +11,12 @@ from typing import Any
 import pytest
 import yaml
 
-from hfk.config import ConfigError, Household, load_household
+from hfk.config import ConfigError, Declarations, Household, load_declarations, load_household
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "examples" / "household.example.yaml"
+DECLARATIONS_EXAMPLE = ROOT / "examples" / "declarations.example.yaml"
+PROFILES = ROOT / "profiles"
 
 
 def example_data() -> dict[str, Any]:
@@ -23,6 +25,16 @@ def example_data() -> dict[str, Any]:
 
 def write_household(tmp_path: Path, data: dict[str, Any]) -> Path:
     path = tmp_path / "household.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return path
+
+
+def declarations_data() -> dict[str, Any]:
+    return copy.deepcopy(yaml.safe_load(DECLARATIONS_EXAMPLE.read_text(encoding="utf-8")))
+
+
+def write_declarations(tmp_path: Path, data: dict[str, Any]) -> Path:
+    path = tmp_path / "declarations.yaml"
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
     return path
 
@@ -164,3 +176,186 @@ def test_household_objects_are_frozen() -> None:
         household.people = ()  # type: ignore[misc]
     with pytest.raises(AttributeError):
         household.accounts[0].name = "x"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_key"),
+    [
+        (lambda d: d["overrides"]["Utilities"].pop("reason"), "overrides.Utilities.reason"),
+        (lambda d: d["splits"]["Fuel"].pop("reason"), "splits.Fuel.reason"),
+        (lambda d: d["sharing"][0].pop("reason"), "sharing[0].reason"),
+        (
+            lambda d: d["sharing"][0].__setitem__("weights", {"alex": 0.4, "sam": 0.5}),
+            "sharing[0].weights",
+        ),
+    ],
+)
+def test_declarations_loader_requires_reasons(
+    tmp_path: Path, mutate: Any, expected_key: str
+) -> None:
+    data = declarations_data()
+    mutate(data)
+    path = write_declarations(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_declarations(path, people=("alex", "sam"))
+
+    assert error.value.key == expected_key
+    assert error.value.file == path
+    assert error.value.fix
+
+
+def test_example_declarations_load() -> None:
+    declarations = load_declarations(DECLARATIONS_EXAMPLE, people=("alex", "sam"))
+
+    assert isinstance(declarations, Declarations)
+    assert declarations.path == DECLARATIONS_EXAMPLE
+    assert declarations.bucket_names() == (
+        "Fixed Essential",
+        "Variable Essential",
+        "Fixed Discretionary",
+        "Variable Discretionary",
+    )
+    assert declarations.groups == (
+        ("Housing", "Fixed Essential"),
+        ("Food", "Variable Essential"),
+        ("Transportation", "Variable Essential"),
+        ("Subscriptions", "Fixed Discretionary"),
+    )
+
+    utilities = declarations.override("Utilities")
+    assert utilities.bucket == "Variable Essential"
+    assert utilities.reason == "Utilities vary by season; the rest of Housing is fixed."
+
+    fuel = declarations.split("Fuel")
+    assert fuel.weights == (
+        ("Variable Essential", Decimal("0.5")),
+        ("Variable Discretionary", Decimal("0.5")),
+    )
+
+    rule = declarations.sharing[0]
+    assert rule.account == "Alex Checking"
+    assert rule.description == "City Utilities*"
+    assert rule.weights == (("alex", Decimal("0.5")), ("sam", Decimal("0.5")))
+    assert declarations.closed_accounts == ()
+
+
+def test_declarations_profile_import(tmp_path: Path) -> None:
+    data = declarations_data()
+    expected_buckets = tuple(bucket["name"] for bucket in data.pop("buckets"))
+    data["profile"] = "four-bucket"
+    declarations = load_declarations(write_declarations(tmp_path, data), profiles_dir=PROFILES)
+
+    assert declarations.profile == "four-bucket"
+    assert declarations.bucket_names() == expected_buckets
+
+    data["profile"] = "unknown-profile"
+    path = write_declarations(tmp_path, data)
+    with pytest.raises(ConfigError) as error:
+        load_declarations(path, profiles_dir=PROFILES)
+
+    assert error.value.file == PROFILES / "unknown-profile.yaml"
+
+
+def test_declarations_mapping_source_rules(tmp_path: Path) -> None:
+    data = declarations_data()
+    data["mapping_source"] = "explicit"
+    del data["groups"]
+    data["categories"] = {"Rent": "Fixed Essential"}
+    declarations = load_declarations(write_declarations(tmp_path, data))
+    assert declarations.categories == (("Rent", "Fixed Essential"),)
+    assert declarations.groups == ()
+
+    data = declarations_data()
+    data["categories"] = {"Rent": "Fixed Essential"}
+    with pytest.raises(ConfigError) as error:
+        load_declarations(write_declarations(tmp_path, data))
+    assert error.value.key == "categories"
+
+    data = declarations_data()
+    data["mapping_source"] = "explicit"
+    data["categories"] = {"Rent": "Fixed Essential"}
+    with pytest.raises(ConfigError) as error:
+        load_declarations(write_declarations(tmp_path, data))
+    assert error.value.key == "groups"
+
+    data = declarations_data()
+    del data["mapping_source"]
+    declarations = load_declarations(write_declarations(tmp_path, data))
+    assert declarations.mapping_source == "tiller_group"
+    assert declarations.groups
+
+    data = declarations_data()
+    data["mapping_source"] = "spreadsheet"
+    with pytest.raises(ConfigError) as error:
+        load_declarations(write_declarations(tmp_path, data))
+    assert error.value.key == "mapping_source"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "expected_key"),
+    [
+        (lambda d: d["groups"].__setitem__("Housing", "Unknown"), "groups.Housing"),
+        (
+            lambda d: d["overrides"]["Utilities"].__setitem__("bucket", "Unknown"),
+            "overrides.Utilities.bucket",
+        ),
+        (
+            lambda d: d["splits"]["Fuel"].__setitem__(
+                "weights", {"Unknown": 0.5, "Variable Essential": 0.5}
+            ),
+            "splits.Fuel.weights.Unknown",
+        ),
+        (
+            lambda d: d["overrides"].__setitem__(
+                "Fuel", {"bucket": "Variable Essential", "reason": "Round example reason."}
+            ),
+            "splits.Fuel",
+        ),
+    ],
+)
+def test_declarations_reject_unknown_buckets_and_conflicts(
+    tmp_path: Path, mutate: Any, expected_key: str
+) -> None:
+    data = declarations_data()
+    mutate(data)
+    path = write_declarations(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_declarations(path)
+
+    assert error.value.key == expected_key
+    assert error.value.file == path
+
+
+def test_declarations_people_check(tmp_path: Path) -> None:
+    data = declarations_data()
+    data["sharing"][0]["weights"] = {"alex": 0.5, "unknown": 0.5}
+    path = write_declarations(tmp_path, data)
+
+    with pytest.raises(ConfigError) as error:
+        load_declarations(path, people=("alex", "sam"))
+
+    assert error.value.key == "sharing[0].weights.unknown"
+    assert load_declarations(path, people=None).sharing[0].weights == (
+        ("alex", Decimal("0.5")),
+        ("unknown", Decimal("0.5")),
+    )
+
+
+def test_declarations_closed_accounts(tmp_path: Path) -> None:
+    data = declarations_data()
+    data["closed_accounts"] = {
+        "Example Bank Card": {"closed": date(2025, 5, 1), "note": "Closed after payoff."}
+    }
+    declarations = load_declarations(write_declarations(tmp_path, data))
+
+    closed = declarations.closed_account("Example Bank Card")
+    assert closed.closed == date(2025, 5, 1)
+    assert closed.note == "Closed after payoff."
+
+    data["closed_accounts"]["Example Bank Card"]["closed"] = "05/01/2025"
+    with pytest.raises(ConfigError) as error:
+        load_declarations(write_declarations(tmp_path, data))
+
+    assert error.value.key == 'closed_accounts."Example Bank Card".closed'
