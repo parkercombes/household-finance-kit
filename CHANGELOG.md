@@ -21,6 +21,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 - `M3-07` adds a local-only parity check of the scorecard against a household's existing statement.
 - Reader: `Ledger.accounts` is derived from transaction and balance rows; `Hide From Reports` accepts only Tiller's `Hide`/`Show` and boolean spellings and errors on anything else; category lookup is indexed.
 - `tests/test_read_only_invariant.py` statically checks that no toolkit module except the fixture generator can save a workbook. PRIVACY.md documents the guard hook's limits.
+- Marked M3 done except `M3-07` in the README milestone table; `hfk doctor` and `hfk scorecard` are listed as available.
 - M3-06: `hfk doctor` reports plan category bucket mismatches, overlapping per-person category plan lines, and conflicting sharing rules.
 - M3-05: Added scorecard regression coverage for cent reconciliation, non-spend exclusion, `history_start`, renamed categories, category-less plan lines, and closed-month pacing.
 - M3-04: `hfk scorecard` prints closed-month per-bucket plan, actual, and left amounts from effective plan lines and owner-share ledger spend.

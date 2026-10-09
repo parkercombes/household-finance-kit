@@ -8,7 +8,7 @@ Last verified: 2026-10-08
 
 ## Current Status
 
-M0 Foundations and M1 Reader + Fixture are done; M2 Config + Doctor is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations, M1 Reader + Fixture, M2 Config + Doctor, and M3 Engine are done, except the `M3-07` local parity check, which the maintainer runs by hand against a private instance; M4 Analyses is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today: `hfk --version`, `hfk dev fixture`, and the read-only Tiller reader and ledger model (`hfk.source`, `hfk.ledger`). Analysis subcommands print `not implemented yet` and exit with code 2 until their milestones land.
 
@@ -74,8 +74,8 @@ python scripts/privacy_scan.py --root .
 The design includes these planned commands. They are listed here to show direction, not current functionality.
 
 - Available now (M1): `hfk dev fixture --out PATH` generates a synthetic Tiller workbook for tests and demos.
-- Planned (M2): `hfk doctor` for config validation and loud data-quality checks.
-- Planned (M3): `hfk scorecard --month YYYY-MM` for monthly plan-vs-actual by bucket.
+- Available now (M2): `hfk doctor` for config validation and loud data-quality checks, including plan-line and sharing-rule conflicts.
+- Available now (M3): `hfk scorecard --month YYYY-MM [--who SLUG]` for closed-month plan-vs-actual by bucket, using the selected person's share.
 - Planned (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
 - Planned (M5): `hfk init <dir>` for creating a private instance skeleton.
 - Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
@@ -89,7 +89,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M0 | Done | Foundations: design brief, docs, skeleton, CI, privacy scan, Tiller guard hook |
 | M1 | Done | Reader, Ledger types, synthetic workbook fixture |
 | M2 | Done | Config loading, validation, and `hfk doctor` with orphan, stale-data, and closed-account checks |
-| M3 | Planned | Ownership, bucket mapping, monthly scorecard |
+| M3 | Done except `M3-07` | Ownership shares, bucket mapping, monthly scorecard, doctor conflict checks; `M3-07` is a manual parity check against a private instance |
 | M4 | Planned | Category targets, balances, net worth, renewals, rebaseline, plan check |
 | M5 | Planned | Instance creation, hook wiring, renderers, CLI polish |
 | M6 | Planned | Extension API and discovery |
