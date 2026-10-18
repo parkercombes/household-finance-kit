@@ -41,11 +41,11 @@ from hfk.engine import (
     build_scorecard,
     run_doctor,
 )
+from hfk.instance import InstanceError, write_instance
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
 _STUB_MILESTONES = {
-    "init": "M5",
     "settle": "M7",
     "retirement": "M8",
 }
@@ -478,6 +478,25 @@ def _dev_fixture(args: argparse.Namespace) -> int:
     return 0
 
 
+def _init(args: argparse.Namespace) -> int:
+    try:
+        report = write_instance(Path(args.dir), git=args.git)
+    except InstanceError as error:
+        print(f"init: {error}", file=sys.stderr)
+        return 1
+
+    print(f"created {args.dir}")
+    for path in report.created:
+        relative = path.relative_to(report.home)
+        suffix = "/" if path.is_dir() else ""
+        print(f"  {relative}{suffix}")
+    if report.git_initialised:
+        print("git: initialised with pre-commit hook")
+    print("next: put the Tiller workbook export in data/")
+    print(f"then run: hfk plan check --home {args.dir} and hfk doctor --home {args.dir}")
+    return 0
+
+
 def _money(amount: object) -> str:
     return f"{amount:.2f}"
 
@@ -609,6 +628,15 @@ def _build_parser() -> argparse.ArgumentParser:
     plan_parser.set_defaults(
         func=lambda _args, plan_parser=plan_parser: _subcommand_help(plan_parser)
     )
+
+    init_parser = subparsers.add_parser("init")
+    init_parser.add_argument("dir", help="New instance directory.")
+    init_parser.add_argument(
+        "--git",
+        action="store_true",
+        help="Also run git init and install the privacy pre-commit hook.",
+    )
+    init_parser.set_defaults(func=_init)
 
     for name in _STUB_MILESTONES:
         subparser = subparsers.add_parser(name)

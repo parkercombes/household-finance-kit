@@ -28,6 +28,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "hfk.profiles" = ["*.yaml"]
+"hfk.templates" = ["*.yaml", "*.md", "gitignore", "pre-commit"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Installed by `hfk init --git`. Blocks commits that stage workbooks (.xlsx,
+# .xlsm, .xls), CSV/TSV, PDF, or Numbers files, or anything under data/ or
+# out/: workbooks, statements and reports never belong in the instance repo.
+
+pattern='(^data/|^out/|\.(xlsx|xlsm|xls|csv|tsv|pdf|numbers)$)'
+
+if git diff --cached --name-only --diff-filter=ACM | grep -qiE "$pattern"; then
+    git diff --cached --name-only --diff-filter=ACM | grep -iE "$pattern" |
+    while IFS= read -r file; do
+        printf '%s: unstage it: git restore --staged %s; workbooks, statements and reports never belong in the instance repo\n' \
+            "$file" "$file" >&2
+    done
+    exit 1
+fi
+exit 0

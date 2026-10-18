@@ -1,0 +1,11 @@
+# hfk instance privacy: workbooks, statements, and generated reports never
+# belong in a commit. data/ and out/ hold the private workbook and reports.
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.tsv
+*.pdf
+*.numbers
+data/
+out/

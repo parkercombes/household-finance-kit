@@ -1,6 +1,6 @@
 # Privacy
 
-Last verified: 2026-10-08
+Last verified: 2026-10-17
 
 household-finance-kit ("hfk") is a public toolkit for building and checking household finance workflows without exposing any real household data. This document describes the privacy rules for the toolkit repository, private instance repositories, contributors, and LLM agents that help with the project.
 
@@ -32,6 +32,7 @@ Privacy is not a single control. hfk relies on simple repo rules, automated scan
 | `scripts/privacy_scan.py` | Performs an automated content and filename scan so forbidden file types and sensitive-looking text are caught before review or release. |
 | Local gitignored `.privacy-denylist` file | Lets each user list private names, employers, account tails, and other household-specific terms without putting those terms in the public repository. |
 | Optional pre-commit hook | Runs privacy checks before a commit is created, giving contributors a fast local guardrail. |
+| Instance pre-commit hook | Installed by `hfk init --git` in the private instance; blocks staged workbooks, CSV/TSV, PDF, and Numbers files and anything under `data/` or `out/` from being committed. |
 | CI workflow | Runs the privacy scan for shared changes so pull requests get a second check outside one developer's machine. |
 | Tiller read-only hook `hooks/tiller_guard.py` | A tripwire for agent sessions: blocks shell commands and file edits whose text names a Tiller workbook and looks like a write. See the limits below. |
 | Static read-only test `tests/test_read_only_invariant.py` | Fails if any toolkit module other than the fixture generator contains a workbook save call, so the reader cannot grow a write path unnoticed. |
