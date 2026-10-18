@@ -9,3 +9,5 @@
 *.numbers
 data/
 out/
+# per-machine Claude Code settings stay local
+.claude/settings.local.json

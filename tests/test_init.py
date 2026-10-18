@@ -8,6 +8,8 @@ hook installed.
 
 from __future__ import annotations
 
+import importlib.resources
+import json
 import os
 import shutil
 import subprocess
@@ -21,6 +23,7 @@ import yaml
 from hfk.source.fixture import build_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
+HOOK = ROOT / "hooks" / "tiller_guard.py"
 INSTANCE_EXAMPLE = ROOT / "examples" / "instance"
 PRIVACY_SCAN = ROOT / "scripts" / "privacy_scan.py"
 PYTHONPATH = str(ROOT / "src")
@@ -105,7 +108,8 @@ def test_init_creates_skeleton(tmp_path: Path) -> None:
     assert list((home / "data").iterdir()) == []
     assert list((home / "out").iterdir()) == []
     assert not (home / ".git").exists()
-    assert not (home / ".claude").exists()
+    assert (home / ".claude" / "settings.json").is_file()
+    assert (home / ".claude" / "hooks" / "tiller_guard.py").is_file()
 
     for name in ("household.yaml", "declarations.yaml", "plan.yaml"):
         assert load_yaml(home / name) == load_yaml(INSTANCE_EXAMPLE / name), name
@@ -115,6 +119,86 @@ def test_init_creates_skeleton(tmp_path: Path) -> None:
     gitignore = (home / ".gitignore").read_text(encoding="utf-8")
     for pattern in GITIGNORE_PATTERNS:
         assert pattern in gitignore, pattern
+
+
+def test_init_wires_tiller_guard(tmp_path: Path) -> None:
+    home = init_home(tmp_path)
+    workbook = "Tiller Finance." + ("xls" + "m")
+
+    settings = json.loads(
+        (home / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    entry = settings["hooks"]["PreToolUse"][0]
+    command = entry["hooks"][0]["command"]
+    assert ".claude/hooks/tiller_guard.py" in command
+    assert "$CLAUDE_PROJECT_DIR" in command
+    assert "Bash" in entry["matcher"]
+    assert "Edit" in entry["matcher"]
+    assert "Write" in entry["matcher"]
+
+    guard = home / ".claude" / "hooks" / "tiller_guard.py"
+    assert guard.read_bytes() == (ROOT / "hooks" / "tiller_guard.py").read_bytes()
+    assert os.access(guard, os.X_OK)
+
+    def run_guard(tool_name: str, tool_input: dict[str, Any]) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(guard)],
+            input=json.dumps({"tool_name": tool_name, "tool_input": tool_input}),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    save = f"python -c \"wb = load_workbook('{workbook}'); wb.save('{workbook}')\""
+    blocked_save = run_guard("Bash", {"command": save})
+    assert blocked_save.returncode == 2
+    assert "blocked" in blocked_save.stderr
+
+    read_only = f"python -c \"load_workbook('{workbook}', read_only=True)\""
+    assert run_guard("Bash", {"command": read_only}).returncode == 0
+
+    write = run_guard("Write", {"file_path": "/somewhere/" + workbook})
+    assert write.returncode == 2
+    assert "blocked" in write.stderr
+
+    assert run_guard("Bash", {"command": "ls -la"}).returncode == 0
+
+    gitignore = (home / ".gitignore").read_text(encoding="utf-8")
+    for pattern in GITIGNORE_PATTERNS:
+        assert pattern in gitignore, pattern
+    assert ".claude/settings.local.json" in gitignore
+    lines = {line.strip() for line in gitignore.splitlines()}
+    assert ".claude/" not in lines
+    assert ".claude" not in lines
+
+
+def test_packaged_guard_matches_hooks_copy() -> None:
+    packaged = importlib.resources.files("hfk.templates") / "tiller_guard"
+
+    assert packaged.read_bytes() == (ROOT / "hooks" / "tiller_guard.py").read_bytes()
+
+
+def test_init_does_not_write_into_toolkit(tmp_path: Path) -> None:
+    home = tmp_path / "finances"
+
+    result = run_hfk("init", str(home))
+
+    assert result.returncode == 0, result.stderr
+    assert not (ROOT / ".claude").exists()
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=ROOT,
+        env={
+            name: value
+            for name, value in os.environ.items()
+            if not name.startswith("GIT_")
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert status.returncode == 0
+    assert not any(".claude" in line.split()[1:] for line in status.stdout.splitlines())
 
 
 def test_init_instance_passes_plan_check_and_doctor(tmp_path: Path) -> None:
@@ -238,6 +322,9 @@ def test_init_git_installs_pre_commit_hook(tmp_path: Path) -> None:
     committed = run_git(home, *COMMIT_IDENTITY, "commit", "-m", "instance config")
 
     assert committed.returncode == 0
+
+    assert run_git(home, "check-ignore", "-q", ".claude/settings.json").returncode != 0
+    assert run_git(home, "check-ignore", "-q", ".claude/settings.local.json").returncode == 0
 
     (home / "data" / "notes.txt").write_text("example\n", encoding="utf-8")
     status = run_git(home, "status", "--porcelain", "--ignored")

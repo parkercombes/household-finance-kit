@@ -2,9 +2,11 @@
 
 ``write_instance`` copies the packaged ``hfk.templates`` files into a new
 instance directory: the three example YAML files, a README, a ``.gitignore``,
-``shared-items/``, and the empty ``data/`` and ``out/`` directories. With
-``git=True`` it also runs ``git init`` and installs the privacy pre-commit
-hook. The module never reads or writes a workbook.
+``shared-items/``, the empty ``data/`` and ``out/`` directories, and the
+``.claude/`` wiring (``settings.json`` plus the ``tiller_guard`` hook) that
+blocks AI assistants from writing the workbook. With ``git=True`` it also
+runs ``git init`` and installs the privacy pre-commit hook. The module never
+reads or writes a workbook.
 """
 
 from __future__ import annotations
@@ -23,9 +25,12 @@ _INSTANCE_FILES = (
     ("README.md", "README.md"),
     (".gitignore", "gitignore"),
     ("shared-items/README.md", "shared-items-README.md"),
+    (".claude/settings.json", "claude-settings.json"),
+    (".claude/hooks/tiller_guard.py", "tiller_guard"),
 )
 _EMPTY_DIRECTORIES = ("data", "out")
 _HOOK_NAME = "pre-commit"
+_GUARD_NAME = ".claude/hooks/tiller_guard.py"
 
 
 class InstanceError(Exception):
@@ -64,6 +69,8 @@ def write_instance(target: Path, *, git: bool = False) -> InstanceReport:
         destination = home / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / template, destination)
+        if relative == _GUARD_NAME:
+            destination.chmod(0o755)
         created.append(destination)
     for name in _EMPTY_DIRECTORIES:
         directory = home / name

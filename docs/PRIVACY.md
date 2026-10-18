@@ -35,11 +35,12 @@ Privacy is not a single control. hfk relies on simple repo rules, automated scan
 | Instance pre-commit hook | Installed by `hfk init --git` in the private instance; blocks staged workbooks, CSV/TSV, PDF, and Numbers files and anything under `data/` or `out/` from being committed. |
 | CI workflow | Runs the privacy scan for shared changes so pull requests get a second check outside one developer's machine. |
 | Tiller read-only hook `hooks/tiller_guard.py` | A tripwire for agent sessions: blocks shell commands and file edits whose text names a Tiller workbook and looks like a write. See the limits below. |
+| Instance guard wiring | `hfk init` copies the guard to `.claude/hooks/tiller_guard.py` inside the private instance and wires it through `.claude/settings.json`, so an agent session opened in the instance folder is blocked from writing the workbook without any toolkit path being touched. |
 | Static read-only test `tests/test_read_only_invariant.py` | Fails if any toolkit module other than the fixture generator contains a workbook save call, so the reader cannot grow a write path unnoticed. |
 
 ## Limits of the guard hook
 
-The hook only sees the text of a command or a file path. It fires when that text names a file matching `tiller*.xls[xm]` and contains a save call, a write-style verb, a redirect, or a copy or move whose destination is that file. It does not see a path held in a variable, a workbook with a different name, or a save inside a script the command merely runs. The `# guardrail-ok` marker disables it for one command and is visible in the command itself. Treat the hook as a tripwire that catches the common accident, not as a boundary.
+The hook only sees the text of a command or a file path. It fires when that text names a file matching `tiller*.xls[xm]` and contains a save call, a write-style verb, a redirect, or a copy or move whose destination is that file. It does not see a path held in a variable, a workbook with a different name, or a save inside a script the command merely runs. The `# guardrail-ok` marker disables it for one command and is visible in the command itself. Treat the hook as a tripwire that catches the common accident, not as a boundary. The instance copy installed by `hfk init` has the same limits and only takes effect for assistants that honour `.claude/settings.json`.
 
 The boundary is the reader: `hfk.source` opens workbooks with `read_only=True` and the toolkit contains no save path for them, which the static test checks on every run.
 

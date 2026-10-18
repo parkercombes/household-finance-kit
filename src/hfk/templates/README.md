@@ -17,9 +17,13 @@ workbook.
 - `data/` — where your Tiller workbook export goes. hfk only reads it.
 - `out/` — where generated reports land.
 - `.gitignore` — keeps workbooks and reports out of git.
+- `.claude/` — holds a small safety rule for AI coding assistants (Claude
+  Code reads it) that stops them from changing the Tiller workbook. It does
+  nothing if you never use an AI assistant, and it is safe to leave in place.
 
 `data/` and `out/` are never committed: `.gitignore` blocks them along with
-workbook, CSV, TSV, PDF, and Numbers files anywhere in this folder.
+workbook, CSV, TSV, PDF, and Numbers files anywhere in this folder, and keeps
+`.claude/settings.local.json` (Claude Code's per-machine settings) local.
 
 ## The YAML files start as example data
 
