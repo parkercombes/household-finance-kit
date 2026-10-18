@@ -82,7 +82,8 @@ household-finance-kit/
   docs/            ARCHITECTURE ROADMAP DECISIONS EXTENSIONS TILLER-SCHEMA PRIVACY DESIGN-BRIEF
   src/hfk/         package (reader, ledger, config, engine, ext, cli, render)
   examples/        household.example.yaml declarations.example.yaml plan.example.yaml ...
-  profiles/        presets: simple.yaml  four-bucket.yaml  fifty-thirty-twenty.yaml
+  src/hfk/profiles/  shipped presets (package data): simple.yaml  four-bucket.yaml  fifty-thirty-twenty.yaml
+  profiles/        documented copy of the presets: simple.yaml  four-bucket.yaml  fifty-thirty-twenty.yaml
   tests/           pytest suite using the synthetic fixture only
   scripts/         privacy_scan.py  (CI + pre-commit)
   hooks/           tiller_guard.py  (Claude Code PreToolUse hook)
@@ -194,8 +195,8 @@ not read 100% spent); essential/discretionary drives "what could be cut" views. 
 rename buckets or use a different scheme (e.g. Needs/Wants/Savings).
 
 **Adoption levels.** Level 0: only Tiller `Type` and `Group` (spend by category/group).
-Level 1: two buckets (essential/discretionary). Level 2: four buckets. Presets live in
-`profiles/`. Mapping source defaults to Tiller's `Group` column so Tiller remains the
+Level 1: two buckets (essential/discretionary). Level 2: four buckets. Presets ship as
+package data in `hfk/profiles/` and are mirrored in `profiles/`. Mapping source defaults to Tiller's `Group` column so Tiller remains the
 place users edit their taxonomy; `overrides`/`splits` layer on top.
 
 **Mapping.** Bucket names and Tiller group names are different vocabularies, so the map

@@ -13,6 +13,7 @@ from .declarations import (
     Override,
     SharingRule,
     Split,
+    available_profiles,
     declarations_path,
     load_declarations,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "PlanProblem",
     "SharingRule",
     "Split",
+    "available_profiles",
     "check_plan",
     "declarations_path",
     "household_path",

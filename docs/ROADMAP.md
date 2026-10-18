@@ -5,7 +5,7 @@ Last verified: 2026-10-17
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M5-00`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+The next item is `M5-01`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
 `tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -95,7 +95,7 @@ Goal: make the toolkit usable end to end by a non-programmer household: one-line
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M5-00` | Package the bucket profiles as package data: `load_declarations` currently resolves `profile:` names against the `profiles/` directory of the source checkout (parents of the module), which breaks for a wheel install; ship them under `hfk/profiles/` via `importlib.resources` and keep the top-level `profiles/` as the documented copy or a symlink. | `todo` | `M2-02` | Run `python -m pytest -q tests/test_config.py::test_declarations_profile_import` after `pip install .` into a fresh venv outside the checkout; expected: the example declarations load with their profile without the source tree present. |
+| `M5-00` | Package the bucket profiles as package data: `load_declarations` currently resolves `profile:` names against the `profiles/` directory of the source checkout (parents of the module), which breaks for a wheel install; ship them under `hfk/profiles/` via `importlib.resources` and keep the top-level `profiles/` as the documented copy or a symlink. | `done` | `M2-02` | Run `python -m pytest -q tests/test_config.py::test_declarations_profile_import`; expected: the example declarations load with `profile: four-bucket` from an explicit `profiles_dir` and from the packaged `hfk/profiles/` default, an unknown profile fails with a fix naming every available profile, and the same test passes from a fresh venv outside the checkout against the built wheel, so profiles load without the source tree present. |
 | `M5-01` | Implement `hfk init <dir>` to create a private instance skeleton with config files, `shared-items/`, gitignored `data/` and `out/`, and safe examples. Initialising must not require `git` on `PATH`; `--git` opts in to `git init` plus the privacy pre-commit hook. | `todo` | `M2-03`, `M4-06`, `M5-00` | Run `python -m pytest -q tests/test_init.py`; expected: the generated instance tree matches the design brief, contains no real data, `test_init_without_git` succeeds with `git` removed from `PATH` and writes no `.git`, and `--git` creates the repo with the pre-commit hook installed. |
 | `M5-02` | Wire the Tiller read-only hook into initialized instances without writing into the public toolkit's own data paths. | `todo` | `M5-01`, `M0-05` | Run `python -m pytest -q tests/test_init.py::test_init_wires_tiller_guard`; expected: `.claude/settings.json` points to the guard and workbook patterns remain gitignored. |
 | `M5-03` | Implement text rendering for scorecard, categories, balances, net worth, renewals, and later extension reports. | `todo` | `M3-04`, `M4-04` | Run `python -m pytest -q tests/test_render_text.py`; expected: text snapshots are stable and readable in a terminal. |

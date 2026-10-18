@@ -46,6 +46,22 @@ def test_profiles_parse_and_bucket_attributes_are_present() -> None:
             assert isinstance(bucket["fixed"], bool)
 
 
+def test_packaged_profiles_match_documented_copies() -> None:
+    documented_dir = ROOT / "profiles"
+    packaged_dir = ROOT / "src" / "hfk" / "profiles"
+    documented = {path.name for path in documented_dir.glob("*.yaml")}
+    packaged = {path.name for path in packaged_dir.glob("*.yaml")}
+
+    assert packaged == documented, (
+        f"packaged profile names {sorted(packaged)} do not match documented copies "
+        f"{sorted(documented)}; copy the missing file or remove the extra one"
+    )
+    for name in sorted(documented):
+        assert (packaged_dir / name).read_bytes() == (documented_dir / name).read_bytes(), (
+            f"{name} drifted between profiles/ and src/hfk/profiles/; copy it again"
+        )
+
+
 def test_plan_annual_bill_matches_monthly_to_cent() -> None:
     data = load_yaml(ROOT / "examples" / "plan.example.yaml")
     assert isinstance(data, dict)

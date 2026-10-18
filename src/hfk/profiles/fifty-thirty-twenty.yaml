@@ -1,0 +1,7 @@
+# Last verified: 2026-10-08
+name: fifty-thirty-twenty
+description: Needs, Wants, and Savings profile for a broad budget view.
+buckets:
+  - {name: Needs, essential: true, fixed: false}
+  - {name: Wants, essential: false, fixed: false}
+  - {name: Savings, essential: true, fixed: true}

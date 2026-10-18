@@ -7,6 +7,7 @@ inferred: every error names the file, key path, and fix.
 
 from __future__ import annotations
 
+import importlib.resources
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -206,6 +207,35 @@ def load_declarations(
     )
 
 
+def available_profiles(profiles_dir: Path | None = None) -> tuple[str, ...]:
+    """Return the sorted profile names available to ``profile:`` imports.
+
+    Names come from the packaged ``hfk/profiles/`` directory by default, or from
+    ``profiles_dir`` when it is given.
+    """
+
+    return _profile_names(_profile_root(profiles_dir))
+
+
+def _profile_root(profiles_dir: Path | None) -> Path:
+    if profiles_dir is None:
+        # hfk ships as a wheel, never zipped, so this Traversable is a plain Path.
+        return Path(str(importlib.resources.files("hfk.profiles")))
+    root = Path(profiles_dir)
+    if not root.is_dir():
+        raise ConfigError(
+            "Missing profiles directory",
+            file=root,
+            key="profile",
+            fix="create the profiles directory or pass profiles_dir to load_declarations",
+        )
+    return root
+
+
+def _profile_names(root: Path) -> tuple[str, ...]:
+    return tuple(sorted(entry.stem for entry in root.glob("*.yaml")))
+
+
 def _bucket_definitions(
     data: dict[str, Any], path: Path, profiles_dir: Path | None
 ) -> tuple[tuple[Bucket, ...], str | None]:
@@ -229,23 +259,15 @@ def _bucket_definitions(
         return _buckets(require(data, "buckets", path), path, "buckets"), None
 
     profile = require_text(require(data, "profile", path), path, "profile")
-    profile_root = Path(__file__).resolve().parents[3] / "profiles"
-    if profiles_dir is not None:
-        profile_root = Path(profiles_dir)
-    if not profile_root.is_dir():
-        raise ConfigError(
-            "Missing profiles directory",
-            file=profile_root,
-            key="profile",
-            fix="create the profiles directory or pass profiles_dir to load_declarations",
-        )
+    profile_root = _profile_root(profiles_dir)
     profile_path = profile_root / f"{profile}.yaml"
     if not profile_path.is_file():
         raise ConfigError(
             f"Missing profile {profile!r}",
             file=profile_path,
             key="profile",
-            fix=f"create {profile_path.name} under {profile_root} or choose an existing profile",
+            fix=f"choose one of: {', '.join(_profile_names(profile_root))}; "
+            "or declare buckets instead of profile",
         )
     profile_data = load_mapping(profile_path)
     reject_unknown_keys(profile_data, ("name", "description", "buckets"), profile_path)

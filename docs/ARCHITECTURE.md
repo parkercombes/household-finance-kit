@@ -1,6 +1,6 @@
 # Architecture
 
-Last verified: 2026-10-08
+Last verified: 2026-10-17
 
 This document explains the architecture of `hfk`, the household-finance-kit toolkit, for both human maintainers and LLM agents resuming the project cold. The source of truth for product scope is [DESIGN-BRIEF.md](DESIGN-BRIEF.md). Planned work is tracked in [ROADMAP.md](ROADMAP.md), and architectural decisions are recorded in [DECISIONS.md](DECISIONS.md).
 
@@ -124,7 +124,7 @@ Adoption levels:
 | 1 | Two buckets | Essential versus discretionary |
 | 2 | Four buckets | Essential/discretionary crossed with fixed/variable |
 
-Presets live in `profiles/`, including the planned simple, four-bucket, and fifty-thirty-twenty profiles. A profile is a starting point, not hidden policy.
+The three presets — simple, four-bucket, and fifty-thirty-twenty — ship inside the package as `hfk/profiles/` package data, resolved with `importlib.resources`, and are mirrored at the top-level `profiles/` for reading the repository on GitHub, with a test keeping the two copies identical. A profile is a starting point, not hidden policy.
 
 `mapping_source` controls how categories map into buckets. The default is `tiller_group`, so Tiller remains the place users edit their taxonomy. An `explicit` mapping source is allowed when a household wants all mappings declared outside Tiller.
 

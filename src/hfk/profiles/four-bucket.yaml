@@ -1,0 +1,8 @@
+# Last verified: 2026-10-08
+name: four-bucket
+description: Four-bucket profile using essential and fixed attributes.
+buckets:
+  - {name: Fixed Essential, essential: true, fixed: true}
+  - {name: Variable Essential, essential: true, fixed: false}
+  - {name: Fixed Discretionary, essential: false, fixed: true}
+  - {name: Variable Discretionary, essential: false, fixed: false}

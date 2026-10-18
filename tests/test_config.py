@@ -17,6 +17,7 @@ from hfk.config import (
     Household,
     Month,
     Plan,
+    available_profiles,
     load_declarations,
     load_household,
     load_plan,
@@ -299,12 +300,28 @@ def test_declarations_profile_import(tmp_path: Path) -> None:
     assert declarations.profile == "four-bucket"
     assert declarations.bucket_names() == expected_buckets
 
+    packaged = load_declarations(write_declarations(tmp_path, data))
+    assert packaged.profile == "four-bucket"
+    assert packaged.bucket_names() == expected_buckets
+
     data["profile"] = "unknown-profile"
     path = write_declarations(tmp_path, data)
     with pytest.raises(ConfigError) as error:
         load_declarations(path, profiles_dir=PROFILES)
 
     assert error.value.file == PROFILES / "unknown-profile.yaml"
+    assert "four-bucket" in error.value.fix
+    assert "simple" in error.value.fix
+
+
+def test_available_profiles_lists_packaged_names(tmp_path: Path) -> None:
+    assert available_profiles() == ("fifty-thirty-twenty", "four-bucket", "simple")
+    assert available_profiles(PROFILES) == ("fifty-thirty-twenty", "four-bucket", "simple")
+
+    with pytest.raises(ConfigError) as error:
+        available_profiles(tmp_path / "missing")
+
+    assert error.value.key == "profile"
 
 
 def test_declarations_mapping_source_rules(tmp_path: Path) -> None:
