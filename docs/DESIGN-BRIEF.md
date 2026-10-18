@@ -53,10 +53,10 @@ income-vs-need modelling.
 Two kinds of repo, strictly separated:
 
 - **Toolkit (this repo, public).** Code, docs, example configs, synthetic data generator.
-- **Instance (one per person/household, private).** Created by `hfk init <dir>`:
+- **Instance (one per person/household, private).** Created by `hfk init <dir>`, an interview that reads the household's workbook and writes the config. It is a folder; git is opt-in (`hfk init --git`):
 
 ```
-my-finances/               # private git repo
+my-finances/               # private folder (git optional)
   household.yaml           # people, files, account ownership (tracked in git; contains no balances)
   declarations.yaml        # judgement calls: buckets, overrides, splits, targets
   plan.yaml                # the budget plan (validated by `hfk plan check`)
@@ -64,6 +64,8 @@ my-finances/               # private git repo
   retirement.yaml          # retirement extension input
   data/                    # GITIGNORED: Tiller workbook(s), statements, snapshots
   out/                     # GITIGNORED: generated reports
+  Open HFK.command         # double-click launcher (macOS, Linux): runs `hfk open --home <this folder>`
+  Open HFK.bat             # the same launcher for Windows
   .claude/settings.json    # tiller read-only hook wiring
   .gitignore               # blocks *.xlsx *.xlsm *.csv *.pdf *.tsv data/ out/
 ```
@@ -344,11 +346,13 @@ A generic income-vs-need model, input `retirement.yaml` (no Excel dependency):
 - **M3 Ownership + buckets + scorecard** — shares, bucket mapping, monthly scorecard.
 - **M4 Targets, balances, renewals** — category targets (paced), balances/net worth,
   renewals/sinking fund, rebaseline, `plan check`.
-- **M5 Instance + CLI polish** — `hfk init`, hook wiring, text/CSV/HTML renderers.
+- **M5 Instance, front door, and non-programmer UX** — `hfk init` as an interview, hook wiring,
+  text/CSV/HTML renderers, the read-only `HFK Plan` workbook tab, `hfk serve` and `hfk open`
+  on `127.0.0.1`, double-click launchers, one-line install, usability test, README rewrite.
 - **M6 Extension API** — entry-point discovery, config-section hooks, doctor hooks.
 - **M7 settle_up extension** (two people).
 - **M8 retirement extension** — R1 schema; R2 income streams; R3 expenses; R4 tax data +
   staleness gate; R5 report; R6 disclaimers and fixtures.
 - **M9 Google Sheets adapter.**
-- **M10+ Community**: FSA/reimbursements, employer pension add-ons, home purchase,
-  local web front door, `hfk plan edit`.
+- **M10+ Community**: FSA/reimbursements, employer pension add-ons, home purchase. (The web
+  front door shipped in M5; `hfk plan edit` was superseded by the `HFK Plan` tab.)

@@ -1,6 +1,6 @@
 # household-finance-kit
 
-Last verified: 2026-10-08
+Last verified: 2026-10-17
 
 `household-finance-kit` (`hfk`) is a public, open-source Python toolkit for households that use a Tiller spreadsheet as their financial ledger and want local budgeting analysis from it. It reads the workbook read-only, combines it with small YAML files owned by the household, and produces reports without becoming the place where private financial data lives.
 
@@ -76,8 +76,8 @@ The design includes these planned commands. They are listed here to show directi
 - Available now (M1): `hfk dev fixture --out PATH` generates a synthetic Tiller workbook for tests and demos.
 - Available now (M2): `hfk doctor` for config validation and loud data-quality checks, including plan-line and sharing-rule conflicts.
 - Available now (M3): `hfk scorecard --month YYYY-MM [--who SLUG]` for closed-month plan-vs-actual by bucket, using the selected person's share.
-- Planned (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
-- Planned (M5): `hfk init <dir>` for creating a private instance skeleton.
+- Available now (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
+- Planned (M5): `hfk init <dir>` as an interview that writes the config from your workbook, an `HFK Plan` tab read from the workbook, `hfk serve` and `hfk open` for a local read-only page, and a double-click launcher.
 - Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
 
 ## Milestones
@@ -90,13 +90,13 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M1 | Done | Reader, Ledger types, synthetic workbook fixture |
 | M2 | Done | Config loading, validation, and `hfk doctor` with orphan, stale-data, and closed-account checks |
 | M3 | Done except `M3-07` | Ownership shares, bucket mapping, monthly scorecard, doctor conflict checks; `M3-07` is a manual parity check against a private instance |
-| M4 | Planned | Category targets, balances, net worth, renewals, rebaseline, plan check |
-| M5 | Planned | Instance creation, hook wiring, renderers, CLI polish |
+| M4 | Done | Category targets, balances, net worth, renewals, rebaseline, plan check |
+| M5 | Planned | Instance interview, plan-in-workbook tab, renderers, local front door and launcher, one-line install, non-programmer docs |
 | M6 | Planned | Extension API and discovery |
 | M7 | Planned | `settle_up` extension for exactly two people |
 | M8 | Planned | `retirement` extension, R1 through R6 |
 | M9 | Planned | Google Sheets source adapter |
-| M10 | Planned | Community extensions, local web front door, plan editor |
+| M10 | Planned | Community extensions: FSA tracking, pension add-ons, home purchase modelling |
 
 ## What It Will Do
 

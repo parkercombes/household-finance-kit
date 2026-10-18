@@ -38,7 +38,7 @@ Import rule: a layer imports only from layers below it. Higher layers may depend
 | Config | `hfk.config` | Load and validate private YAML files. Errors name file, key path, and fix. | `household.yaml`, `declarations.yaml`, `plan.yaml`, extension config sections | Typed config objects | Read workbook data, infer missing required decisions, calculate reports |
 | Engine | `hfk.engine` | Calculate ownership shares, bucket mappings, scorecards, targets, balances, renewals, rebaseline proposals, and doctor diagnostics. | `Ledger` plus validated config | Pure result objects and diagnostics | Mutate source data, write YAML without an explicit command, call renderers, import extensions |
 | Extensions | `hfk.ext` | Discover optional plugins through `hfk.extensions` entry points. | Extension config section, ledger fields, engine outputs as needed | Extra commands, report sections, and doctor checks | Become required for core use, bypass validation, write to Tiller, import presentation internals |
-| Presentation | `hfk.cli`, `hfk.render` | Provide CLI commands and render text, CSV, and HTML. A local read-only web front door is planned later. | Result objects and diagnostics | Terminal output and files under the instance output directory | Recalculate business logic, silently patch data, reach around lower-layer APIs |
+| Presentation | `hfk.cli`, `hfk.render` | Provide CLI commands and render text, CSV, and HTML. `hfk serve` (M5) is the local read-only web front door, bound to `127.0.0.1` only. | Result objects and diagnostics | Terminal output and files under the instance output directory | Recalculate business logic, silently patch data, reach around lower-layer APIs |
 
 This layering is for maintainability and for agent safety. A worker changing renderers should not need to understand Tiller column headers. A worker changing the source adapter should not be able to modify budgeting policy by accident, but must preserve header name lookup so Tiller column reordering does not change behavior. When in doubt, keep data conversion low, decisions in config, calculations in engine, and formatting in presentation.
 
@@ -84,7 +84,7 @@ Private instance home (--home or HFK_HOME)
                          out/report.txt, .csv, .html
 ```
 
-The workbook is an input only. Reports are generated outputs. Configuration files are user-owned inputs except for explicit commands that are designed to write a specific config file, such as the planned `hfk plan edit` (M10) writing only `plan.yaml`. The toolkit contains no save path for workbooks; `tests/test_read_only_invariant.py` checks that statically.
+The workbook is an input only. Reports are generated outputs. Configuration files are user-owned inputs except for explicit commands that are designed to write a specific config file, such as `hfk init` writing a new instance's config files. The plan may also be read from an `HFK Plan` tab in the workbook (M5), through the same read-only loader. The toolkit contains no save path for workbooks; `tests/test_read_only_invariant.py` checks that statically.
 
 ## Ownership and shares
 
