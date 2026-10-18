@@ -1,0 +1,9 @@
+net worth as of 2026-09-30
+Alex Checking  Asset      3025.00  observed 2026-09-28
+Sam Checking   Asset      2725.00  observed 2026-09-28
+Joint Card     Liability  25.00  observed 2026-09-28; liability positive
+Savings        Asset      5625.00  observed 2026-09-28
+assets 11375.00
+liabilities 25.00
+net worth 11400.00
+counted 4 of 4  excluded 0

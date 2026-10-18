@@ -1,0 +1,6 @@
+scorecard 2026-08 for alex (closed month, shares per declarations)
+Fixed Essential         plan 1200.00  actual 1500.00  left -300.00
+Variable Essential      plan 640.00  actual 287.50  left 352.50
+Fixed Discretionary     plan 30.00  actual 0.00  left 30.00
+Variable Discretionary  plan 0.00  actual 52.50  left -52.50
+total  plan 1870.00  actual 1840.00  left 30.00

@@ -1,0 +1,6 @@
+categories 2026-08 for alex (closed month, 31 of 31 days)
+Example Rent           fixed  target 1200.00  actual 1500.00  left -300.00
+Example Utilities      paced  target 90.00  actual 105.00  left -15.00
+Example Grocer         paced  target 550.00  actual 182.50  left 367.50
+Example Cloud Renewal  fixed  target 10.00  actual 0.00  left 10.00
+total  target 1850.00  actual 1787.50  left 62.50

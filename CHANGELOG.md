@@ -8,6 +8,8 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M5-03: `hfk.render.text` renders the scorecard, categories, balances, net worth, and renewals reports to the exact terminal text the CLI prints (byte-identical, checked against the six snapshots under `tests/snapshots/text/`), and `cli.py` now prints only what the renderer returns through the `render_text` registry that later CSV/HTML renderers and extension reports plug into.
+
 - M5-02: `hfk init` wires the Tiller read-only guard into every private instance: it copies the guard byte-for-byte to `.claude/hooks/tiller_guard.py` (executable), writes `.claude/settings.json` with a `PreToolUse` hook that runs it through `$CLAUDE_PROJECT_DIR`, and gitignores `.claude/settings.local.json` while keeping `settings.json` and the hook tracked, all from packaged `hfk.templates` data so no toolkit path is touched.
 
 - M5-01: `hfk init <dir> [--git]` creates a private instance skeleton — the three example YAML files, a plain-words README, a `.gitignore` blocking workbooks and reports, `shared-items/`, and empty gitignored `data/` and `out/` directories — without requiring `git` on `PATH`, refusing to overwrite any existing file, while `--git` additionally runs `git init` and installs a privacy pre-commit hook that blocks staged workbooks, CSV/TSV, PDF, and Numbers files and anything under `data/` or `out/`.

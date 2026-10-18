@@ -1,0 +1,6 @@
+balances as of 2026-09-30
+Alex Checking  Asset      3025.00  observed 2026-09-28
+Sam Checking   Asset      2725.00  observed 2026-09-28
+Joint Card     Liability  25.00  observed 2026-09-28
+Savings        Asset      5625.00  observed 2026-09-28
+accounts 4  gaps 0

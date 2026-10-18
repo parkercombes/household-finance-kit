@@ -23,12 +23,10 @@ from hfk.config import (
     load_plan,
 )
 from hfk.engine import (
-    AccountBalance,
     BalancesError,
     BucketError,
     CategoriesError,
     NetWorthError,
-    NetWorthLine,
     RebaselineError,
     RenewalsError,
     ScorecardError,
@@ -42,6 +40,14 @@ from hfk.engine import (
     run_doctor,
 )
 from hfk.instance import InstanceError, write_instance
+from hfk.render import (
+    money,
+    render_balances,
+    render_categories,
+    render_networth,
+    render_renewals,
+    render_scorecard,
+)
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
@@ -122,19 +128,7 @@ def _scorecard(args: argparse.Namespace) -> int:
         print(f"scorecard: {error}", file=sys.stderr)
         return 1
 
-    print(f"scorecard {scorecard.month} for {scorecard.who} (closed month, shares per declarations)")
-    width = max((len(bucket.bucket) for bucket in scorecard.buckets), default=len("total"))
-    for bucket in scorecard.buckets:
-        print(
-            f"{bucket.bucket:<{width}}  plan {_money(bucket.planned)}  "
-            f"actual {_money(bucket.actual)}  left {_money(bucket.variance)}"
-        )
-    print(
-        f"total  plan {_money(scorecard.planned_total)}  actual {_money(scorecard.actual_total)}  "
-        f"left {_money(scorecard.planned_total - scorecard.actual_total)}"
-    )
-    if scorecard.clamped:
-        print(f"note: window clamped to history_start {scorecard.window_start.isoformat()}")
+    sys.stdout.write(render_scorecard(scorecard))
     return 0
 
 
@@ -169,34 +163,7 @@ def _categories(args: argparse.Namespace) -> int:
         print(f"categories: {error}", file=sys.stderr)
         return 1
 
-    if report.closed:
-        print(
-            f"categories {report.month} for {report.who} "
-            f"(closed month, {report.window_days} of {report.days_in_month} days)"
-        )
-    else:
-        print(
-            f"categories {report.month} for {report.who} "
-            f"(through {report.window_end.isoformat()}, "
-            f"{report.window_days} of {report.days_in_month} days)"
-        )
-    if not report.lines:
-        print(f"no plan lines with categories for {report.who} in {report.month}")
-        return 0
-    width = max(len(line.desc) for line in report.lines)
-    for line in report.lines:
-        paced = "paced" if line.paced else "fixed"
-        print(
-            f"{line.desc:<{width}}  {paced}  "
-            f"target {_money(line.target)}  actual {_money(line.actual)}  "
-            f"left {_money(line.variance)}"
-        )
-    print(
-        f"total  target {_money(report.target_total)}  actual {_money(report.actual_total)}  "
-        f"left {_money(report.target_total - report.actual_total)}"
-    )
-    if report.clamped:
-        print(f"note: window clamped to history_start {report.window_start.isoformat()}")
+    sys.stdout.write(render_categories(report))
     return 0
 
 
@@ -217,46 +184,8 @@ def _balances(args: argparse.Namespace) -> int:
         print(f"balances: {error}", file=sys.stderr)
         return 1
 
-    print(f"balances as of {report.as_of.isoformat()}")
-    account_width = max((len(row.account) for row in report.accounts), default=0)
-    class_width = max((len(_balance_class(row)) for row in report.accounts), default=1)
-    for row in report.accounts:
-        amount = "gap" if row.gap else _money(row.balance)
-        print(
-            f"{row.account:<{account_width}}  {_balance_class(row):<{class_width}}  "
-            f"{amount}  {_balance_detail(row)}"
-        )
-    print(f"accounts {len(report.accounts)}  gaps {report.gap_count}")
-    if report.ignored_before_history_start:
-        print(
-            f"note: ignored {report.ignored_before_history_start} observations "
-            f"before history_start {household.history_start.isoformat()}"
-        )
+    sys.stdout.write(render_balances(report, history_start=household.history_start))
     return 0
-
-
-def _balance_class(row: AccountBalance) -> str:
-    return "-" if row.account_class is None else row.account_class
-
-
-def _balance_detail(row: AccountBalance) -> str:
-    if not row.gap:
-        detail = f"observed {row.observed.isoformat()}"
-    else:
-        detail = row.gap_reason or ""
-        if row.observed is not None:
-            if row.last_known is not None:
-                detail += (
-                    f"; last known {_money(row.last_known)} on "
-                    f"{row.last_known_date.isoformat()}"
-                )
-            else:
-                detail += "; no earlier value"
-    if row.closed is not None:
-        detail += f"; closed {row.closed.isoformat()}"
-    if not row.declared:
-        detail += "; undeclared"
-    return detail
 
 
 def _networth(args: argparse.Namespace) -> int:
@@ -277,43 +206,8 @@ def _networth(args: argparse.Namespace) -> int:
         print(f"networth: {error}", file=sys.stderr)
         return 1
 
-    print(f"net worth as of {report.as_of.isoformat()}")
-    account_width = max((len(line.account) for line in report.lines), default=0)
-    class_width = max((len(_networth_class(line)) for line in report.lines), default=1)
-    for line in report.lines:
-        amount = "gap" if line.gap else _money(line.balance)
-        print(
-            f"{line.account:<{account_width}}  {_networth_class(line):<{class_width}}  "
-            f"{amount}  {_networth_detail(line)}"
-        )
-    print(f"assets {_money(report.assets)}")
-    print(f"liabilities {_money(report.liabilities)}")
-    print(f"net worth {_money(report.net_worth)}")
-    print(f"counted {report.counted} of {len(report.lines)}  excluded {len(report.excluded)}")
-    if report.incomplete:
-        print(f"warning: incomplete net worth; excluded: {', '.join(report.incomplete)}")
-    if report.ignored_before_history_start:
-        print(
-            f"note: ignored {report.ignored_before_history_start} observations "
-            f"before history_start {household.history_start.isoformat()}"
-        )
+    sys.stdout.write(render_networth(report, history_start=household.history_start))
     return 0
-
-
-def _networth_class(line: NetWorthLine) -> str:
-    return "-" if line.account_class is None else line.account_class
-
-
-def _networth_detail(line: NetWorthLine) -> str:
-    if not line.gap:
-        detail = f"observed {line.observed.isoformat()}"
-    else:
-        detail = line.gap_reason or ""
-    for flag in line.flags:
-        detail += f"; {flag}"
-    if not line.counted:
-        detail += "; excluded"
-    return detail
 
 
 def _renewals(args: argparse.Namespace) -> int:
@@ -332,45 +226,7 @@ def _renewals(args: argparse.Namespace) -> int:
         print(f"renewals: {error}", file=sys.stderr)
         return 1
 
-    header = f"renewals for {report.month}"
-    if report.who is not None:
-        header += f"  who {report.who}"
-    print(header)
-    desc_width = max((len(row.desc) for row in report.renewals), default=0)
-    who_width = max((len(row.who) for row in report.renewals), default=0)
-    for row in report.renewals:
-        due_text = "-" if row.next_due is None else str(row.next_due)
-        accrued_text = "-" if row.accrued is None else _money(row.accrued)
-        projected_text = "-" if row.projected is None else _money(row.projected)
-        if row.shortfall is None:
-            status = "-"
-        elif row.shortfall == 0:
-            status = "ok"
-        else:
-            status = f"short {_money(row.shortfall)}"
-        line = (
-            f"{row.desc:<{desc_width}}  {row.who:<{who_width}}  due {due_text}  "
-            f"bill {_money(row.annual_bill)}  monthly {_money(row.monthly)}  "
-            f"accrued {accrued_text}  projected {projected_text}  {status}"
-        )
-        for flag in row.flags:
-            line += f"; {flag}"
-        print(line)
-    if report.schedule:
-        print("schedule:")
-        for entry in report.schedule:
-            print(f"  {entry.month}  {_money(entry.total)}  {', '.join(entry.items)}")
-    else:
-        print("schedule: nothing due in the next 12 months")
-    print(
-        f"set-aside monthly {_money(report.set_aside_monthly)}  "
-        f"accrued {_money(report.accrued_total)}  shortfall {_money(report.shortfall_total)}"
-    )
-    if report.shortfall_total == 0:
-        print("adequacy ok")
-    else:
-        plural = "renewal" if report.short_count == 1 else "renewals"
-        print(f"adequacy short {_money(report.shortfall_total)} across {report.short_count} {plural}")
+    sys.stdout.write(render_renewals(report))
     return 0
 
 
@@ -421,9 +277,9 @@ def _rebaseline(args: argparse.Namespace) -> int:
                 (
                     f"{line.category:<{width}}",
                     f"months {line.nonzero_months}/{report.months}",
-                    f"mean {_money(line.mean)}",
-                    f"median {_money(line.median)}",
-                    f"max {_money(line.max)}",
+                    f"mean {money(line.mean)}",
+                    f"median {money(line.median)}",
+                    f"max {money(line.max)}",
                     f"current {_amount_or_dash(line.current)}",
                     f"proposed {_amount_or_dash(line.proposed)}",
                     line.classification,
@@ -469,7 +325,7 @@ def _month_before(value: date) -> Month:
 
 
 def _amount_or_dash(amount: object) -> str:
-    return "-" if amount is None else _money(amount)
+    return "-" if amount is None else money(amount)
 
 
 def _dev_fixture(args: argparse.Namespace) -> int:
@@ -495,10 +351,6 @@ def _init(args: argparse.Namespace) -> int:
     print("next: put the Tiller workbook export in data/")
     print(f"then run: hfk plan check --home {args.dir} and hfk doctor --home {args.dir}")
     return 0
-
-
-def _money(amount: object) -> str:
-    return f"{amount:.2f}"
 
 
 def _build_parser() -> argparse.ArgumentParser:

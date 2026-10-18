@@ -1,0 +1,6 @@
+renewals for 2026-09
+Example Cloud Renewal  alex  due 2027-07  bill 120.00  monthly 10.00  accrued 20.00  projected 120.00  ok
+schedule:
+  2027-07  120.00  Example Cloud Renewal (alex)
+set-aside monthly 10.00  accrued 20.00  shortfall 0.00
+adequacy ok
