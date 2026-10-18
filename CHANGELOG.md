@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- ADR-0014 and roadmap item `M5-16` (2026-10-17): a closed account keeps its ownership. Closure becomes an optional `closed: YYYY-MM-DD` (plus `note`) on the `household.yaml` account entry, so a card closed mid-year still scores its in-window transactions without `ShareError` and `hfk doctor` no longer reports it as declared twice; `declarations.yaml` will reject `closed_accounts` with a fix naming the move once `M5-16` lands.
 - M5-03: `hfk.render.text` renders the scorecard, categories, balances, net worth, and renewals reports to the exact terminal text the CLI prints (byte-identical, checked against the six snapshots under `tests/snapshots/text/`), and `cli.py` now prints only what the renderer returns through the `render_text` registry that later CSV/HTML renderers and extension reports plug into.
 
 - M5-02: `hfk init` wires the Tiller read-only guard into every private instance: it copies the guard byte-for-byte to `.claude/hooks/tiller_guard.py` (executable), writes `.claude/settings.json` with a `PreToolUse` hook that runs it through `$CLAUDE_PROJECT_DIR`, and gitignores `.claude/settings.local.json` while keeping `settings.json` and the hook tracked, all from packaged `hfk.templates` data so no toolkit path is touched.

@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Last verified: 2026-10-09
+Last verified: 2026-10-17
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
 `household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
@@ -428,3 +428,77 @@ Net worth totals can be labelled incomplete, which is the honest statement
 that an unknown value was excluded rather than zeroed. The user's fixes are
 to set `Class` in Tiller, declare closed accounts in `declarations.yaml`, or
 declare unsynced accounts in `household.yaml` — never to edit arithmetic.
+
+---
+
+## ADR-0014: A Closed Account Keeps Its Ownership; Closure Is a Date on the household.yaml Account Entry
+
+Status: accepted
+Date: 2026-10-17
+
+### Context
+
+ADR-0003 puts every account's ownership under `accounts` in `household.yaml`.
+Closure lives somewhere else: `declarations.yaml` has `closed_accounts`, a map
+of name to `{closed, note}` with no ownership, and `hfk doctor`
+(`_check_closed_accounts`) reports `account-closed-and-open` when a name
+appears in both places. That split was designed for accounts that closed before
+`history_start`, where no transaction ever needs a share.
+
+A real-data smoke of the scorecard on 2026-10-17 showed the case the split
+cannot express: a card closed at the end of August still had June transactions
+inside the reporting window. `share_weights` in `hfk.engine.shares` raises
+`ShareError` for any transaction whose account is not under `accounts`, so the
+only way to score that month was to leave the card under `accounts`, and then
+doctor reported it as declared twice. The two declarations are not redundant
+either: `build_balances` already looks up a closed date for every household
+account, so the code half-expects both at once while doctor forbids it.
+
+Three options were weighed:
+
+1. Add `owner` or `shared` to `closed_accounts` entries. Rejected: ownership
+   would then be declared in two files with two parsers, and the doctor
+   duplicate check becomes a reconciliation problem instead of a simple rule.
+2. Keep both places and let doctor accept an account declared in both when the
+   closure date is after `history_start`. Rejected: "declare it in exactly one
+   place" stops being true, and a user has to learn when the second place is
+   required.
+3. Make closure an attribute of the account entry in `household.yaml`.
+   Accepted.
+
+### Decision
+
+- An entry under `accounts` in `household.yaml` may carry `closed: YYYY-MM-DD`
+  and an optional `note`, next to its `owner` or `shared` weights. Ownership
+  does not change at closure: `share_weights` uses the account's weights for
+  every transaction on that account, exactly as for an open account.
+- Balances and net worth keep the existing cutoff rule, now read from the
+  account entry: an account with `closed` is observed through
+  `min(as_of, closed)`; on or after the closure date net worth excludes the line
+  with the `closed <ISO>` flag.
+- Doctor's liveness check moves with the data: a transaction dated after
+  `closed` is still the `closed-account-active` error, with the fix naming
+  `household.yaml`. The `account-closed-and-open` diagnostic is removed because
+  the condition can no longer be written.
+- `declarations.yaml` loses `closed_accounts`. The loader rejects the key with
+  a `ConfigError` whose fix says to move each entry under `accounts` in
+  `household.yaml` and add its ownership. There is no silent alias: the
+  loaders reject unknown keys everywhere else (ADR-0002), and a tolerated
+  alias would recreate the two-places problem this record removes.
+- An account that closed before `history_start` is declared the same way; its
+  ownership is simply never consulted, because every report clamps to
+  `history_start`.
+
+### Consequences
+
+One declaration per account answers both "whose is it" and "until when". A
+closed account with in-window transactions scores without `ShareError`, doctor
+is clean when the account is declared once, and balances still stop at the
+closure date. The design brief's `declarations.yaml` sketch (section 6) and
+[docs/TILLER-SCHEMA.md](TILLER-SCHEMA.md) must be amended to show `closed` on
+the account entry, the example instance and tests move their closed accounts,
+and ADR-0012's fix wording ("declare closed accounts in `declarations.yaml`")
+is read as `household.yaml` from this record on; its Decision section is left
+as written. Private instances that still carry `closed_accounts` fail loudly on
+load with the move named as the fix, which matches the fail-loudly rule. The
+change ships as roadmap item `M5-16`.
