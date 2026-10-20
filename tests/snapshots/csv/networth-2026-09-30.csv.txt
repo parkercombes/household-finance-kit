@@ -1,0 +1,5 @@
+account,account_class,balance,observed,gap,gap_reason,counted,flags,closed,declared,unsynced
+Alex Checking,Asset,3025.00,2026-09-28,false,,true,,,true,false
+Sam Checking,Asset,2725.00,2026-09-28,false,,true,,,true,false
+Joint Card,Liability,25.00,2026-09-28,false,,true,liability positive,,true,false
+Savings,Asset,5625.00,2026-09-28,false,,true,,,true,false

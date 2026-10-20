@@ -40,14 +40,7 @@ from hfk.engine import (
     run_doctor,
 )
 from hfk.instance import InstanceError, write_instance
-from hfk.render import (
-    money,
-    render_balances,
-    render_categories,
-    render_networth,
-    render_renewals,
-    render_scorecard,
-)
+from hfk.render import money, render_csv, render_text
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
@@ -128,7 +121,10 @@ def _scorecard(args: argparse.Namespace) -> int:
         print(f"scorecard: {error}", file=sys.stderr)
         return 1
 
-    sys.stdout.write(render_scorecard(scorecard))
+    if args.format == "csv":
+        sys.stdout.write(render_csv(scorecard))
+    else:
+        sys.stdout.write(render_text(scorecard))
     return 0
 
 
@@ -163,7 +159,10 @@ def _categories(args: argparse.Namespace) -> int:
         print(f"categories: {error}", file=sys.stderr)
         return 1
 
-    sys.stdout.write(render_categories(report))
+    if args.format == "csv":
+        sys.stdout.write(render_csv(report))
+    else:
+        sys.stdout.write(render_text(report))
     return 0
 
 
@@ -184,7 +183,10 @@ def _balances(args: argparse.Namespace) -> int:
         print(f"balances: {error}", file=sys.stderr)
         return 1
 
-    sys.stdout.write(render_balances(report, history_start=household.history_start))
+    if args.format == "csv":
+        sys.stdout.write(render_csv(report))
+    else:
+        sys.stdout.write(render_text(report, history_start=household.history_start))
     return 0
 
 
@@ -206,7 +208,10 @@ def _networth(args: argparse.Namespace) -> int:
         print(f"networth: {error}", file=sys.stderr)
         return 1
 
-    sys.stdout.write(render_networth(report, history_start=household.history_start))
+    if args.format == "csv":
+        sys.stdout.write(render_csv(report))
+    else:
+        sys.stdout.write(render_text(report, history_start=household.history_start))
     return 0
 
 
@@ -226,7 +231,10 @@ def _renewals(args: argparse.Namespace) -> int:
         print(f"renewals: {error}", file=sys.stderr)
         return 1
 
-    sys.stdout.write(render_renewals(report))
+    if args.format == "csv":
+        sys.stdout.write(render_csv(report))
+    else:
+        sys.stdout.write(render_text(report))
     return 0
 
 
@@ -378,6 +386,12 @@ def _build_parser() -> argparse.ArgumentParser:
     scorecard_parser.add_argument("--who", help="Household person slug.")
     scorecard_parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
     scorecard_parser.add_argument(
+        "--format",
+        choices=("text", "csv"),
+        default="text",
+        help="Output format (default: text).",
+    )
+    scorecard_parser.add_argument(
         "--home",
         default=argparse.SUPPRESS,
         help="Instance directory (default: HFK_HOME or current directory).",
@@ -388,6 +402,12 @@ def _build_parser() -> argparse.ArgumentParser:
     categories_parser.add_argument("--month", required=True, type=_parse_month, help="Month to report.")
     categories_parser.add_argument("--who", help="Household person slug.")
     categories_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pacing.")
+    categories_parser.add_argument(
+        "--format",
+        choices=("text", "csv"),
+        default="text",
+        help="Output format (default: text).",
+    )
     categories_parser.add_argument(
         "--home",
         default=argparse.SUPPRESS,
@@ -402,6 +422,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=date.today(),  # noqa: DTZ011
         dest="as_of",
         help="Report date; each account shows its latest observation on or before it.",
+    )
+    balances_parser.add_argument(
+        "--format",
+        choices=("text", "csv"),
+        default="text",
+        help="Output format (default: text).",
     )
     balances_parser.add_argument(
         "--home",
@@ -426,6 +452,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Flag synced accounts whose latest observation is older than this many days.",
     )
     networth_parser.add_argument(
+        "--format",
+        choices=("text", "csv"),
+        default="text",
+        help="Output format (default: text).",
+    )
+    networth_parser.add_argument(
         "--home",
         default=argparse.SUPPRESS,
         help="Instance directory (default: HFK_HOME or current directory).",
@@ -440,6 +472,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Report month; the schedule and fund are shown as of that month.",
     )
     renewals_parser.add_argument("--who", help="Household person slug.")
+    renewals_parser.add_argument(
+        "--format",
+        choices=("text", "csv"),
+        default="text",
+        help="Output format (default: text).",
+    )
     renewals_parser.add_argument(
         "--home",
         default=argparse.SUPPRESS,

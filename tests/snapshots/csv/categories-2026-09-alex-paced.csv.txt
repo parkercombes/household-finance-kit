@@ -1,0 +1,5 @@
+desc,bucket,categories,paced,monthly,target,actual,variance
+Example Rent,Fixed Essential,Rent,false,1200.00,1200.00,1500.00,-300.00
+Example Utilities,Variable Essential,Utilities,true,90.00,45.00,105.00,-60.00
+Example Grocer,Variable Essential,Groceries,true,550.00,275.00,127.50,147.50
+Example Cloud Renewal,Fixed Discretionary,Annual Membership,false,10.00,10.00,0.00,10.00

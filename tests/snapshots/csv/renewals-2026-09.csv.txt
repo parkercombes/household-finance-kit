@@ -1,0 +1,2 @@
+desc,who,bucket,account,annual_bill,annual_full,monthly,due,next_due,accrued_months,accrued,months_to_due,projected,shortfall,flags
+Example Cloud Renewal,alex,Fixed Discretionary,Alex Checking,120.00,120.00,10.00,07-01,2027-07,2,20.00,10,120.00,0.00,

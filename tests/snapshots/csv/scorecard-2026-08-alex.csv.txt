@@ -1,0 +1,5 @@
+bucket,essential,fixed,planned,actual,variance
+Fixed Essential,true,true,1200.00,1500.00,-300.00
+Variable Essential,true,false,640.00,287.50,352.50
+Fixed Discretionary,false,true,30.00,0.00,30.00
+Variable Discretionary,false,false,0.00,52.50,-52.50
