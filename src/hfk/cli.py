@@ -40,7 +40,7 @@ from hfk.engine import (
     run_doctor,
 )
 from hfk.instance import InstanceError, write_instance
-from hfk.render import money, render_csv, render_text
+from hfk.render import money, render_csv, render_html, render_text
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
@@ -123,6 +123,8 @@ def _scorecard(args: argparse.Namespace) -> int:
 
     if args.format == "csv":
         sys.stdout.write(render_csv(scorecard))
+    elif args.format == "html":
+        sys.stdout.write(render_html(scorecard))
     else:
         sys.stdout.write(render_text(scorecard))
     return 0
@@ -161,6 +163,8 @@ def _categories(args: argparse.Namespace) -> int:
 
     if args.format == "csv":
         sys.stdout.write(render_csv(report))
+    elif args.format == "html":
+        sys.stdout.write(render_html(report))
     else:
         sys.stdout.write(render_text(report))
     return 0
@@ -185,6 +189,8 @@ def _balances(args: argparse.Namespace) -> int:
 
     if args.format == "csv":
         sys.stdout.write(render_csv(report))
+    elif args.format == "html":
+        sys.stdout.write(render_html(report, history_start=household.history_start))
     else:
         sys.stdout.write(render_text(report, history_start=household.history_start))
     return 0
@@ -210,6 +216,8 @@ def _networth(args: argparse.Namespace) -> int:
 
     if args.format == "csv":
         sys.stdout.write(render_csv(report))
+    elif args.format == "html":
+        sys.stdout.write(render_html(report, history_start=household.history_start))
     else:
         sys.stdout.write(render_text(report, history_start=household.history_start))
     return 0
@@ -233,6 +241,8 @@ def _renewals(args: argparse.Namespace) -> int:
 
     if args.format == "csv":
         sys.stdout.write(render_csv(report))
+    elif args.format == "html":
+        sys.stdout.write(render_html(report))
     else:
         sys.stdout.write(render_text(report))
     return 0
@@ -387,7 +397,7 @@ def _build_parser() -> argparse.ArgumentParser:
     scorecard_parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
     scorecard_parser.add_argument(
         "--format",
-        choices=("text", "csv"),
+        choices=("text", "csv", "html"),
         default="text",
         help="Output format (default: text).",
     )
@@ -404,7 +414,7 @@ def _build_parser() -> argparse.ArgumentParser:
     categories_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pacing.")
     categories_parser.add_argument(
         "--format",
-        choices=("text", "csv"),
+        choices=("text", "csv", "html"),
         default="text",
         help="Output format (default: text).",
     )
@@ -425,7 +435,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     balances_parser.add_argument(
         "--format",
-        choices=("text", "csv"),
+        choices=("text", "csv", "html"),
         default="text",
         help="Output format (default: text).",
     )
@@ -453,7 +463,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     networth_parser.add_argument(
         "--format",
-        choices=("text", "csv"),
+        choices=("text", "csv", "html"),
         default="text",
         help="Output format (default: text).",
     )
@@ -474,7 +484,7 @@ def _build_parser() -> argparse.ArgumentParser:
     renewals_parser.add_argument("--who", help="Household person slug.")
     renewals_parser.add_argument(
         "--format",
-        choices=("text", "csv"),
+        choices=("text", "csv", "html"),
         default="text",
         help="Output format (default: text).",
     )

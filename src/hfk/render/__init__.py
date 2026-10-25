@@ -1,4 +1,4 @@
-"""Presentation render layer; text and CSV rendering are implemented, HTML is planned."""
+"""Presentation render layer; text, CSV, and HTML rendering are implemented."""
 
 from hfk.render.csv import (
     CSV_RENDERERS,
@@ -9,6 +9,16 @@ from hfk.render.csv import (
     render_networth_csv,
     render_renewals_csv,
     render_scorecard_csv,
+)
+from hfk.render.html import (
+    HTML_RENDERERS,
+    register_html_renderer,
+    render_balances_html,
+    render_categories_html,
+    render_html,
+    render_networth_html,
+    render_renewals_html,
+    render_scorecard_html,
 )
 from hfk.render.text import (
     TEXT_RENDERERS,
@@ -24,20 +34,28 @@ from hfk.render.text import (
 
 __all__ = [
     "CSV_RENDERERS",
+    "HTML_RENDERERS",
     "TEXT_RENDERERS",
     "money",
     "register_csv_renderer",
+    "register_html_renderer",
     "register_text_renderer",
     "render_balances",
     "render_balances_csv",
+    "render_balances_html",
     "render_categories",
     "render_categories_csv",
+    "render_categories_html",
     "render_csv",
+    "render_html",
     "render_networth",
     "render_networth_csv",
+    "render_networth_html",
     "render_renewals",
     "render_renewals_csv",
+    "render_renewals_html",
     "render_scorecard",
     "render_scorecard_csv",
+    "render_scorecard_html",
     "render_text",
 ]

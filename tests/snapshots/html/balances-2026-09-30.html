@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>balances as of 2026-09-30</title>
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  margin: 2rem;
+  color: #222;
+  line-height: 1.4;
+}
+h1 {
+  font-size: 1.25rem;
+  margin: 0 0 1rem;
+}
+h2 {
+  font-size: 1.05rem;
+  margin: 1.5rem 0 0.5rem;
+}
+table {
+  border-collapse: collapse;
+  margin-bottom: 1.5rem;
+}
+th, td {
+  border: 1px solid #bbb;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+}
+th {
+  background: #f0f0f0;
+}
+th.num, td.num {
+  text-align: right;
+}
+dl.totals {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1rem;
+}
+dl.totals dt {
+  font-weight: bold;
+}
+dl.totals dd {
+  margin: 0;
+}
+p.note {
+  color: #666;
+  margin: 0.25rem 0;
+}
+</style>
+</head>
+<body>
+<h1>balances as of 2026-09-30</h1>
+<table>
+<thead><tr><th>account</th><th>account class</th><th>account type</th><th class="num">balance</th><th>observed</th><th>gap</th><th>gap reason</th><th class="num">last known</th><th>last known date</th><th>closed</th><th>declared</th></tr></thead>
+<tbody>
+<tr><td>Alex Checking</td><td>Asset</td><td>Checking</td><td class="num">3025.00</td><td>2026-09-28</td><td>false</td><td></td><td class="num"></td><td></td><td></td><td>true</td></tr>
+<tr><td>Sam Checking</td><td>Asset</td><td>Checking</td><td class="num">2725.00</td><td>2026-09-28</td><td>false</td><td></td><td class="num"></td><td></td><td></td><td>true</td></tr>
+<tr><td>Joint Card</td><td>Liability</td><td>Credit</td><td class="num">25.00</td><td>2026-09-28</td><td>false</td><td></td><td class="num"></td><td></td><td></td><td>true</td></tr>
+<tr><td>Savings</td><td>Asset</td><td>Savings</td><td class="num">5625.00</td><td>2026-09-28</td><td>false</td><td></td><td class="num"></td><td></td><td></td><td>true</td></tr>
+</tbody>
+</table>
+<dl class="totals">
+<dt>accounts</dt><dd>4</dd><dt>gaps</dt><dd>0</dd>
+</dl>
+</body>
+</html>
