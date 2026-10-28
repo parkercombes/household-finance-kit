@@ -39,7 +39,8 @@ from hfk.engine import (
     build_scorecard,
     run_doctor,
 )
-from hfk.instance import InstanceError, write_instance
+from hfk.instance import InstanceError, InstanceReport, write_instance
+from hfk.interview import InterviewError, Question, load_answers, run_interview
 from hfk.render import money, render_csv, render_html, render_text
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
@@ -352,13 +353,23 @@ def _dev_fixture(args: argparse.Namespace) -> int:
     return 0
 
 
-def _init(args: argparse.Namespace) -> int:
-    try:
-        report = write_instance(Path(args.dir), git=args.git)
-    except InstanceError as error:
-        print(f"init: {error}", file=sys.stderr)
-        return 1
+def _prompt(question: Question) -> str:
+    default = f" [{question.default}]" if question.default is not None else ""
+    print(f"{question.text}{default}")
+    return input("> ")
 
+
+def _init_workbook(home: Path) -> Path | None:
+    data_dir = home / "data"
+    if not data_dir.is_dir():
+        return None
+    try:
+        return find_workbook(data_dir)
+    except TillerFormatError:
+        return None
+
+
+def _print_instance(report: InstanceReport, args: argparse.Namespace) -> None:
     print(f"created {args.dir}")
     for path in report.created:
         relative = path.relative_to(report.home)
@@ -366,9 +377,65 @@ def _init(args: argparse.Namespace) -> int:
         print(f"  {relative}{suffix}")
     if report.git_initialised:
         print("git: initialised with pre-commit hook")
+
+
+def _init_plain(args: argparse.Namespace) -> int:
+    try:
+        report = write_instance(Path(args.dir), git=args.git)
+    except InstanceError as error:
+        print(f"init: {error}", file=sys.stderr)
+        return 1
+
+    _print_instance(report, args)
     print("next: put the Tiller workbook export in data/")
     print(f"then run: hfk plan check --home {args.dir} and hfk doctor --home {args.dir}")
     return 0
+
+
+def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int:
+    if args.answers is None and not sys.stdin.isatty():
+        print(
+            "init: no terminal attached for the interview: fix=pass --answers <file>",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        if args.answers is not None:
+            answers = load_answers(Path(args.answers))
+            result = run_interview(workbook, answers=answers, ask=None)
+        else:
+            result = run_interview(workbook, answers=None, ask=_prompt)
+    except (InterviewError, ConfigError, TillerFormatError) as error:
+        print(f"init: {error}", file=sys.stderr)
+        return 1
+
+    try:
+        report = write_instance(home, git=args.git, documents=result.documents)
+    except InstanceError as error:
+        print(f"init: {error}", file=sys.stderr)
+        return 1
+
+    _print_instance(report, args)
+    for line in result.summary:
+        print(line)
+    print(f"next: run hfk doctor --home {args.dir}")
+    print(f"then: set your targets in plan.yaml and run hfk plan check --home {args.dir}")
+    return 0
+
+
+def _init(args: argparse.Namespace) -> int:
+    home = Path(args.dir)
+    workbook = _init_workbook(home)
+    if workbook is None and args.answers is not None:
+        print(
+            f"init: --answers given but no Tiller workbook found in {home / 'data'}: "
+            "fix=put the workbook export in data/ first",
+            file=sys.stderr,
+        )
+        return 1
+    if workbook is None:
+        return _init_plain(args)
+    return _init_interview(args, home, workbook)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -535,6 +602,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--git",
         action="store_true",
         help="Also run git init and install the privacy pre-commit hook.",
+    )
+    init_parser.add_argument(
+        "--answers",
+        help="YAML file of interview answers; required when no terminal is attached.",
     )
     init_parser.set_defaults(func=_init)
 

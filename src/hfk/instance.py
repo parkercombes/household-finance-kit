@@ -5,8 +5,10 @@ instance directory: the three example YAML files, a README, a ``.gitignore``,
 ``shared-items/``, the empty ``data/`` and ``out/`` directories, and the
 ``.claude/`` wiring (``settings.json`` plus the ``tiller_guard`` hook) that
 blocks AI assistants from writing the workbook. With ``git=True`` it also
-runs ``git init`` and installs the privacy pre-commit hook. The module never
-reads or writes a workbook.
+runs ``git init`` and installs the privacy pre-commit hook. The M5-06
+interview passes ``documents`` to replace the three YAML files with
+interview-rendered text; everything else is copied as before. The module
+never reads or writes a workbook.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ import importlib.resources
 import os
 import shutil
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -28,6 +31,7 @@ _INSTANCE_FILES = (
     (".claude/settings.json", "claude-settings.json"),
     (".claude/hooks/tiller_guard.py", "tiller_guard"),
 )
+_INSTANCE_DOCUMENTS = ("household.yaml", "declarations.yaml", "plan.yaml")
 _EMPTY_DIRECTORIES = ("data", "out")
 _HOOK_NAME = "pre-commit"
 _GUARD_NAME = ".claude/hooks/tiller_guard.py"
@@ -50,11 +54,25 @@ class InstanceReport:
     git_initialised: bool
 
 
-def write_instance(target: Path, *, git: bool = False) -> InstanceReport:
-    """Create a private instance skeleton in ``target`` and report what was written."""
+def write_instance(
+    target: Path, *, git: bool = False, documents: Mapping[str, str] | None = None
+) -> InstanceReport:
+    """Create a private instance skeleton in ``target`` and report what was written.
+
+    ``documents`` replaces the text of the named YAML files (household.yaml,
+    declarations.yaml, plan.yaml); every other instance file comes from the
+    packaged templates as usual.
+    """
 
     home = Path(target)
     root = _templates_root()
+    if documents is not None and not set(documents) <= set(_INSTANCE_DOCUMENTS):
+        unknown = ", ".join(sorted(set(documents) - set(_INSTANCE_DOCUMENTS)))
+        raise InstanceError(
+            f"unknown instance documents {unknown}",
+            file=home,
+            fix="documents keys must be household.yaml, declarations.yaml, or plan.yaml",
+        )
     _require_free_target(home)
     if git and shutil.which("git") is None:
         raise InstanceError(
@@ -68,7 +86,10 @@ def write_instance(target: Path, *, git: bool = False) -> InstanceReport:
     for relative, template in _INSTANCE_FILES:
         destination = home / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(root / template, destination)
+        if documents is not None and relative in documents:
+            destination.write_text(documents[relative], encoding="utf-8")
+        else:
+            shutil.copyfile(root / template, destination)
         if relative == _GUARD_NAME:
             destination.chmod(0o755)
         created.append(destination)
