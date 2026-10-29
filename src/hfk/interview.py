@@ -94,6 +94,17 @@ class InterviewResult:
     summary: tuple[str, ...]
 
 
+# Tiller's Sheets feed writes "ACTIVE" in Balance History's Account Status column; the
+# Excel template wrote "Open". Closure is declared, never inferred (ADR-0014), so only
+# an explicit closed-style status files an account under closed_accounts; anything else,
+# including a missing column, counts as open.
+CLOSED_STATUSES = frozenset({"closed", "inactive"})
+
+
+def _is_closed_status(status: str | None) -> bool:
+    return status is not None and status.strip().lower() in CLOSED_STATUSES
+
+
 def propose_from_ledger(ledger: Ledger, workbook: Path) -> Proposal:
     """Derive the interview proposal from a ledger, without reading any file."""
 
@@ -102,10 +113,10 @@ def propose_from_ledger(ledger: Ledger, workbook: Path) -> Proposal:
     closed_accounts: list[AccountFacts] = []
     for name in ledger.account_names():
         entry = facts[name]
-        if entry.status is None or entry.status.strip().lower() == "open":
-            open_accounts.append(entry)
-        else:
+        if _is_closed_status(entry.status):
             closed_accounts.append(entry)
+        else:
+            open_accounts.append(entry)
     expense_groups, non_spend_groups = _group_facts(ledger.categories)
     earliest = min((row.date for row in ledger.transactions), default=None)
     return Proposal(

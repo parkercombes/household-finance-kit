@@ -15,6 +15,7 @@ import hashlib
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -526,3 +527,30 @@ def test_yaml_carries_a_comment_per_judgement_call(tmp_path: Path) -> None:
     assert any("Balance History" in line for line in comments(household_text))
     assert any("Categories" in line for line in comments(declarations_text))
     assert any("plan check" in line for line in comments(plan_text))
+
+
+def test_sheets_active_status_counts_as_open(tmp_path: Path) -> None:
+    """Tiller's Sheets feed writes ACTIVE, not Open; closure is declared, never inferred."""
+    ledger = closed_ledger()
+    balances = tuple(
+        replace(row, account_status="ACTIVE") if row.account_status == "Open" else row
+        for row in ledger.balances
+    )
+    balances += (
+        BalanceRow(
+            date=date(2026, 5, 28),
+            account="No Status Card",
+            balance=Decimal("-5.00"),
+            account_type="Credit",
+            account_class="Liability",
+            account_status=None,
+        ),
+    )
+    proposal = propose_from_ledger(
+        replace(ledger, balances=balances), tmp_path / "Tiller-Example.xlsx"
+    )
+
+    assert "Old Card" in [facts.name for facts in proposal.closed_accounts]
+    assert "Old Card" not in [facts.name for facts in proposal.accounts]
+    for name in ("Alex Checking", "Sam Checking", "Joint Card", "Savings", "No Status Card"):
+        assert name in [facts.name for facts in proposal.accounts], name

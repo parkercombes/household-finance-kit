@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ## [Unreleased]
 
+### Fixed
+
+- M3-07 parity run (2026-10-28, July 2026 against the household's Google Sheets download): every bucket total reconciled with the household's scripted statement, each difference a declared judgement call or per-transaction cent reconciliation; the run exposed that Tiller's Sheets feed writes `ACTIVE` in Balance History's Account Status, which the `hfk init` interview filed as closed. Only an explicit closed-style status (`closed`, `inactive`) files an account under `closed_accounts` now; a missing or unknown status counts as open, as ADR-0014 says closure is declared, never inferred. Remaining interview gaps are roadmap row `M5-17`.
+
 ### Added
 
 - M5-06: `hfk init <dir>` becomes an interview when `data/` already holds a Tiller workbook: init opens the newest one read-only, proposes `household.yaml` accounts from `Balance History` and `declarations.yaml` group-to-bucket mappings from the `Categories` sheet, asks only what the workbook cannot answer (the people and their slugs, which accounts are shared and the split, the bucket profile, the bucket for each expense group, `history_start`) on the terminal or non-interactively through `--answers <file>`, and writes the three YAML files with a comment per judgement call plus a starter `plan.yaml`, while plain `hfk init` stays byte-identical when `data/` holds no workbook.
