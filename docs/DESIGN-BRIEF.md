@@ -126,6 +126,9 @@ Sheets used (header names verified against a real Tiller workbook):
 - `Balance History`: `Date, Time, Account, Account #, Account ID, Balance ID, Institution,
   Balance, Month, Week, Type, Class, Account Status, Date Added`.
 - `Accounts` (optional).
+- `HFK Plan` (optional, user-added, planned (M5-08)): the plan as a sheet the user adds
+  to their own workbook; `hfk` reads it read-only, by header name like every other
+  sheet. See section 6 and docs/TILLER-SCHEMA.md.
 
 Amount sign: expenses negative, income positive (Tiller convention). Workbooks may be
 named `Tiller Finance v5.xlsm` (version bumps; newest `vN` in `data/` wins; glob
@@ -149,6 +152,7 @@ accounts:
   "Sam Checking":  {owner: sam}
   "Savings":       {owner: alex, kind: savings}
   "House":         {shared: {alex: 0.5, sam: 0.5}, unsynced: true}   # hand-typed house value, not synced by Tiller
+plan: {source: file}                 # `file` (default) reads plan.yaml; `workbook` reads the `HFK Plan` tab (planned, M5-08)
 extensions: [settle_up, retirement]  # opt-in
 ```
 **Ownership model.** Every account is either `owner: <slug>` or `shared: {slug: weight}`.
@@ -252,8 +256,53 @@ Each line is one person's share of one budget item (ADR-0010).
   `annual_bill / 12` (validated).
 
 `hfk plan check` validates the file against `declarations.yaml` and names each problem.
-`hfk plan edit` (M10) is a local 127.0.0.1-bound editor that appends and ends lines rather
-than editing them in place, and writes only `plan.yaml`.
+`hfk plan edit` (M10) is superseded by the `HFK Plan` tab (ADR-0013).
+
+### HFK Plan tab (planned, M5-08)
+
+The `HFK Plan` tab is an optional sheet the user adds to their own Tiller workbook
+(Google Sheets or Excel). Tiller does not create it; it travels with the downloaded
+workbook like any other sheet. hfk reads it through the same read-only loader as every
+other sheet (`openpyxl.load_workbook(path, read_only=True, data_only=True)`), by header
+name and never by column position, and hfk never writes it. The only writer of such a
+tab is the planned `hfk dev fixture --plan-tab` (M5-08), which writes the synthetic
+fixture workbook, never a user's workbook.
+
+Row 1 holds the headers. Each later row is one plan line — one person's share of one
+budget item — with exactly the meaning a `plan.yaml` line has today (ADR-0010). Rows
+whose cells are all blank are skipped; row order is the plan's line order. Extra
+columns are tolerated. A missing required column is the existing loud error shape with
+`sheet=HFK Plan`; a bad cell is an error naming sheet, row, column, and fix.
+
+| Header | plan.yaml key | Required | Value |
+|---|---|---:|---|
+| `Description` | `desc` | Yes | Free text. |
+| `Who` | `who` | Yes | A person slug from `household.yaml`. |
+| `Bucket` | `bucket` | Yes | A declared bucket name (declarations or the imported profile). |
+| `Monthly` | `monthly` | Yes | Dollars and cents, read as an exact decimal, never a float. |
+| `Categories` | `categories` | No | Tiller category names separated by `;`, surrounding spaces trimmed, blank means no categories. |
+| `Paced` | `paced` | No | `yes` or `no` (case-insensitive); blank means `no`; any other value is an error. |
+| `Effective From` | `effective_from` | Yes | `YYYY-MM` text or a date cell, of which the month is used. A tab has no plan-level default month, so every row carries its own. |
+| `Effective Until` | `effective_until` | No | `YYYY-MM` inclusive; blank means open-ended. |
+| `Annual Bill` | `annual_bill` | No | Dollars; when present, `Monthly` must equal `Annual Bill` divided by 12, the same validation `plan.yaml` has. |
+| `Annual Full` | `annual_full` | No | Dollars. |
+| `Account` | `account` | No | An account name from `household.yaml`. |
+| `Due Month` | `due: {month, day}` | No | Integer 1-12; `Due Month` and `Due Day` are both present or both blank. |
+| `Due Day` | `due: {month, day}` | No | Integer 1-31; both present or both blank. |
+
+Source selection lives in `household.yaml`: `plan: {source: file}` (the default) or
+`plan: {source: workbook}`. `file` reads `plan.yaml` exactly as today. `workbook`
+reads the `HFK Plan` tab of the selected workbook; a `plan.yaml` in the instance is
+then not read, and `hfk doctor` names it as unused. Both sources load into the same
+`Plan` objects and pass the same validation, and `hfk plan check` validates either.
+Reports never depend on which source was used: the same lines give the same cents.
+`plan.yaml` remains the alternative for people who want the plan under version control
+(the `hfk init --git` path).
+
+To change an amount, end the old row with `Effective Until` and add a new row — the
+same append-and-end rule ADR-0010 set for `plan.yaml`; `hfk doctor` reports overlapping
+lines. Everything in this subsection is planned behaviour, labelled `planned (M5-08)`;
+the decision is recorded as ADR-0013.
 
 ## 7. Engine capabilities (core)
 

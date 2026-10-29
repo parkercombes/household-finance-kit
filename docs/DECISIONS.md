@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Last verified: 2026-10-17
+Last verified: 2026-10-28
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
 `household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
@@ -428,6 +428,64 @@ Net worth totals can be labelled incomplete, which is the honest statement
 that an unknown value was excluded rather than zeroed. The user's fixes are
 to set `Class` in Tiller, declare closed accounts in `declarations.yaml`, or
 declare unsynced accounts in `household.yaml` — never to edit arithmetic.
+
+---
+
+## ADR-0013: The Plan Can Live in a `HFK Plan` Workbook Tab; `hfk plan edit` Is Superseded
+
+Status: accepted
+Date: 2026-10-28
+
+### Context
+
+Since ADR-0010 the budget plan lives only in `plan.yaml`, a hand-edited file in the
+private instance. A non-programmer household therefore faces one of two bad paths: edit
+YAML by hand, where indentation and quoting mistakes surface as validation errors, or
+wait for the M10 `hfk plan edit` local web editor, which was planned precisely to make
+the plan editable without touching YAML. Both keep the plan in a second place the
+household must learn, while the household already edits its Tiller workbook every
+week: the plan can live beside the data people already open.
+
+Three alternatives were weighed. Build the M10 `hfk plan edit` editor as planned:
+rejected, because a second editor beside the spreadsheet duplicates what the workbook
+already does well and adds a local web app to maintain for one screen of data. Make
+the tab the only plan source and drop `plan.yaml`: rejected, because a versioned,
+diffable text file is exactly what a household that runs `hfk init --git` wants, and
+removing it would break those instances. Read the tab by column position: rejected,
+because positional reads break when columns are inserted, and reading by header name
+is already the project rule.
+
+### Decision
+
+The plan can live in an optional `HFK Plan` sheet that the user adds to their own
+workbook; Tiller does not create it. `hfk` reads it through the same read-only loader
+as every other sheet (`openpyxl.load_workbook(path, read_only=True, data_only=True)`),
+by header name and never by column position, and `hfk` never writes it; the only
+writer of such a tab is the planned `hfk dev fixture --plan-tab` (M5-08), which writes
+the synthetic fixture workbook, never a user's workbook. Row 1 holds the headers and
+each later row is one plan line with exactly the meaning a `plan.yaml` line has today
+(ADR-0010). The thirteen columns are `Description` (`desc`), `Who` (`who`), `Bucket`
+(`bucket`), `Monthly` (`monthly`), `Categories` (`categories`, Tiller category names
+separated by `;` with surrounding spaces trimmed), `Paced` (`paced`), `Effective From`
+(`effective_from`, required on every row because a tab has no plan-level default
+month), `Effective Until` (`effective_until`), `Annual Bill` (`annual_bill`),
+`Annual Full` (`annual_full`), `Account` (`account`), `Due Month` and `Due Day`
+(`due: {month, day}`). Source selection is declared in `household.yaml`:
+`plan: {source: file}` (the default) reads `plan.yaml` exactly as today;
+`plan: {source: workbook}` reads the tab, and `plan.yaml` remains the alternative for
+households that want the plan under version control. To change an amount, end the old
+row with `Effective Until` and add a new row — the same append-and-end rule ADR-0010
+set for `plan.yaml`.
+
+### Consequences
+
+M5-08 implements the tab loader, extends `hfk plan check` to validate either source,
+and adds `hfk dev fixture --plan-tab`. The M10 `hfk plan edit` editor is superseded by
+the tab and will not be built; ADR-0010's sentence about it stays as written and is
+read as historical. Once M5-08 lands, the `hfk init` interview defaults new instances
+to the tab and offers `plan.yaml` only when `--git` is chosen, as the M5-08 roadmap
+row records. Reports never depend on which source was used: the same lines give the
+same cents.
 
 ---
 

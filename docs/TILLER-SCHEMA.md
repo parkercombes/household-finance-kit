@@ -1,6 +1,6 @@
 # Tiller Schema
 
-Last verified: 2026-10-08
+Last verified: 2026-10-28
 
 This document describes the workbook contract for `hfk`. It is derived from [DESIGN-BRIEF](DESIGN-BRIEF.md), especially section 5. The M1 source adapter reads a local `.xlsx` or `.xlsm` workbook into the normalized ledger model. Current CLI analysis commands remain planned until later milestones.
 
@@ -29,6 +29,7 @@ Temporary lock files beginning with `~$` are ignored. The reader accepts `.xlsx`
 | `Categories` | Yes | Category names, groups, and Tiller category type. |
 | `Balance History` | Yes | Account balance observations for balances and net worth. |
 | `Accounts` | No | Optional Tiller sheet. Section 5 of the design brief does not define required `hfk` columns for this sheet. |
+| `HFK Plan` | No | User-added plan sheet, planned (M5-08). Read only when `household.yaml` selects `plan: {source: workbook}`. |
 
 Extra sheets are tolerated. Extra columns are tolerated because Tiller may add columns over time. Missing required sheets and columns are loud errors.
 
@@ -114,6 +115,53 @@ Section 5 names `Accounts` as optional but does not define exact column headers 
 |---|---:|---|
 | Not specified in section 5 | No | Optional sheet; no approved column contract yet. |
 
+## `HFK Plan` optional plan sheet (planned, M5-08)
+
+The `HFK Plan` sheet is an optional, user-added plan sheet. Tiller does not create it;
+the user adds it to their own workbook (Google Sheets or Excel) and it travels with the
+downloaded workbook like any other sheet. hfk reads it only when `household.yaml`
+selects `plan: {source: workbook}`, by header name and never by column position.
+
+| Header | Required by hfk | Notes |
+|---|---:|---|
+| `Description` | Yes | `desc`. Free text. |
+| `Who` | Yes | `who`. A person slug from `household.yaml`. |
+| `Bucket` | Yes | `bucket`. A declared bucket name (declarations or the imported profile). |
+| `Monthly` | Yes | `monthly`. Dollars and cents, read as an exact decimal, never a float. |
+| `Categories` | No | `categories`. Tiller category names separated by `;`, surrounding spaces trimmed, blank means no categories. |
+| `Paced` | No | `paced`. `yes` or `no` (case-insensitive); blank means `no`; any other value is an error naming the row. |
+| `Effective From` | Yes | `effective_from`. `YYYY-MM` text or a date cell, of which the month is used. A tab has no plan-level default month, so every row carries its own. |
+| `Effective Until` | No | `effective_until`. `YYYY-MM` inclusive; blank means open-ended. |
+| `Annual Bill` | No | `annual_bill`. Dollars; when present, `Monthly` must equal `Annual Bill` divided by 12, the same validation `plan.yaml` has. |
+| `Annual Full` | No | `annual_full`. Dollars. |
+| `Account` | No | `account`. An account name from `household.yaml`. |
+| `Due Month` | No | `due: {month, day}`. Integer 1-12; `Due Month` and `Due Day` are both present or both blank. |
+| `Due Day` | No | `due: {month, day}`. Integer 1-31; both present or both blank. |
+
+Row 1 holds the headers. Each later row is one plan line — one person's share of one
+budget item — with exactly the meaning a `plan.yaml` line has today (ADR-0010). Rows
+whose cells are all blank are skipped; row order is the plan's line order. Extra
+columns are tolerated. A missing required column is the existing loud error shape with
+`sheet=HFK Plan`; a bad cell is an error naming sheet, row, column, and fix.
+
+The sheet is read through the same read-only loader as every other sheet
+(`openpyxl.load_workbook(path, read_only=True, data_only=True)`), and hfk never writes
+it. The only writer of such a tab is the planned `hfk dev fixture --plan-tab` (M5-08),
+which writes the synthetic fixture workbook, never a user's workbook.
+
+With `plan: {source: file}` (the default) hfk reads `plan.yaml` exactly as today; with
+`plan: {source: workbook}` it reads the `HFK Plan` tab of the selected workbook. A
+`plan.yaml` in the instance is then not read, and `hfk doctor` names it as unused. Both
+sources load into the same `Plan` objects and pass the same validation, `hfk plan check`
+validates either, and reports never depend on which source was used: the same lines
+give the same cents. `plan.yaml` remains the alternative for households that want the
+plan under version control (the `hfk init --git` path).
+
+To change an amount, end the old row with `Effective Until` and add a new row, the same
+append-and-end rule ADR-0010 set for `plan.yaml`; `hfk doctor` reports overlapping
+lines. This whole section is planned behaviour, `planned (M5-08)`; the decision is
+recorded as ADR-0013.
+
 ## Dates and time zones
 
 Dates are interpreted as workbook dates from the user's exported Tiller file. The reader accepts date and datetime cells and stores only the calendar date. Analysis windows use calendar months such as `YYYY-MM` and are clamped to `history_start` from `household.yaml` when that value is present. An unfinished month must not be settled and should be treated carefully by reports that could produce plausible but misleading partial results.
@@ -136,7 +184,7 @@ Do not place real workbooks in the public toolkit repo. Do not paste real accoun
 
 The source adapter opens workbooks read-only with `openpyxl.load_workbook(path, read_only=True, data_only=True)`. It never calls `save`. Macros, charts, formatting, and workbook formulas are never touched because `hfk` reads data and writes reports outside the workbook.
 
-This matters for `.xlsm` files: saving with a library can damage workbook features. `hfk` avoids that entire class of problems by treating Tiller as an input source only.
+This matters for `.xlsm` files: saving with a library can damage workbook features. `hfk` avoids that entire class of problems by treating Tiller as an input source only. The `HFK Plan` sheet is covered by the same rule.
 
 ## Updating this document
 
