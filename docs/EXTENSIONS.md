@@ -8,7 +8,7 @@ This document describes the extension API for `hfk`. Each section says whether i
 
 An extension is a Python package that adds a bounded feature on top of the core household-finance-kit engine. It may add CLI commands, report sections, validation rules, and doctor checks, but it must not change the meaning of the core ledger or write to the user's Tiller workbook.
 
-The planned API treats extensions as clients of the lower layers:
+The API treats extensions as clients of the lower layers:
 
 - Source adapter reads Tiller into a normalized ledger.
 - Ledger exposes frozen transaction, category, account, balance, and ledger objects.
@@ -21,7 +21,7 @@ That boundary matters because `hfk` is public software used with private househo
 
 ## Discovery
 
-Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Planned for later M6 items: core loads only extensions enabled by the private instance config, validates their declared config sections, and wires their CLI and report hooks.
+Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Wiring `commands()` into the `hfk` command line is planned for `M7-01`, where `settle_up` first needs it, and wiring `report_sections()` into the renderers and `hfk serve` is planned with the first extension report (`M7-04`).
 
 Illustrative `pyproject.toml` snippet:
 
@@ -131,7 +131,7 @@ The public toolkit repo may include example config using Alex and Sam only. Real
 The extension boundary is part of the privacy and correctness model.
 
 - Core never imports an extension by package name. It only discovers entry points.
-- Extensions import only `hfk.engine`, `hfk.ledger`, and `hfk.config` APIs, plus their own package code.
+- Extensions import only `hfk.engine`, `hfk.ledger`, `hfk.config`, and the `hfk.ext` contract types (`ExtensionCommand`, `ReportSection`), plus their own package code. The core layers never import `hfk.ext`; `tests/test_extensions.py` checks that.
 - Extensions never write to Tiller. They may read the normalized ledger produced by the source adapter and may write generated reports under the user's private output directory.
 - Public extensions must not include real data. Tests and docs use the synthetic fixture, Alex, Sam, Example Bank, and round example numbers.
 - Extensions must be deterministic for the same input files.
@@ -140,7 +140,7 @@ The extension boundary is part of the privacy and correctness model.
 
 ## Built-in-first extensions
 
-`settle_up` and `retirement` are planned as built-in-first extensions: they exercise the M6 contract while remaining optional features. Their names and high-level behavior are part of the approved design, but the code does not exist in M0.
+`settle_up` (M7) and `retirement` (M8) are planned as built-in-first extensions. They ship inside the `household-finance-kit` distribution as subpackages of `hfk.ext` and register through its own `hfk.extensions` entry points, so one install brings them, yet core still discovers them like any other extension and never imports them. A household turns each on by listing it under `extensions` in `household.yaml`.
 
 ### `settle_up`
 
@@ -203,15 +203,27 @@ Out of scope for the built-in extension:
 - Product selection.
 - Personalized financial advice.
 
-## Private and community extensions
+## Public and private extension packages
 
 Some models belong outside the public toolkit. Employer-specific pension schedules, home-purchase modeling, reimbursement workflows, and local household conventions can live in separate packages. They may be public community packages when they contain no private data, or private repos when they encode employer rules or household-specific assumptions.
 
-A private extension can be kept in a private Git repository and installed into the same Python environment as `hfk`. The private instance enables it by name in config. There is no instance-local `extensions/` directory: discovery is entry points only (ADR-0006), so a private extension is installed, not dropped into the instance. The public toolkit should never import that private package directly and should never include its data in tests, examples, or docs.
+A private extension can be kept in a private Git repository and installed into the same Python environment as `hfk` (for example `uv tool install household-finance-kit --with <path or URL of the private package>`). The private instance enables it by name in config. There is no instance-local `extensions/` directory: discovery is entry points only (ADR-0006), so a private extension is installed, not dropped into the instance. The public toolkit should never import that private package directly and should never include its data in tests, examples, or docs.
+
+Boundaries for every extension package, public or private:
+
+| Boundary | Rule |
+|---|---|
+| Registration | One `hfk.extensions` entry point whose name equals the extension's `name`. |
+| Dependency | Depend on `household-finance-kit`; declare `contract_version` for the contract you built against. |
+| Imports | `hfk.config`, `hfk.ledger`, `hfk.engine`, and the `hfk.ext` contract types only. Never `hfk.cli`, `hfk.render` internals, or `hfk.source` file handling. |
+| Data | Read the ledger and config core hands over. Never open or write the Tiller workbook. Write only generated output under the instance's `out/`. |
+| Config | Your own YAML file in the instance, validated by your `schema` (proposed ADR-0016). |
+| Privacy | A public package carries only Alex, Sam, `Example Bank`, and round numbers, and runs a privacy scan before publishing. A private package stays in a private repository. |
+| Advice | Show arithmetic and scenarios only. Never recommend products, tax strategy, claiming strategy, or investments. |
 
 ## Testing extensions
 
-Extensions should test against the synthetic fixture planned for M1 and avoid real workbooks. A good extension test suite should cover:
+Extensions should test against the synthetic fixture (`hfk dev fixture`, or `hfk.source.fixture.build_fixture` from Python) and avoid real workbooks. `tests/ext_fixture.py` in this repository shows how to install a throwaway extension package for a test without pip: write the module and a `*.dist-info` directory with an `entry_points.txt`, then put the directory on `sys.path`. A good extension test suite should cover:
 
 - Config validation success and failure.
 - `doctor()` errors with exact file, key path, and fix guidance.
@@ -220,11 +232,11 @@ Extensions should test against the synthetic fixture planned for M1 and avoid re
 - Renderer output using fictional data only.
 - Privacy scan before publishing.
 
-Extension-specific command tests are planned for M6 and later; see the [README milestone table](../README.md#milestones) for current status.
+Command tests wait on the CLI wiring of `commands()`, planned for `M7-01`.
 
 ## Stability and versioning
 
-The extension contract will use semver. The extension object declares `contract_version`; core compares it with the supported API range and rejects incompatible extensions loudly. Extension packages also have their own package `version`, which may change for bug fixes or feature additions.
+The extension contract uses semver; this hfk supports contract `1.x`. The extension object declares `contract_version`; core compares it with the supported API range and rejects incompatible extensions loudly. Extension packages also have their own package `version`, which may change for bug fixes or feature additions.
 
 Contract stability goal:
 
@@ -232,4 +244,3 @@ Contract stability goal:
 - Minor changes add optional members or optional fields.
 - Major changes may require extension authors to update code.
 
-Until M6 lands, this document is a planned API reference, not a promise that current code can load extensions.

@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: `M6-01` to `M6-04` (extension discovery, contract, config, and doctor hooks) are done. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and `M7-01` (`settle_up` registration) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -126,7 +126,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M3 | Done | Ownership shares, bucket mapping, monthly scorecard, doctor conflict checks, and the `M3-07` parity check against a private instance |
 | M4 | Done | Category targets, balances, net worth, renewals, rebaseline, plan check |
 | M5 | In progress | Instance interview, plan-in-workbook tab, renderers, local front door and launcher, one-line install, non-programmer docs |
-| M6 | Planned | Extension API and discovery |
+| M6 | Done | Extension API: entry-point discovery, contract, config files, doctor hooks |
 | M7 | Planned | `settle_up` extension for exactly two people |
 | M8 | Planned | `retirement` extension, R1 through R6 |
 | M9 | Planned | Google Sheets source adapter |
