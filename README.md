@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-11` are done and `M5-12` (one-line install) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-12` are done and `M5-13` (the working-with-AI guide) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -66,6 +66,24 @@ my-finances/
 
 The toolkit never reads its own directory for user data. A private instance is located by `--home <dir>` or `HFK_HOME`, with the current directory as the default.
 
+## Install
+
+Installing is one line in a terminal, and it is the only terminal step a non-programmer needs. Install [uv](https://docs.astral.sh/uv/) first, then run:
+
+```bash
+uv tool install household-finance-kit
+```
+
+If you use pipx instead of uv, `pipx install household-finance-kit` does the same. Either command puts `hfk` on your `PATH` and keeps it apart from other Python programs.
+
+The package is not on PyPI yet: publication waits on `M0-07`. Until then, install from a checkout of this repository:
+
+```bash
+uv tool install .
+```
+
+Check the install with `hfk --version`. After that, `hfk init <folder>` writes double-click launchers into your folder, so you do not need the terminal to read reports.
+
 ## Quickstart
 These commands set up a development checkout and run the checks. The clone command shown is for making a disposable local copy from an existing checkout before the public URL is assigned.
 
@@ -89,7 +107,8 @@ What has landed by milestone, and what is still planned:
 - Available now (M3): `hfk scorecard --month YYYY-MM [--who SLUG]` for closed-month plan-vs-actual by bucket, using the selected person's share.
 - Available now (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
 - Available now (M5): `hfk init <dir>` as an interview that writes the config from your workbook, the `HFK Plan` sheet as a plan source, `--format text|csv|html` on the reports, a readiness section in `hfk doctor`, `hfk serve` for a local read-only page, and `hfk open` with double-click launchers.
-- Planned (M5): one-line install, non-programmer docs, and the sheet as the only plan source (M5-18).
+- Available now (M5): a one-line install from a built wheel (`uv tool install`); the PyPI name works once the package is published (`M0-07`).
+- Planned (M5): non-programmer docs, and the sheet as the only plan source (M5-18).
 - Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
 
 ## Milestones
