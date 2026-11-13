@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and `M7-01` (`settle_up` registration) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and in M7 `M7-01` to `M7-03` (`settle_up` registration, on-ledger shares, and off-ledger shared items) are done. `M7-04` to `M7-07` (the statement) wait on proposed ADR-0017, so M8 work has started. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -127,7 +127,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M4 | Done | Category targets, balances, net worth, renewals, rebaseline, plan check |
 | M5 | In progress | Instance interview, plan-in-workbook tab, renderers, local front door and launcher, one-line install, non-programmer docs |
 | M6 | Done | Extension API: entry-point discovery, contract, config files, doctor hooks |
-| M7 | Planned | `settle_up` extension for exactly two people |
+| M7 | In progress | `settle_up` extension for exactly two people |
 | M8 | Planned | `retirement` extension, R1 through R6 |
 | M9 | Planned | Google Sheets source adapter |
 | M10 | Planned | Community extensions: FSA tracking, pension add-ons, home purchase modelling |

@@ -82,7 +82,7 @@ def test_example_household_loads() -> None:
     assert household.person("sam").name == "Sam"
     assert household.tiller_glob == "Tiller*.xls*"
     assert household.history_start == date(2025, 1, 1)
-    assert household.extensions == ()
+    assert household.extensions == ("settle_up",)
 
     joint = household.account("Joint Card")
     assert joint.owner is None

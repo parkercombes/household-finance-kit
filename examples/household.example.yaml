@@ -13,6 +13,6 @@ accounts:
   "Savings": {owner: alex, kind: savings}
   # A closed account keeps its owner and adds its closing date (ADR-0014), for example:
   # "Old Card": {owner: sam, closed: 2025-06-30, note: "replaced by the Joint Card"}
-# extensions: opt-in add-ons, enabled by name once installed, such as settle_up
-# (M7) and retirement (M8). An enabled extension that is not installed is an error.
-extensions: []
+# extensions: opt-in add-ons, enabled by name. settle_up ships with hfk;
+# retirement is planned (M8). An enabled extension that is not installed is an error.
+extensions: [settle_up]

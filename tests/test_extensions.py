@@ -444,7 +444,7 @@ def hook_extensions(tmp_path, monkeypatch):
 
 
 def test_extension_doctor_hooks(tmp_path, hook_extensions):
-    home = make_doctor_instance(tmp_path, ["reports", "explodes", "settle_up"])
+    home = make_doctor_instance(tmp_path, ["reports", "explodes", "ghost"])
     baseline = run_doctor(make_doctor_instance(tmp_path / "plain", []), today=date(2026, 10, 1))
     assert baseline.ok
 
@@ -466,7 +466,7 @@ def test_extension_doctor_hooks(tmp_path, hook_extensions):
 
     missing = by_code["extension-config"]
     assert [d.where for d in missing] == ["household.yaml key=extensions[2]"]
-    assert "'settle_up' is enabled but not installed" in missing[0].message
+    assert "'ghost' is enabled but not installed" in missing[0].message
 
     unavailable = by_code["extension-unavailable"]
     assert [(d.where, d.level) for d in unavailable] == [("extension unloadable", "warning")]
@@ -497,3 +497,91 @@ def test_doctor_cli_runs_extension_hooks(tmp_path, hook_extensions):
     assert "error: extension explodes: the explodes doctor hook raised RuntimeError" in result.stdout
     assert "error: extension unloadable: " in result.stdout
     assert "readiness: ready" in result.stdout
+
+
+COMMAND_SOURCE = '''
+from hfk.config import ConfigError
+from hfk.ext import ExtensionCommand
+
+
+def _schema(data, path):
+    return dict(data)
+
+
+def _configure(parser):
+    parser.add_argument("month")
+
+
+def _run(args, context):
+    ledger = context.load_ledger()
+    print(
+        f"example {args.month} people={','.join(context.household.slugs)} "
+        f"config={context.config} transactions={len(ledger.transactions)} "
+        f"today={context.today.isoformat()}"
+    )
+    return 0
+
+
+class Example:
+    name = "example"
+    version = "0.1.0"
+    contract_version = "1.0.0"
+    config_section = "example.yaml"
+    schema = staticmethod(_schema)
+    requires = {"ledger_fields": ["transactions"], "extensions": []}
+
+    def commands(self):
+        return [ExtensionCommand("example-report", "Print an example line.", _configure, _run)]
+
+    def doctor(self, context, config):
+        return []
+'''
+
+
+def test_extension_commands_run_through_the_cli(tmp_path, monkeypatch):
+    import os
+    import subprocess
+
+    root = install_extension(
+        tmp_path / "site",
+        module="hfk_command_ext",
+        source=COMMAND_SOURCE,
+        entry_points={"example": "hfk_command_ext:Example"},
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join([str(ROOT / "src"), str(root)])
+
+    def hfk(*args: str):
+        return subprocess.run(
+            [sys.executable, "-m", "hfk", *args], env=env, text=True,
+            capture_output=True, check=False,
+        )
+
+    home = make_doctor_instance(tmp_path, ["settle_up"])
+    result = hfk("example-report", "--home", str(home), "2026-08")
+    assert result.returncode == 1
+    assert "extension 'example' is not enabled" in result.stderr
+
+    home = make_doctor_instance(tmp_path / "enabled", ["settle_up", "example"])
+    result = hfk("example-report", "--home", str(home), "2026-08")
+    assert result.returncode == 1
+    assert "example is enabled but its config file is missing" in result.stderr
+
+    (home / "example.yaml").write_text("colour: blue\n", encoding="utf-8")
+    result = hfk("example-report", "--home", str(home), "--today", "2026-10-01", "2026-08")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        "example 2026-08 people=alex,sam config={'colour': 'blue'} transactions=67 "
+        "today=2026-10-01\n"
+    )
+    assert "example-report" in hfk("--help").stdout
+
+
+def test_extension_may_not_take_a_core_command_name():
+    core = type(
+        "Core",
+        (Complete,),
+        {"commands": lambda self: [ExtensionCommand("doctor", "x", lambda p: None, lambda a, c: 0)]},
+    )
+    with pytest.raises(ContractError, match="'doctor' is a core command"):
+        validate_extension(core(), entry_point="example")

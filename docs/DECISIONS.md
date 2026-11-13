@@ -698,3 +698,62 @@ wording is removed.
   `household.yaml` or `declarations.yaml`.
 - [EXTENSIONS](EXTENSIONS.md) describes the implemented file form and points here for
   the in-file form.
+
+---
+
+## ADR-0017: Who Paid a Shared Account's Charges in a Settle-Up Statement
+
+Status: proposed
+Date: 2026-11-13
+
+### Context
+
+`hfk settle YYYY-MM` (M7-04) must show "per-person paid vs owed, and the net transfer"
+(design brief section 8a). The owed side is settled: ADR-0009 says every extension reads
+shares from the core share function, and M7-02 does. The paid side is not defined
+anywhere for workbook transactions. Off-ledger shared items carry an explicit `paid_by`
+(M7-03), but a charge on a shared account such as the `Joint Card` has no payer in the
+workbook or in config.
+
+The choice changes the net transfer, so it cannot be guessed (ADR-0002). Two examples
+with a 50/50 `Joint Card` and a 100.00 charge:
+
+- If the card is funded half each, Alex paid 50.00 and owes 50.00: no transfer.
+- If Alex alone pays the card bill each month, Alex paid 100.00 and owes 50.00: Sam owes
+  Alex 50.00.
+
+A household that builds a settle-up tab by hand is usually in the second case, which is
+why it needs a statement at all. The gap was found during unattended roadmap work, so it
+is recorded as proposed for the maintainer to decide.
+
+Options:
+
+1. **The account's ownership weights are also who paid.** No new config. The net comes
+   only from `sharing` rules (a joint bill paid from Alex's own account) and from shared
+   items. A jointly owned card always nets to zero, so this cannot express "Alex pays
+   the joint card".
+2. **Declare who pays each shared account, in the extension's own config file.**
+   `settle_up.yaml` (per proposed ADR-0016's option 1) maps each account that carries
+   shared charges to payer weights, for example
+   `payers: {"Joint Card": {alex: 1.0}}` or `{alex: 0.5, sam: 0.5}`. A shared charge on an
+   account without an entry is a loud error naming the account. Paying from a person's
+   own account (`owner: alex`) needs no entry: the owner paid.
+3. **Infer the payer from card-payment transfers in `Transactions`.** Match each payment
+   into the card from a person's checking account. This is inference (ADR-0011 rejects
+   inferring household facts), it breaks when a payment lands in a different month from
+   the charges, and it needs payments to be in the workbook at all.
+
+### Decision
+
+Proposed: option 2. It covers both examples above (option 1 is option 2 with the
+account's own weights written out), keeps every number traceable to a declared line, and
+fails loudly when a payer is missing.
+
+### Consequences
+
+- Roadmap items `M7-04` (statement output) and `M7-05` to `M7-07`, which depend on it,
+  are blocked until this ADR and proposed ADR-0016 are decided.
+- If option 2 is accepted, `settle_up` gains `config_section = "settle_up.yaml"` with a
+  schema for `payers`, the example instance gains a `settle_up.yaml`, and the statement's
+  paid column is: on-ledger shared charges by payer weights, plus shared items by
+  `paid_by`.
