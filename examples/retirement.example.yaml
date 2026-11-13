@@ -1,0 +1,32 @@
+# Last verified: 2026-11-13
+# Synthetic retirement input for Alex and Sam (round, fictional numbers only).
+# Every money figure is in today's dollars (ADR-0008). The retirement extension
+# shows arithmetic, not advice.
+schema_version: 1
+people:
+  alex: {birth: "1970-06", retire_year: 2035}
+  sam: {birth: "1972-09", retire_year: 2037}
+assumptions:
+  until_age: 95        # the track runs through the year the youngest person turns 95
+  inflation: 0.025     # annual; converts streams that do not track inflation fully
+income:
+  # Social Security: the monthly benefit for each claim age to compare. A scenario
+  # picks one claim age per person; the ages are alternatives, not a timeline.
+  - {type: social_security, who: alex, cola: full, claim_ages: {62: 1400, 67: 2000, 70: 2480}}
+  - {type: social_security, who: sam, cola: full, claim_ages: {62: 1100, 67: 1600, 70: 2000}}
+  - {type: pension, who: sam, monthly: 1500, start_year: 2037, cola: none}
+  - {type: account_drawdown, who: alex, monthly: 1000, start_year: 2035, end_year: 2060, cola: full}
+  - {type: other, label: "Example rent", who: sam, monthly: 300, start_year: 2037, end_year: 2041, cola: 0.02}
+expenses:
+  # Monthly, in today's dollars, flat unless an item declares real_growth with a reason.
+  # seed_from_plan: {month: 2026-08}   # optionally start from your HFK Plan lines that month
+  items:
+    - {label: "Housing", monthly: 1500}
+    - {label: "Food", monthly: 800}
+    - {label: "Healthcare", who: alex, monthly: 400, real_growth: 0.02, reason: "medical costs have outpaced prices"}
+    - {label: "Healthcare", who: sam, monthly: 400, real_growth: 0.02, reason: "medical costs have outpaced prices"}
+    - {label: "Car", monthly: 250, start_year: 2035, end_year: 2044}
+tax:
+  filing_status: married_joint   # married_joint or single
+  max_data_age_years: 1          # refuse federal tax data older than this
+  state: {module: flat, rate: 0.04}   # none, flat, or bracket, with your state's figures

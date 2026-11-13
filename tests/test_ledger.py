@@ -168,15 +168,23 @@ def test_total_sums_decimal_amounts_exactly() -> None:
 
 
 def test_importing_ledger_imports_no_sibling_hfk_packages() -> None:
-    for name in list(sys.modules):
-        if name.startswith("hfk."):
+    # Restore the original modules afterwards: later tests hold references to
+    # classes from them (exception types, dataclasses), and a fresh copy of a
+    # module would make isinstance and pytest.raises checks fail.
+    saved = {name: module for name, module in sys.modules.items() if name.startswith("hfk.")}
+    try:
+        for name in saved:
             del sys.modules[name]
 
-    importlib.import_module("hfk.ledger")
+        importlib.import_module("hfk.ledger")
 
-    loaded_siblings = {
-        name
-        for name in sys.modules
-        if name.startswith("hfk.") and name.split(".")[1] not in {"ledger"}
-    }
-    assert loaded_siblings == set()
+        loaded_siblings = {
+            name
+            for name in sys.modules
+            if name.startswith("hfk.") and name.split(".")[1] not in {"ledger"}
+        }
+        assert loaded_siblings == set()
+    finally:
+        for name in [name for name in sys.modules if name.startswith("hfk.")]:
+            del sys.modules[name]
+        sys.modules.update(saved)
