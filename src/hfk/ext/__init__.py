@@ -1,4 +1,4 @@
-"""Extensions layer: entry-point discovery (M6-01; ADR-0006).
+"""Extensions layer: entry-point discovery (M6-01) and the contract (M6-02; ADR-0006).
 
 Extensions are installed Python packages that register an object, or a
 factory returning one, under the entry-point group ``hfk.extensions``. Core
@@ -14,6 +14,16 @@ import importlib.metadata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
+
+from hfk.ext.contract import (
+    CONTRACT_MAJOR,
+    ContractError,
+    Extension,
+    ExtensionCommand,
+    ReportSection,
+    Requirements,
+    validate_extension,
+)
 
 ENTRY_POINT_GROUP = "hfk.extensions"
 
@@ -83,6 +93,57 @@ def discover_extensions(
     return Discovery(tuple(found), tuple(problems))
 
 
+@dataclass(frozen=True)
+class LoadedExtensions:
+    """Every installed extension that passed the contract, and every problem found."""
+
+    extensions: tuple[Extension, ...]
+    problems: tuple[DiscoveryProblem, ...]
+
+    def get(self, name: str) -> Extension | None:
+        for extension in self.extensions:
+            if extension.name == name:
+                return extension
+        return None
+
+
+def load_extensions(discovery: Discovery | None = None) -> LoadedExtensions:
+    """Discover extensions and validate each against the contract.
+
+    A contract break becomes a ``DiscoveryProblem`` naming every broken member;
+    two packages registering the same name are both refused.
+    """
+
+    discovery = discover_extensions() if discovery is None else discovery
+    problems = list(discovery.problems)
+    valid: list[Extension] = []
+    for found in discovery.extensions:
+        try:
+            valid.append(validate_extension(found.extension, entry_point=found.entry_point))
+        except ContractError as error:
+            problems.append(
+                DiscoveryProblem(
+                    entry_point=found.entry_point,
+                    value=found.value,
+                    problem=str(error),
+                    fix="update the extension to the hfk extension contract (docs/EXTENSIONS.md)",
+                )
+            )
+    names = [extension.name for extension in valid]
+    duplicates = {name for name in names if names.count(name) > 1}
+    for name in sorted(duplicates):
+        problems.append(
+            DiscoveryProblem(
+                entry_point=name,
+                value=", ".join(e.obj.__class__.__module__ for e in valid if e.name == name),
+                problem="more than one installed package registers this extension name",
+                fix="uninstall all but one of them",
+            )
+        )
+    kept = tuple(extension for extension in valid if extension.name not in duplicates)
+    return LoadedExtensions(kept, tuple(problems))
+
+
 def _instantiate(target: Any) -> Any:
     """A class is instantiated, a factory function is called, an object is used as is."""
 
@@ -92,9 +153,18 @@ def _instantiate(target: Any) -> Any:
 
 
 __all__ = [
+    "CONTRACT_MAJOR",
     "ENTRY_POINT_GROUP",
+    "ContractError",
     "DiscoveredExtension",
     "Discovery",
     "DiscoveryProblem",
+    "Extension",
+    "ExtensionCommand",
+    "LoadedExtensions",
+    "ReportSection",
+    "Requirements",
     "discover_extensions",
+    "load_extensions",
+    "validate_extension",
 ]

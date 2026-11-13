@@ -5,11 +5,20 @@ from __future__ import annotations
 import ast
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from ext_fixture import forget, install_extension
 
-from hfk.ext import ENTRY_POINT_GROUP, discover_extensions
+from hfk.ext import (
+    ENTRY_POINT_GROUP,
+    ContractError,
+    ExtensionCommand,
+    ReportSection,
+    discover_extensions,
+    load_extensions,
+    validate_extension,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "hfk"
@@ -136,3 +145,127 @@ def test_core_layers_never_import_the_extension_layer():
             assert not any(name == "hfk.ext" or name.startswith("hfk.ext.") for name in imported), (
                 f"{path.relative_to(SRC)} imports the extension layer"
             )
+
+
+class Complete:
+    name = "example"
+    version = "0.1.0"
+    contract_version = "1.2.0"
+    config_section = None
+    schema = None
+    requires: ClassVar[dict] = {"ledger_fields": ["transactions", "balances"], "extensions": []}
+
+    def commands(self):
+        return [
+            ExtensionCommand(
+                name="example-report",
+                help="Print the example report.",
+                configure=lambda parser: None,
+                run=lambda args, context: 0,
+            )
+        ]
+
+    def report_sections(self):
+        return [ReportSection(name="example", title="Example", build=lambda context: None)]
+
+    def doctor(self, context, config):
+        return []
+
+
+def test_extension_contract_validation():
+    extension = validate_extension(Complete(), entry_point="example")
+    assert extension.name == "example"
+    assert extension.contract_version == "1.2.0"
+    assert extension.requires.ledger_fields == ("transactions", "balances")
+    assert [command.name for command in extension.commands] == ["example-report"]
+    assert [section.name for section in extension.report_sections] == ["example"]
+
+    class Incomplete:
+        name = "Example Ext"
+        contract_version = "2.0.0"
+        requires: ClassVar[dict] = {"ledger_fields": ["receipts"], "colour": []}
+
+    with pytest.raises(ContractError) as caught:
+        validate_extension(Incomplete(), entry_point="example")
+    members = [member for member, _problem, _fix in caught.value.problems]
+    assert members == [
+        "name",
+        "version",
+        "contract_version",
+        "config_section",
+        "schema",
+        "requires",
+        "requires.ledger_fields",
+        "commands",
+        "doctor",
+    ]
+    text = str(caught.value)
+    assert text.startswith("extension example breaks the hfk extension contract: ")
+    assert "'Example Ext' is not a lowercase identifier" in text
+    assert "2.0.0 is not supported; this hfk supports contract 1.x" in text
+    assert "'receipts' is not a Ledger field" in text
+    assert "unknown keys ['colour']" in text
+
+
+@pytest.mark.parametrize(
+    ("change", "member", "problem"),
+    [
+        ({"name": "other"}, "name", "differs from the entry-point name"),
+        ({"contract_version": "1.0"}, "contract_version", "is not MAJOR.MINOR.PATCH"),
+        ({"config_section": "household.yaml", "schema": staticmethod(lambda d, p: d)},
+         "config_section", "belongs to core"),
+        ({"config_section": "settings"}, "config_section", "is not a YAML file name"),
+        ({"config_section": "example.yaml"}, "schema", "missing or not callable"),
+        ({"schema": staticmethod(lambda d, p: d)}, "schema", "set while config_section is None"),
+        ({"requires": {"ledger_fields": "transactions"}}, "requires.ledger_fields", "not a list"),
+        ({"commands": lambda self: [object()]}, "commands", "is not an ExtensionCommand"),
+        ({"commands": lambda self: 1 / 0}, "commands", "raised ZeroDivisionError"),
+        ({"doctor": None}, "doctor", "missing or not callable"),
+        ({"report_sections": lambda self: ["page"]}, "report_sections", "is not a ReportSection"),
+    ],
+)
+def test_each_contract_rule_is_enforced(change, member, problem):
+    broken = type("Broken", (Complete,), change)
+    with pytest.raises(ContractError) as caught:
+        validate_extension(broken(), entry_point="example")
+    assert [(m, p) for m, p, _fix in caught.value.problems if m == member and problem in p]
+
+
+def test_load_extensions_refuses_contract_breaks(tmp_path, monkeypatch):
+    root = install_extension(
+        tmp_path / "site",
+        module="hfk_partial_ext",
+        source="class Partial:\n    name = 'partial'\n\nextension = Partial()\n",
+        entry_points={"partial": "hfk_partial_ext:extension"},
+    )
+    install_extension(
+        root,
+        module="hfk_example_ext",
+        source=EXAMPLE_SOURCE,
+        entry_points={"example": "hfk_example_ext:extension"},
+    )
+    monkeypatch.syspath_prepend(str(root))
+    forget("hfk_partial_ext")
+    forget("hfk_example_ext")
+
+    loaded = load_extensions()
+
+    assert loaded.get("example") is not None
+    assert loaded.get("partial") is None
+    problem = next(p for p in loaded.problems if p.entry_point == "partial")
+    assert "version: missing" in problem.problem
+    forget("hfk_partial_ext")
+    forget("hfk_example_ext")
+
+
+def test_the_documented_minimal_extension_passes_the_contract():
+    text = (ROOT / "docs" / "EXTENSIONS.md").read_text(encoding="utf-8")
+    section = text.split("## A minimal extension", 1)[1]
+    code = section.split("```python\n", 1)[1].split("```", 1)[0]
+    namespace: dict[str, object] = {}
+    exec(compile(code, "EXTENSIONS.md", "exec"), namespace)  # noqa: S102 - the doc's own example
+
+    extension = validate_extension(namespace["extension"](), entry_point="example")
+
+    assert extension.config_section == "example.yaml"
+    assert [command.name for command in extension.commands] == ["example"]

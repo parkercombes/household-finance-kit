@@ -2,7 +2,7 @@
 
 Last verified: 2026-11-13
 
-This document describes the planned extension API for `hfk`. It is a contract proposal for milestone M6 and later. Nothing in this file works yet: the extension system, config loader, and engine are planned. See the [README milestone table](../README.md#milestones) for what is implemented. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
+This document describes the extension API for `hfk`. Each section says whether it is implemented, with its roadmap item, or planned. See the [README milestone table](../README.md#milestones) for milestone status. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
 
 ## What an extension is
 
@@ -35,60 +35,67 @@ dependencies = ["household-finance-kit"]
 example = "hfk_example_extension:extension"
 ```
 
-The name on the left is the entry-point name. The callable on the right returns or exposes the extension object described below. This is planned API text, not a working interface in M0.
+The name on the left is the entry-point name, which must equal the extension's `name`. The target on the right is the extension object described below, its class, or a function that returns it.
 
 ## The contract
 
-Planned for M6, an extension object provides these members:
+Implemented (M6-02): `hfk.ext.validate_extension` checks every member below and reports every problem at once in one `ContractError`. `hfk.ext.load_extensions()` discovers and validates; an extension that breaks the contract is refused and reported, never half-used.
 
-| Member | Required | Purpose |
+| Member | Required | Rule |
 |---|---:|---|
-| `name` | Yes | Stable machine name, such as `settle_up` or `retirement`. This is the value enabled from private instance config. |
-| `version` | Yes | Extension package version. This follows the package's own release version. |
-| `contract_version` | Yes | Extension API contract version the extension expects, using semver. Core rejects incompatible versions loudly. |
-| `config_section` | Yes | Name of the config section owned by the extension, or a pointer to the extension's own input file when the feature uses one. |
-| `schema` | Yes | Validation schema or validator for that config section. Missing or invalid required keys are errors. |
-| `requires` | Yes | Required ledger fields, config capabilities, or other extensions. Core checks these before running commands. |
-| `commands()` | Yes | Returns planned CLI subcommands contributed by the extension. Commands run through normal `hfk` presentation wiring. |
-| `report_sections()` | Optional | Returns report section builders for text, CSV, or HTML output. |
-| `doctor()` | Yes | Hook for extension-specific diagnostics, stale data checks, and configuration errors. |
+| `name` | Yes | A lowercase identifier, such as `settle_up`, equal to the entry-point name. Households enable it by listing it under `extensions` in `household.yaml`. |
+| `version` | Yes | The extension package's own version, as a non-empty string. |
+| `contract_version` | Yes | `MAJOR.MINOR.PATCH`. This hfk supports contract major version 1; any other major version is refused loudly. |
+| `config_section` | Yes | `None` when the extension needs no config, or the file name of its own input file in the instance, such as `retirement.yaml`. Core file names are refused. Sections inside `household.yaml` or `declarations.yaml` are not supported; see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance). |
+| `schema` | When `config_section` is set | A callable `schema(data, path)` that validates the loaded mapping and returns the extension's config object, raising `hfk.config.ConfigError` naming the file, key path, and fix. `None` when `config_section` is `None`. |
+| `requires` | Yes | A mapping with optional `ledger_fields` (names of `Ledger` fields: `transactions`, `categories`, `balances`, `accounts`) and `extensions` (other extension names). |
+| `commands()` | Yes | Returns `hfk.ext.ExtensionCommand` objects: `name`, `help`, `configure(parser)`, and `run(args, context)` returning an exit code. |
+| `report_sections()` | Optional | Returns `hfk.ext.ReportSection` objects: `name`, `title`, and `build(context)` returning a report object. |
+| `doctor` | Yes | A callable `doctor(context, config)` that returns `hfk.engine.Diagnostic` objects. |
 
 The contract is intentionally small. Extensions should use the core engine for shared calculations instead of each inventing its own ledger parser, date rules, money handling, or config semantics.
 
 ## A minimal extension
 
-Illustrative skeleton only. This is not executable against M0.
-
 ```python
-"""Example planned hfk extension skeleton."""
+"""A minimal hfk extension."""
 
-from hfk import config, engine, ledger
+from hfk.config import ConfigError
+from hfk.ext import ExtensionCommand
+
+
+def _schema(data, path):
+    reason = data.get("enabled_reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise ConfigError(
+            "enabled_reason is required",
+            file=path,
+            key="enabled_reason",
+            fix="write one sentence saying why the household uses this extension",
+        )
+    return {"enabled_reason": reason}
+
+
+def _run(args, context):
+    print("example report")
+    return 0
 
 
 class ExampleExtension:
     name = "example"
     version = "0.1.0"
     contract_version = "1.0.0"
-    config_section = "example"
-    schema = {
-        "type": "object",
-        "required": ["enabled_reason"],
-        "properties": {
-            "enabled_reason": {"type": "string"},
-        },
-    }
-    requires = {
-        "ledger_fields": ["transactions", "categories"],
-        "extensions": [],
-    }
+    config_section = "example.yaml"
+    schema = staticmethod(_schema)
+    requires = {"ledger_fields": ["transactions", "categories"], "extensions": []}
 
     def commands(self):
-        return []
+        return [ExtensionCommand("example", "Print the example report.", lambda parser: None, _run)]
 
     def report_sections(self):
         return []
 
-    def doctor(self, loaded_config: config.LoadedConfig, book: ledger.Ledger):
+    def doctor(self, context, config):
         return []
 
 
