@@ -21,7 +21,7 @@ That boundary matters because `hfk` is public software used with private househo
 
 ## Discovery
 
-Planned for M6: `hfk` discovers extensions through the Python entry-point group `hfk.extensions`. An installed package registers one object factory under that group. Core discovers installed entry points, loads only extensions enabled by the private instance config, validates their declared config sections, and wires their CLI/report hooks.
+Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Planned for later M6 items: core loads only extensions enabled by the private instance config, validates their declared config sections, and wires their CLI and report hooks.
 
 Illustrative `pyproject.toml` snippet:
 

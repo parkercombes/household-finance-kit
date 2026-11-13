@@ -5,7 +5,7 @@ Last verified: 2026-11-13
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M6-01`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+The next item is `M6-02`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
 `tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -121,7 +121,7 @@ Goal: let optional packages add config, commands, report sections, and doctor ch
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M6-01` | Implement extension discovery through Python entry points in the `hfk.extensions` group. | `todo` | `M5-01` | Run `python -m pytest -q tests/test_extensions.py::test_entry_point_discovery`; expected: a test extension is discovered without a direct core import. |
+| `M6-01` | Implement extension discovery through Python entry points in the `hfk.extensions` group. | `done` | `M5-01` | Run `python -m pytest -q tests/test_extensions.py::test_entry_point_discovery`; expected: a test extension is discovered without a direct core import. Result 2026-11-13: passed. `hfk.ext.discover_extensions` loads every `hfk.extensions` entry point through `importlib.metadata`, sorted by name; the target may be the extension object, a class, or a factory function. A throwaway package installed into a temporary `sys.path` entry is discovered, and its module is imported only by entry-point loading. A package that raises on import becomes a `DiscoveryProblem` naming the entry point, and the other extensions still load. An AST check confirms that `hfk.source`, `hfk.ledger`, `hfk.config`, `hfk.engine` and `hfk.render` never import `hfk.ext`. |
 | `M6-02` | Define the extension object contract: `name`, `version`, config section and schema, `requires`, `commands()`, optional `report_sections()`, and `doctor()`. | `todo` | `M6-01` | Run `python -m pytest -q tests/test_extensions.py::test_extension_contract_validation`; expected: incomplete extension objects fail with clear contract errors. |
 | `M6-03` | Integrate extension config-section loading while keeping sections optional unless the feature is enabled. | `todo` | `M2-02`, `M6-02` | Run `python -m pytest -q tests/test_extensions.py::test_extension_config_sections`; expected: disabled extension config is ignored and enabled malformed config fails. |
 | `M6-04` | Run extension doctor hooks as part of `hfk doctor` and report hook failures with extension names. | `todo` | `M2-04`, `M6-02` | Run `python -m pytest -q tests/test_extensions.py::test_extension_doctor_hooks`; expected: hook errors are surfaced without stopping unrelated core checks from reporting. |
