@@ -93,6 +93,15 @@ class Plan:
     schema_version: int
     effective_from: Month
     lines: tuple[PlanLine, ...]
+    source: str = "file"
+    line_rows: tuple[int, ...] = ()
+
+    def describe_line(self, index: int) -> str:
+        """Where line ``index`` lives: ``plan.lines[3]`` or ``HFK Plan row 5``."""
+
+        if self.source == "workbook" and index < len(self.line_rows):
+            return f"HFK Plan row {self.line_rows[index]}"
+        return f"plan.lines[{index}]"
 
     def lines_for(self, month: Month, who: str | None = None) -> tuple[PlanLine, ...]:
         return tuple(

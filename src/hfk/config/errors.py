@@ -35,3 +35,22 @@ def key_path(*parts: str) -> str:
         else:
             rendered += f'"{part}"'
     return rendered
+
+
+class PlanSheetError(ConfigError):
+    """A problem in the ``HFK Plan`` workbook sheet, located by sheet, row, and column."""
+
+    def __init__(
+        self, problem: str, *, file: Path, sheet: str, row: int, column: str, fix: str
+    ) -> None:
+        self.sheet = sheet
+        self.row = row
+        self.column = column
+        location = f"sheet={sheet}" + (f", row={row}" if row else "") + (
+            f", column={column}" if column else ""
+        )
+        super().__init__(problem, file=file, key=location, fix=fix)
+        self.args = (f"{problem}: {location}, file={file}, fix={fix}",)
+
+    def __str__(self) -> str:
+        return str(self.args[0])
