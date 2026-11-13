@@ -184,7 +184,7 @@ The package names below are the approved architecture from the design brief. Sta
 | `src/hfk/ledger` | Ledger | Done (M1): frozen dataclasses and helpers |
 | `src/hfk/config` | Config | Planned M2 YAML loading and validation |
 | `src/hfk/engine` | Engine | Planned M2 doctor basics; M3 ownership, buckets, scorecard; M4 targets, balances, renewals |
-| `src/hfk/ext` | Extensions | Done (M6-01 to M6-03): entry-point discovery, the extension contract, and config sections; planned M6 doctor hooks |
+| `src/hfk/ext` | Extensions | Done (M6-01 to M6-04): entry-point discovery, the extension contract, config sections, and doctor hooks |
 | `src/hfk/render` | Presentation | Planned M5 text, CSV, and HTML renderers |
 | `src/hfk/serve.py` | Presentation | Done (M5-10): `hfk serve`, the loopback-only, GET-only web front door over the HTML renderers |
 | `src/hfk/cli.py` | Presentation | `--version` and `dev fixture` work; analysis subcommands are stubs that become functional across M2-M8 |

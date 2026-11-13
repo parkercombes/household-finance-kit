@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import sys
+from datetime import date
 from pathlib import Path
 from typing import ClassVar
 
@@ -12,6 +13,7 @@ import yaml
 from ext_fixture import forget, install_extension
 
 from hfk.config import ConfigError, Household, load_household
+from hfk.engine import run_doctor
 from hfk.ext import (
     ENTRY_POINT_GROUP,
     ContractError,
@@ -22,6 +24,7 @@ from hfk.ext import (
     load_extensions,
     validate_extension,
 )
+from hfk.ext.doctor import extension_doctor_hooks
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "hfk"
@@ -350,3 +353,147 @@ def test_extension_without_config_loads_none(tmp_path):
     enabled = household_with(tmp_path, ["example"])
     loaded = load_enabled_extensions(tmp_path, household=enabled, installed=installed)
     assert loaded[0].config is None
+
+
+HOOKS_SOURCE = '''
+from hfk.engine import Diagnostic
+
+
+class Base:
+    version = "0.1.0"
+    contract_version = "1.0.0"
+    config_section = None
+    schema = None
+    requires = {"ledger_fields": ["transactions"], "extensions": []}
+
+    def commands(self):
+        return []
+
+
+class Reports(Base):
+    name = "reports"
+
+    def doctor(self, context, config):
+        accounts = len(context.household.accounts)
+        return [
+            Diagnostic(
+                "warning",
+                "reports-note",
+                "reports.yaml",
+                f"saw {accounts} accounts and {len(context.ledger.transactions)} transactions",
+                "nothing to do",
+            )
+        ]
+
+
+class Explodes(Base):
+    name = "explodes"
+
+    def doctor(self, context, config):
+        raise RuntimeError("hook bug")
+
+
+class Quiet(Base):
+    name = "quiet"
+
+    def doctor(self, context, config):
+        raise AssertionError("a disabled extension's hook must never run")
+'''
+
+
+def make_doctor_instance(tmp_path: Path, extensions: list[str]) -> Path:
+    import shutil
+
+    from hfk.source.fixture import build_fixture
+
+    home = tmp_path / "instance"
+    home.mkdir(parents=True)
+    for filename in ("household.yaml", "declarations.yaml"):
+        shutil.copyfile(INSTANCE_EXAMPLE / filename, home / filename)
+    data = yaml.safe_load((home / "household.yaml").read_text(encoding="utf-8"))
+    data["extensions"] = extensions
+    (home / "household.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    build_fixture(home / "data" / "Tiller-Example.xlsx")
+    return home
+
+
+@pytest.fixture()
+def hook_extensions(tmp_path, monkeypatch):
+    root = install_extension(
+        tmp_path / "site",
+        module="hfk_hook_ext",
+        source=HOOKS_SOURCE,
+        entry_points={
+            "reports": "hfk_hook_ext:Reports",
+            "explodes": "hfk_hook_ext:Explodes",
+            "quiet": "hfk_hook_ext:Quiet",
+        },
+    )
+    install_extension(
+        root,
+        module="hfk_unloadable_ext",
+        source="raise ImportError('missing dependency')\n",
+        entry_points={"unloadable": "hfk_unloadable_ext:extension"},
+    )
+    monkeypatch.syspath_prepend(str(root))
+    for module in ("hfk_hook_ext", "hfk_unloadable_ext"):
+        forget(module)
+    yield root
+    for module in ("hfk_hook_ext", "hfk_unloadable_ext"):
+        forget(module)
+
+
+def test_extension_doctor_hooks(tmp_path, hook_extensions):
+    home = make_doctor_instance(tmp_path, ["reports", "explodes", "settle_up"])
+    baseline = run_doctor(make_doctor_instance(tmp_path / "plain", []), today=date(2026, 10, 1))
+    assert baseline.ok
+
+    report = run_doctor(
+        home, today=date(2026, 10, 1), hooks=extension_doctor_hooks(load_extensions())
+    )
+
+    by_code: dict[str, list] = {}
+    for diagnostic in report.diagnostics:
+        by_code.setdefault(diagnostic.code, []).append(diagnostic)
+
+    failed = by_code["extension-hook-failed"]
+    assert len(failed) == 1
+    assert failed[0].where == "extension explodes"
+    assert "the explodes doctor hook raised RuntimeError: hook bug" in failed[0].message
+
+    note = by_code["reports-note"][0]
+    assert note.message == "saw 4 accounts and 67 transactions"
+
+    missing = by_code["extension-config"]
+    assert [d.where for d in missing] == ["household.yaml key=extensions[2]"]
+    assert "'settle_up' is enabled but not installed" in missing[0].message
+
+    unavailable = by_code["extension-unavailable"]
+    assert [(d.where, d.level) for d in unavailable] == [("extension unloadable", "warning")]
+
+    # Core checks still ran and still report: readiness and the core diagnostics are intact.
+    core = [d for d in report.diagnostics if not d.code.startswith(("extension", "reports"))]
+    assert core == list(baseline.diagnostics)
+    assert report.readiness == baseline.readiness
+    assert not report.ok
+
+
+def test_doctor_cli_runs_extension_hooks(tmp_path, hook_extensions):
+    import os
+    import subprocess
+
+    home = make_doctor_instance(tmp_path, ["explodes", "unloadable"])
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join([str(ROOT / "src"), str(hook_extensions)])
+    result = subprocess.run(
+        [sys.executable, "-m", "hfk", "doctor", "--home", str(home), "--today", "2026-10-01"],
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 1
+    assert "error: extension explodes: the explodes doctor hook raised RuntimeError" in result.stdout
+    assert "error: extension unloadable: " in result.stdout
+    assert "readiness: ready" in result.stdout

@@ -115,9 +115,12 @@ Each extension owns its configuration. Implemented (M6-03): an extension's confi
 - An enabled extension whose required extensions (`requires.extensions`) are not enabled names the missing one.
 - A missing config file, unparseable YAML, or a value the extension's `schema` rejects names the extension's file.
 
-Behaviour that is still planned:
+Implemented (M6-04): `hfk doctor` reports these problems and runs each enabled extension's own `doctor(context, config)` after the core checks. The context is an `hfk.engine.DoctorContext` with `home`, `household`, `declarations`, `ledger` (each `None` when it failed to load) and `today`.
 
-- `hfk doctor` reports these problems (M6-04).
+- An entry point that failed to load or broke the contract is `extension-unavailable`: an error when the household enabled it, a warning otherwise.
+- A config problem is `extension-config`, naming the file and key; the extension's own doctor is then skipped.
+- A doctor hook that raises, or returns something other than `Diagnostic` objects, is `extension-hook-failed` naming the extension. The core checks, the readiness section, and the other extensions still report.
+- A disabled extension's hook never runs.
 - If an extension requires a ledger field that the selected source adapter cannot provide, the command stops before producing numbers.
 - If config conflicts, the extension reports the conflict instead of guessing.
 

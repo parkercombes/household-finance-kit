@@ -49,6 +49,8 @@ from hfk.engine import (
     build_scorecard,
     run_doctor,
 )
+from hfk.ext import load_extensions
+from hfk.ext.doctor import extension_doctor_hooks
 from hfk.instance import InstanceError, InstanceReport, write_instance
 from hfk.interview import (
     InterviewError,
@@ -105,6 +107,7 @@ def _doctor(args: argparse.Namespace) -> int:
         Path(args.home),
         today=args.today,
         stale_after_days=args.stale_days,
+        hooks=extension_doctor_hooks(load_extensions()),
     )
     for diagnostic in report.diagnostics:
         print(diagnostic.render())
