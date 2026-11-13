@@ -18,7 +18,9 @@ income-vs-need modelling.
 
 - **Requires Tiller** as its only data source. It stands on its own otherwise: no other
   spreadsheet, macro, or service is needed. Its only other inputs are small YAML files the
-  user owns (`household.yaml`, `declarations.yaml`, `plan.yaml`).
+  user owns (`household.yaml`, `declarations.yaml`) and an `HFK Plan` sheet the user adds
+  to their own workbook for the budget plan (ADR-0015; `plan.yaml` is still read until
+  M5-18 removes it).
 - **Never writes to the Tiller workbook.** It produces output files and reports.
 - Package name `hfk`, CLI `hfk`, Python >= 3.10, dependencies: `openpyxl`, `PyYAML`;
   dev: `pytest`, `ruff`.
@@ -59,7 +61,8 @@ Two kinds of repo, strictly separated:
 my-finances/               # private folder (git optional)
   household.yaml           # people, files, account ownership (tracked in git; contains no balances)
   declarations.yaml        # judgement calls: buckets, overrides, splits, targets
-  plan.yaml                # the budget plan (validated by `hfk plan check`)
+                           # the budget plan is the HFK Plan sheet in the workbook (ADR-0015);
+                           # plan.yaml is removed in M5-18
   shared-items/            # settle-up extension: YYYY-MM.yaml off-ledger shared items
   retirement.yaml          # retirement extension input
   data/                    # GITIGNORED: Tiller workbook(s), statements, snapshots
@@ -99,8 +102,9 @@ household-finance-kit/
    `BalanceRow`, and `Ledger` (collections + helpers). Amounts are `Decimal`. No Tiller
    specifics leak above this layer.
 3. **Config** (`hfk.config`). Loads and validates `household.yaml`, `declarations.yaml`,
-   `plan.yaml` (JSON-Schema or hand-written validators; errors name the file, key path and
-   fix). Sections are optional unless a loaded feature requires them.
+   and the `HFK Plan` sheet's rows handed over by the source adapter (until M5-18 also
+   `plan.yaml`). Errors name the file, key path and fix, or the sheet, row, column and
+   fix. Sections are optional unless a loaded feature requires them.
 4. **Engine** (`hfk.engine`). Pure functions over `Ledger` + config: ownership/share
    allocation, bucket mapping, monthly scorecard, plan-vs-actual, category targets,
    balances/net worth, renewals and sinking fund, `doctor` checks.
@@ -126,7 +130,7 @@ Sheets used (header names verified against a real Tiller workbook):
 - `Balance History`: `Date, Time, Account, Account #, Account ID, Balance ID, Institution,
   Balance, Month, Week, Type, Class, Account Status, Date Added`.
 - `Accounts` (optional).
-- `HFK Plan` (optional, user-added, planned (M5-08)): the plan as a sheet the user adds
+- `HFK Plan` (optional, user-added, M5-08): the plan as a sheet the user adds
   to their own workbook; `hfk` reads it read-only, by header name like every other
   sheet. See section 6 and docs/TILLER-SCHEMA.md.
 
@@ -152,7 +156,7 @@ accounts:
   "Sam Checking":  {owner: sam}
   "Savings":       {owner: alex, kind: savings}
   "House":         {shared: {alex: 0.5, sam: 0.5}, unsynced: true}   # hand-typed house value, not synced by Tiller
-plan: {source: file}                 # `file` (default) reads plan.yaml; `workbook` reads the `HFK Plan` tab (planned, M5-08)
+# no plan key: the plan is always the HFK Plan sheet (ADR-0015); M5-08's plan: {source} switch goes in M5-18
 extensions: [settle_up, retirement]  # opt-in
 ```
 **Ownership model.** Every account is either `owner: <slug>` or `shared: {slug: weight}`.
@@ -225,7 +229,12 @@ reports the conflict and analysis stops. Because the scorecard, the categories v
 settle-up all read shares from the same function, a joint bill paid from one person's
 account lands on both people everywhere, not only in settle-up.
 
-### plan.yaml
+### Plan lines (`plan.yaml` until M5-18)
+
+ADR-0015 moves the plan into the `HFK Plan` sheet, and M5-18 stops reading `plan.yaml`.
+The line rules below apply unchanged to sheet rows, except that there is no plan-level
+`effective_from`: every row carries its own `Effective From`.
+
 ```yaml
 schema_version: 1
 plan:
@@ -258,14 +267,14 @@ Each line is one person's share of one budget item (ADR-0010).
 `hfk plan check` validates the file against `declarations.yaml` and names each problem.
 `hfk plan edit` (M10) is superseded by the `HFK Plan` tab (ADR-0013).
 
-### HFK Plan tab (planned, M5-08)
+### HFK Plan tab (M5-08)
 
 The `HFK Plan` tab is an optional sheet the user adds to their own Tiller workbook
 (Google Sheets or Excel). Tiller does not create it; it travels with the downloaded
 workbook like any other sheet. hfk reads it through the same read-only loader as every
 other sheet (`openpyxl.load_workbook(path, read_only=True, data_only=True)`), by header
 name and never by column position, and hfk never writes it. The only writer of such a
-tab is the planned `hfk dev fixture --plan-tab` (M5-08), which writes the synthetic
+tab is `hfk dev fixture --plan-tab` (M5-08), which writes the synthetic
 fixture workbook, never a user's workbook.
 
 Row 1 holds the headers. Each later row is one plan line — one person's share of one
@@ -290,19 +299,21 @@ columns are tolerated. A missing required column is the existing loud error shap
 | `Due Month` | `due: {month, day}` | No | Integer 1-12; `Due Month` and `Due Day` are both present or both blank. |
 | `Due Day` | `due: {month, day}` | No | Integer 1-31; both present or both blank. |
 
-Source selection lives in `household.yaml`: `plan: {source: file}` (the default) or
-`plan: {source: workbook}`. `file` reads `plan.yaml` exactly as today. `workbook`
-reads the `HFK Plan` tab of the selected workbook; a `plan.yaml` in the instance is
-then not read, and `hfk doctor` names it as unused. Both sources load into the same
-`Plan` objects and pass the same validation, and `hfk plan check` validates either.
-Reports never depend on which source was used: the same lines give the same cents.
-`plan.yaml` remains the alternative for people who want the plan under version control
-(the `hfk init --git` path).
+The sheet is the only plan source (ADR-0015, implemented in M5-18; until then the M5-08
+`plan: {source: file | workbook}` switch in `household.yaml` still selects between the
+sheet and `plan.yaml`). After M5-18:
+
+- A `plan.yaml` in the instance is an error naming the file, with the fix: move its lines
+  into the sheet, then delete it.
+- A `plan:` key in `household.yaml` is an unknown-key error.
+- hfk never writes the workbook, so lines reach the sheet by paste or import. The
+  `hfk init` interview writes its starter lines to `out/hfk-plan-starter.csv`, and the
+  one-time `hfk plan to-sheet` converts an existing `plan.yaml` to the same CSV.
+- `hfk plan check` validates the sheet.
 
 To change an amount, end the old row with `Effective Until` and add a new row — the
 same append-and-end rule ADR-0010 set for `plan.yaml`; `hfk doctor` reports overlapping
-lines. Everything in this subsection is planned behaviour, labelled `planned (M5-08)`;
-the decision is recorded as ADR-0013.
+lines. The sheet is ADR-0013, implemented in M5-08; the single source is ADR-0015.
 
 ## 7. Engine capabilities (core)
 
@@ -348,7 +359,7 @@ A generic income-vs-need model, input `retirement.yaml` (no Excel dependency):
 - **Income streams** (typed list): `social_security` (amount per claim age), `pension`,
   `account_drawdown`, `other`; each with start, end, amount, COLA.
 - **Expenses**: itemized monthly budget in today's dollars with inflation; baseline may
-  be seeded from the user's own `plan.yaml` spend.
+  be seeded from the user's own plan spend.
 - **Money frame**: all figures are real (today's) dollars; see ADR-0008 in `DECISIONS.md`.
 - **Rules carried over**: the claim-age scenarios are mutually exclusive "retire at that
   age" alternatives, not a timeline; income is flat for life after retirement unless a

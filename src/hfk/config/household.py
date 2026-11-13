@@ -29,7 +29,16 @@ from hfk.config.errors import ConfigError, key_path
 
 HOUSEHOLD_FILE = "household.yaml"
 SLUG = re.compile(r"^[a-z][a-z0-9_]*$")
-TOP_LEVEL_KEYS = ("schema_version", "people", "files", "history_start", "accounts", "extensions")
+TOP_LEVEL_KEYS = (
+    "schema_version",
+    "people",
+    "files",
+    "history_start",
+    "accounts",
+    "extensions",
+    "plan",
+)
+PLAN_SOURCES = ("file", "workbook")
 ACCOUNT_KEYS = ("owner", "shared", "kind", "unsynced")
 
 
@@ -76,6 +85,7 @@ class Household:
     history_start: date | None
     accounts: tuple[AccountOwnership, ...]
     extensions: tuple[str, ...]
+    plan_source: str = "file"
 
     def person(self, slug: str) -> Person | None:
         for person in self.people:
@@ -114,6 +124,7 @@ def load_household(home_or_file: Path) -> Household:
     history_start = _history_start(data.get("history_start"), path)
     accounts = _accounts(require(data, "accounts", path), slugs, path)
     extensions = _extensions(data.get("extensions", []), path)
+    plan_source = _plan_source(data.get("plan"), path)
     return Household(
         path=path,
         schema_version=schema_version,
@@ -122,6 +133,7 @@ def load_household(home_or_file: Path) -> Household:
         history_start=history_start,
         accounts=accounts,
         extensions=extensions,
+        plan_source=plan_source,
     )
 
 
@@ -312,3 +324,22 @@ def _extensions(value: Any, path: Path) -> tuple[str, ...]:
             )
         result.append(name)
     return tuple(result)
+
+
+def _plan_source(value: Any, path: Path) -> str:
+    """``plan: {source: file | workbook}``; an absent ``plan`` key means ``file`` (ADR-0013)."""
+
+    if value is None:
+        return "file"
+    plan = require_mapping(value, path, "plan")
+    reject_unknown_keys(plan, ("source",), path, "plan")
+    source = require_text(require(plan, "source", path, "plan"), path, "plan", "source")
+    if source not in PLAN_SOURCES:
+        raise ConfigError(
+            f"Unknown plan source {source!r}",
+            file=path,
+            key="plan.source",
+            fix="write plan: {source: file} to read plan.yaml or plan: {source: workbook} "
+            "to read the HFK Plan sheet",
+        )
+    return source

@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Last verified: 2026-10-28
+Last verified: 2026-11-12
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
 `household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
@@ -322,6 +322,9 @@ can declare that with a `category` match rather than code.
 Status: accepted
 Date: 2026-10-08
 
+See also [ADR-0015](#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed):
+the line rules below stand, but the plan now lives in the `HFK Plan` sheet, not `plan.yaml`.
+
 ### Context
 
 The original `plan.yaml` line used `type: Fixed Discretionary`, where `Type` already
@@ -433,7 +436,7 @@ declare unsynced accounts in `household.yaml` — never to edit arithmetic.
 
 ## ADR-0013: The Plan Can Live in a `HFK Plan` Workbook Tab; `hfk plan edit` Is Superseded
 
-Status: accepted
+Status: superseded by [ADR-0015](#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed) for source selection; the sheet contract and the `hfk plan edit` supersession stand
 Date: 2026-10-28
 
 ### Context
@@ -560,3 +563,83 @@ is read as `household.yaml` from this record on; its Decision section is left
 as written. Private instances that still carry `closed_accounts` fail loudly on
 load with the move named as the fix, which matches the fail-loudly rule. The
 change ships as roadmap item `M5-16`.
+
+---
+
+## ADR-0015: The Plan Lives Only in the `HFK Plan` Sheet; `plan.yaml` Is Removed
+
+Status: accepted
+Date: 2026-11-12
+
+### Context
+
+ADR-0013 let the plan live in either of two places: `plan.yaml` (the default) or an
+`HFK Plan` sheet in the household's own workbook, chosen by `plan: {source: file |
+workbook}` in `household.yaml`. M5-08 built both. Two sources turned out to cost more
+than they give:
+
+- People are confused about where the plan lives. Two sources need a switch, a warning
+  when a leftover `plan.yaml` is ignored, and docs that explain both. The maintainer
+  found this confusing, and the toolkit is aimed at households that do not program.
+- The `hfk init` interview cannot default to the sheet. It writes starter plan lines,
+  and hfk never writes the workbook (ADR-0001), so under `source: workbook` those lines
+  have nowhere to go. The roadmap's "default to the sheet once M5-08 lands" plan stalled
+  on this.
+- Every command, test, and doc has to cover both sources, and `hfk plan check` keeps two
+  location models: YAML line numbers and sheet rows.
+- The household already edits the workbook every week. The plan sits next to the data
+  it is scored against, and both Excel and Google Sheets keep version history.
+
+Three alternatives were considered:
+
+- Keep both sources (ADR-0013 as it stands). Rejected for the reasons above.
+- Move the plan into `household.yaml` so there is one settings file. Rejected: it keeps
+  hand-edited YAML as the way to change a budget, which is exactly what ADR-0013 set out
+  to remove for non-programmers. It also mixes what changes monthly (targets) with what
+  rarely changes (people, accounts).
+- Keep `plan.yaml` only for `hfk init --git` instances. Rejected: it is still two sources,
+  only harder to find.
+
+### Decision
+
+The `HFK Plan` sheet in the household's own workbook is the only plan source. The
+following changes apply:
+
+- `plan.yaml` is no longer read. A `plan.yaml` in an instance is a loud error, not a
+  warning, because a file that used to change numbers must not be silently ignored. The
+  error names the file and the fix: move its lines into the sheet, then delete the file.
+- The `plan:` key in `household.yaml` is removed. With one source there is nothing to
+  select, so the key becomes an unknown-key error whose fix says to delete it.
+- The column contract, the read-only loader, the validation, and the append-and-end rule
+  from ADR-0013 and ADR-0010 are unchanged. Every row carries its own `Effective From`,
+  so a plan-level default start month no longer exists.
+- hfk still never writes the workbook. To get lines into the sheet:
+  - The `hfk init` interview writes its starter lines to `out/hfk-plan-starter.csv`
+    (gitignored, private to the instance), with the thirteen headers in contract order.
+    It then tells the user to add an `HFK Plan` sheet and paste or import the file.
+  - A one-time `hfk plan to-sheet` writes an existing `plan.yaml` to the same CSV shape,
+    for instances created before this decision. It reads `plan.yaml` only to convert it
+    and never scores from it.
+- `hfk init --git` keeps its meaning: git and the privacy pre-commit hook for the
+  instance's YAML files. It no longer has anything to do with where the plan lives.
+
+### Consequences
+
+- This supersedes the source-selection part of ADR-0013. ADR-0013's sheet contract and
+  its supersession of `hfk plan edit` still stand.
+- ADR-0010's rules for plan lines (bucket-keyed, dated, carry their own categories)
+  still stand. Its file location (`plan.yaml`) and `plan.effective_from` do not.
+- Commands that need the plan now need the workbook too. This changes `hfk renewals` and
+  `hfk plan check`, which today run from YAML alone.
+- The plan is no longer diffable in a git-tracked instance. Plan history is kept by the
+  dated rows themselves (end a row, add a row) and by the spreadsheet's own version
+  history.
+- The public example plan can no longer be a YAML file. The privacy scan blocks CSV-like
+  data, so the example is shown as a Markdown table in `examples/instance/README.md`, and
+  the machine-readable copy is the synthetic fixture's tab (`hfk dev fixture --plan-tab`).
+- Code removed: the `plan.yaml` loader and its YAML line-number lookup in `plan check`,
+  the `plan_source` field, the unused-file warning, and the `plan.yaml` instance
+  template.
+- Roadmap row `M5-18` implements this ADR, together with the matching updates to the
+  brief, the schema doc, the README, the instance templates, and the tests. Until it
+  lands, M5-08's two-source behaviour is what the code does.

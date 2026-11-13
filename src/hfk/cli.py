@@ -16,11 +16,15 @@ from pathlib import Path
 from hfk import __version__
 from hfk.config import (
     ConfigError,
+    Declarations,
+    Household,
     Month,
-    check_plan,
+    Plan,
+    check_instance_plan,
     load_declarations,
     load_household,
-    load_plan,
+    load_instance_plan,
+    unused_plan_file,
 )
 from hfk.engine import (
     BalancesError,
@@ -79,6 +83,21 @@ def _parse_month(value: str) -> Month:
         raise argparse.ArgumentTypeError("write months as YYYY-MM") from exc
 
 
+def _warn_unused_plan_file(home: Path, household: Household) -> None:
+    unused = unused_plan_file(home, household)
+    if unused is not None:
+        print(
+            f"warning: {unused} is ignored because household.yaml sets plan: "
+            "{source: workbook}; fix=delete or rename it, or set plan: {source: file}",
+            file=sys.stderr,
+        )
+
+
+def _load_plan(home: Path, household: Household, declarations: Declarations) -> Plan:
+    _warn_unused_plan_file(home, household)
+    return load_instance_plan(home, household=household, declarations=declarations)
+
+
 def _doctor(args: argparse.Namespace) -> int:
     report = run_doctor(
         Path(args.home),
@@ -96,7 +115,7 @@ def _scorecard(args: argparse.Namespace) -> int:
     try:
         household = load_household(home)
         declarations = load_declarations(home, people=household.slugs)
-        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        plan = _load_plan(home, household, declarations)
         who = args.who
         if who is None:
             if len(household.slugs) != 1:
@@ -136,7 +155,7 @@ def _categories(args: argparse.Namespace) -> int:
     try:
         household = load_household(home)
         declarations = load_declarations(home, people=household.slugs)
-        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        plan = _load_plan(home, household, declarations)
         who = args.who
         if who is None:
             if len(household.slugs) != 1:
@@ -229,7 +248,7 @@ def _renewals(args: argparse.Namespace) -> int:
     try:
         household = load_household(home)
         declarations = load_declarations(home, people=household.slugs)
-        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        plan = _load_plan(home, household, declarations)
         report = build_renewals(
             plan=plan,
             household=household,
@@ -254,7 +273,7 @@ def _rebaseline(args: argparse.Namespace) -> int:
     try:
         household = load_household(home)
         declarations = load_declarations(home, people=household.slugs)
-        plan = load_plan(home, declarations=declarations, people=household.slugs)
+        plan = _load_plan(home, household, declarations)
         who = args.who
         if who is None:
             if len(household.slugs) != 1:
@@ -322,9 +341,21 @@ def _plan_check(args: argparse.Namespace) -> int:
         print(f"plan check: {error}", file=sys.stderr)
         return 1
 
-    report = check_plan(home, declarations=declarations, people=household.slugs)
-    print(f"plan check {report.path}")
+    _warn_unused_plan_file(home, household)
+    report = check_instance_plan(home, household=household, declarations=declarations)
+    if report.source == "workbook":
+        print(f"plan check {report.path} (sheet HFK Plan)")
+    else:
+        print(f"plan check {report.path}")
     for problem in report.problems:
+        if problem.sheet is not None:
+            row = "-" if problem.line == 0 else str(problem.line)
+            column = problem.column or "-"
+            print(
+                f"  sheet {problem.sheet}  row {row}  column {column}  "
+                f"{problem.problem}; fix: {problem.fix}"
+            )
+            continue
         line = "-" if problem.line == 0 else str(problem.line)
         print(f"  line {line}  {problem.key}  {problem.problem}; fix: {problem.fix}")
     if report.ok:
@@ -348,7 +379,7 @@ def _amount_or_dash(amount: object) -> str:
 
 
 def _dev_fixture(args: argparse.Namespace) -> int:
-    output = build_fixture(args.out, months=args.months)
+    output = build_fixture(args.out, months=args.months, plan_tab=args.plan_tab)
     print(output)
     return 0
 
@@ -618,6 +649,12 @@ def _build_parser() -> argparse.ArgumentParser:
     fixture_parser = dev_subparsers.add_parser("fixture")
     fixture_parser.add_argument("--out", required=True, help="Output workbook path.")
     fixture_parser.add_argument("--months", type=int, default=6, help="Number of months.")
+    fixture_parser.add_argument(
+        "--plan-tab",
+        action="store_true",
+        dest="plan_tab",
+        help="Also write an HFK Plan sheet matching examples/instance/plan.yaml.",
+    )
     fixture_parser.set_defaults(func=_dev_fixture)
     dev_parser.set_defaults(func=lambda _args, dev_parser=dev_parser: _subcommand_help(dev_parser))
 

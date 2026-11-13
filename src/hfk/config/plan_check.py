@@ -37,7 +37,8 @@ from hfk.config._yaml import (
     require_schema_version,
 )
 from hfk.config.declarations import Declarations
-from hfk.config.errors import ConfigError, key_path
+from hfk.config.errors import ConfigError, PlanSheetError, key_path
+from hfk.config.household import Household
 from hfk.config.plan import (
     PLAN_KEYS,
     TOP_LEVEL_KEYS,
@@ -48,16 +49,31 @@ from hfk.config.plan import (
     _require_month,
     plan_path,
 )
+from hfk.config.plan_sheet import (
+    PLAN_SHEET,
+    plan_workbook,
+    read_plan_sheet,
+    sheet_lines,
+    sheet_terms,
+)
 
 
 @dataclass(frozen=True)
 class PlanProblem:
-    """One ``plan.yaml`` problem: 1-based physical line (0 when unknown), key, fix."""
+    """One plan problem and its fix.
+
+    For ``plan.yaml``, ``line`` is the 1-based physical line (0 when unknown)
+    and ``key`` the key path. For the ``HFK Plan`` sheet, ``sheet`` is set,
+    ``line`` is the sheet row (0 when the problem is the whole sheet), and
+    ``column`` names the header.
+    """
 
     line: int
     key: str
     problem: str
     fix: str
+    sheet: str | None = None
+    column: str | None = None
 
 
 @dataclass(frozen=True)
@@ -67,6 +83,7 @@ class PlanCheckReport:
     path: Path
     problems: tuple[PlanProblem, ...]
     line_count: int
+    source: str = "file"
 
     @property
     def ok(self) -> bool:
@@ -125,10 +142,120 @@ def check_plan(
         except ConfigError as error:
             problems.append(_problem(error, text))
 
-    problems.extend(_duplicate_category_problems(good, text))
-    problems.extend(_bucket_mapping_problems(good, declarations, text))
+    where = _FileLocator(text)
+    problems.extend(_duplicate_category_problems(good, where))
+    problems.extend(_bucket_mapping_problems(good, declarations, where))
     problems.sort(key=lambda problem: problem.line)
     return PlanCheckReport(path=path, problems=tuple(problems), line_count=len(rows))
+
+
+def check_plan_sheet(
+    workbook: Path,
+    *,
+    declarations: Declarations,
+    people: Iterable[str] | None = None,
+) -> PlanCheckReport:
+    """Collect every problem in the ``HFK Plan`` sheet of ``workbook``; nothing is written."""
+
+    workbook = Path(workbook)
+    try:
+        sheet = read_plan_sheet(workbook)
+    except PlanSheetError as error:
+        return PlanCheckReport(
+            path=workbook, problems=(_sheet_problem(error),), line_count=0, source="workbook"
+        )
+
+    problems: list[PlanProblem] = []
+    good: list[tuple[int, PlanLine]] = []
+    rows: dict[int, int] = {}
+    for result in sheet_lines(sheet, declarations=declarations, people=people):
+        rows[result.index] = result.row
+        if result.error is not None:
+            problems.append(_sheet_problem(result.error))
+        else:
+            assert result.line is not None
+            good.append((result.index, result.line))
+
+    where = _SheetLocator(rows)
+    problems.extend(_duplicate_category_problems(good, where))
+    problems.extend(_bucket_mapping_problems(good, declarations, where))
+    problems.sort(key=lambda problem: problem.line)
+    return PlanCheckReport(
+        path=workbook, problems=tuple(problems), line_count=len(sheet.rows), source="workbook"
+    )
+
+
+def check_instance_plan(
+    home: Path, *, household: Household, declarations: Declarations
+) -> PlanCheckReport:
+    """``hfk plan check``: validate whichever plan source ``household.yaml`` selects."""
+
+    if household.plan_source == "workbook":
+        try:
+            workbook = plan_workbook(home, household)
+        except ConfigError as error:
+            return PlanCheckReport(
+                path=error.file,
+                problems=(
+                    PlanProblem(line=0, key=error.key, problem=error.problem, fix=error.fix),
+                ),
+                line_count=0,
+                source="workbook",
+            )
+        return check_plan_sheet(workbook, declarations=declarations, people=household.slugs)
+    return check_plan(home, declarations=declarations, people=household.slugs)
+
+
+def _sheet_problem(error: PlanSheetError) -> PlanProblem:
+    return PlanProblem(
+        line=error.row,
+        key=error.key,
+        problem=error.problem,
+        fix=error.fix,
+        sheet=error.sheet,
+        column=error.column or None,
+    )
+
+
+class _FileLocator:
+    """Locates plan lines in ``plan.yaml`` by key path and physical line."""
+
+    def __init__(self, text: str | None) -> None:
+        self.text = text
+
+    def name(self, index: int) -> str:
+        return f"plan.lines[{index}]"
+
+    def terms(self, text: str) -> str:
+        return text
+
+    def problem(self, index: int, position: int, problem: str, fix: str) -> PlanProblem:
+        key = _category_key(index, position)
+        return PlanProblem(line=_key_line(key, self.text), key=key, problem=problem, fix=fix)
+
+
+class _SheetLocator:
+    """Locates plan lines in the ``HFK Plan`` sheet by row and the Categories column."""
+
+    def __init__(self, rows: dict[int, int]) -> None:
+        self.rows = rows
+
+    def name(self, index: int) -> str:
+        return f"{PLAN_SHEET} row {self.rows[index]}"
+
+    def terms(self, text: str) -> str:
+        return sheet_terms(text)
+
+    def problem(self, index: int, position: int, problem: str, fix: str) -> PlanProblem:
+        row = self.rows[index]
+        return PlanProblem(
+            line=row,
+            key=f"sheet={PLAN_SHEET}, row={row}, column=Categories",
+            problem=problem,
+            fix=fix,
+            sheet=PLAN_SHEET,
+            column="Categories",
+        )
 
 
 def _read_text(path: Path) -> str | None:
@@ -227,7 +354,7 @@ def _segment_name(segment: str) -> str:
 
 
 def _duplicate_category_problems(
-    good: list[tuple[int, PlanLine]], text: str | None
+    good: list[tuple[int, PlanLine]], where: _FileLocator | _SheetLocator
 ) -> list[PlanProblem]:
     rows: dict[tuple[str, str], list[tuple[int, PlanLine]]] = {}
     for index, line in good:
@@ -246,17 +373,16 @@ def _duplicate_category_problems(
                 )
                 if overlap is None:
                     continue
-                key = _category_key(right_index, right.categories.index(category))
                 problems.append(
-                    PlanProblem(
-                        line=_key_line(key, text),
-                        key=key,
-                        problem=(
+                    where.problem(
+                        right_index,
+                        right.categories.index(category),
+                        (
                             f'category "{category}" for "{who}" is also on '
-                            f'plan.lines[{left_index}] ("{left.desc}") '
+                            f'{where.name(left_index)} ("{left.desc}") '
                             f"with first overlapping month {overlap}"
                         ),
-                        fix=(
+                        where.terms(
                             "end one line with effective_until before the other starts, "
                             "or remove the category from one of them"
                         ),
@@ -266,7 +392,9 @@ def _duplicate_category_problems(
 
 
 def _bucket_mapping_problems(
-    good: list[tuple[int, PlanLine]], declarations: Declarations, text: str | None
+    good: list[tuple[int, PlanLine]],
+    declarations: Declarations,
+    where: _FileLocator | _SheetLocator,
 ) -> list[PlanProblem]:
     explicit = dict(declarations.categories)
     problems: list[PlanProblem] = []
@@ -275,7 +403,6 @@ def _bucket_mapping_problems(
             expected = _declared_buckets(category, declarations, explicit)
             if expected is None or line.bucket in expected:
                 continue
-            key = _category_key(index, position)
             if len(expected) == 1:
                 problem = (
                     f'category "{category}" maps to bucket "{expected[0]}" in '
@@ -287,14 +414,12 @@ def _bucket_mapping_problems(
                     f'declarations.yaml but this line is bucket "{line.bucket}"'
                 )
             problems.append(
-                PlanProblem(
-                    line=_key_line(key, text),
-                    key=key,
-                    problem=problem,
-                    fix=(
-                        f"move the line to {', '.join(expected)}, or change the "
-                        "declarations.yaml override, split, or categories entry"
-                    ),
+                where.problem(
+                    index,
+                    position,
+                    problem,
+                    f"move the line to {', '.join(expected)}, or change the "
+                    "declarations.yaml override, split, or categories entry",
                 )
             )
     return problems

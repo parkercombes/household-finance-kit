@@ -16,7 +16,9 @@ from hfk.config import (
     SharingRule,
     load_declarations,
     load_household,
+    load_instance_plan,
     load_plan,
+    unused_plan_file,
 )
 from hfk.engine.buckets import BucketError, resolve_category
 from hfk.engine.shares import ShareConflictError, ShareError, share_weights
@@ -84,7 +86,11 @@ def run_doctor(
             )
         )
     else:
-        plan = _load_plan(home, declarations=declarations, people=people, diagnostics=diagnostics)
+        plan = _load_plan(
+            home, household=household, declarations=declarations, diagnostics=diagnostics
+        )
+    if household is not None:
+        _check_unused_plan_file(home, household, diagnostics)
 
     workbook_path: Path | None = None
     ledger: Ledger | None = None
@@ -131,15 +137,45 @@ def _load_declarations(
 def _load_plan(
     home: Path,
     *,
+    household: Household | None,
     declarations: Declarations,
-    people: tuple[str, ...] | None,
     diagnostics: list[Diagnostic],
 ) -> Plan | None:
     try:
-        return load_plan(home, declarations=declarations, people=people)
+        if household is None:
+            return load_plan(home, declarations=declarations, people=None)
+        return load_instance_plan(home, household=household, declarations=declarations)
     except ConfigError as error:
         diagnostics.append(_config_diagnostic(error))
         return None
+
+
+def _check_unused_plan_file(
+    home: Path, household: Household, diagnostics: list[Diagnostic]
+) -> None:
+    unused = unused_plan_file(home, household)
+    if unused is None:
+        return
+    diagnostics.append(
+        Diagnostic(
+            "warning",
+            "plan-file-unused",
+            unused.name,
+            "plan.yaml is ignored because household.yaml sets plan: {source: workbook} "
+            "and the plan is read from the HFK Plan sheet",
+            "delete or rename plan.yaml, or set plan: {source: file} to use it",
+        )
+    )
+
+
+def _plan_where(plan: Plan) -> str:
+    return "HFK Plan" if plan.source == "workbook" else "plan.yaml"
+
+
+def _plan_categories_ref(plan: Plan, index: int) -> str:
+    if plan.source == "workbook":
+        return f"{plan.describe_line(index)} Categories"
+    return f"{plan.describe_line(index)}.categories"
 
 
 def _config_diagnostic(error: ConfigError) -> Diagnostic:
@@ -377,8 +413,8 @@ def _check_plan_category_buckets(
                 Diagnostic(
                     "error",
                     "plan-category-bucket-mismatch",
-                    "plan.yaml",
-                    f'plan.lines[{index}].categories desc "{line.desc}" who "{line.who}" '
+                    _plan_where(plan),
+                    f'{_plan_categories_ref(plan, index)} desc "{line.desc}" who "{line.who}" '
                     f'lists category "{category}" on bucket "{line.bucket}", but it maps to '
                     f"{mapped_text}",
                     f"move the category to a line in {fix_bucket}, or change the declarations "
@@ -405,8 +441,9 @@ def _check_plan_category_duplicates(plan: Plan, diagnostics: list[Diagnostic]) -
                     Diagnostic(
                         "error",
                         "plan-category-duplicate",
-                        "plan.yaml",
-                        f'plan.lines[{left[0]}].categories and plan.lines[{right[0]}].categories '
+                        _plan_where(plan),
+                        f"{_plan_categories_ref(plan, left[0])} and "
+                        f"{_plan_categories_ref(plan, right[0])} "
                         f'list category "{category}" for "{who}" with first overlapping month '
                         f"{overlap}",
                         "end one line with effective_until before the other starts, or remove "

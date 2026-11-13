@@ -1,6 +1,6 @@
 # Architecture
 
-Last verified: 2026-10-17
+Last verified: 2026-11-12
 
 This document explains the architecture of `hfk`, the household-finance-kit toolkit, for both human maintainers and LLM agents resuming the project cold. The source of truth for product scope is [DESIGN-BRIEF.md](DESIGN-BRIEF.md). Planned work is tracked in [ROADMAP.md](ROADMAP.md), and architectural decisions are recorded in [DECISIONS.md](DECISIONS.md).
 
@@ -23,7 +23,7 @@ Implementation status is recorded once, in the milestone table in [README](../RE
 
 The toolkit repo is the package developers publish and improve. It contains example configs only, using Alex, Sam, Example Bank, and round numbers. It does not contain a household's real workbook, statements, balances, account numbers, employer names, or private notes.
 
-An instance is a private directory or private repo for one person or household. Its intended shape is defined in the design brief: `household.yaml` for people, files, and account ownership; `declarations.yaml` for judgment calls such as bucket mappings, overrides, and splits; `plan.yaml` for the budget plan; `data/` for local workbooks; and `out/` for generated reports. `data/` and `out/` are gitignored in the instance.
+An instance is a private directory or private repo for one person or household. Its intended shape is defined in the design brief: `household.yaml` for people, files, and account ownership; `declarations.yaml` for judgment calls such as bucket mappings, overrides, and splits; `plan.yaml` (or an `HFK Plan` sheet in the workbook, ADR-0013) for the budget plan; `data/` for local workbooks; and `out/` for generated reports. `data/` and `out/` are gitignored in the instance.
 
 The toolkit locates the instance by an explicit `--home <dir>` flag or by the `HFK_HOME` environment variable. If neither is provided, the current directory is the instance home. The toolkit must not search its own repo for user data.
 
@@ -35,7 +35,7 @@ Import rule: a layer imports only from layers below it. Higher layers may depend
 |---|---|---|---|---|---|
 | Source adapter | `hfk.source` | Read source systems and normalize them. M1 starts with Tiller `.xlsx`/`.xlsm`; M9 adds Google Sheets. Tiller columns are resolved by header name, never by column position. | Tiller workbook path and source options from config | A normalized `Ledger` | Write to Tiller, rely on column position, perform budgeting policy, hide missing required columns |
 | Ledger | `hfk.ledger` | Hold frozen domain records: transactions, categories, accounts, balance rows, and ledger helpers. | Normalized rows from source adapters | Immutable ledger collections using `Decimal` money | Know Tiller sheet names, read files, validate household intent, render reports |
-| Config | `hfk.config` | Load and validate private YAML files. Errors name file, key path, and fix. | `household.yaml`, `declarations.yaml`, `plan.yaml`, extension config sections | Typed config objects | Read workbook data, infer missing required decisions, calculate reports |
+| Config | `hfk.config` | Load and validate private YAML files, and the optional `HFK Plan` sheet when `household.yaml` selects `plan: {source: workbook}` (ADR-0013). Errors name file, key path, and fix, or sheet, row, column, and fix. | `household.yaml`, `declarations.yaml`, `plan.yaml` or the `HFK Plan` sheet's raw rows from `hfk.source`, extension config sections | Typed config objects | Open a workbook itself or read any sheet but `HFK Plan` (its rows come only from the source adapter's read-only loader), infer missing required decisions, calculate reports |
 | Engine | `hfk.engine` | Calculate ownership shares, bucket mappings, scorecards, targets, balances, renewals, rebaseline proposals, and doctor diagnostics. | `Ledger` plus validated config | Pure result objects and diagnostics | Mutate source data, write YAML without an explicit command, call renderers, import extensions |
 | Extensions | `hfk.ext` | Discover optional plugins through `hfk.extensions` entry points. | Extension config section, ledger fields, engine outputs as needed | Extra commands, report sections, and doctor checks | Become required for core use, bypass validation, write to Tiller, import presentation internals |
 | Presentation | `hfk.cli`, `hfk.render` | Provide CLI commands and render text, CSV, and HTML. `hfk serve` (M5) is the local read-only web front door, bound to `127.0.0.1` only. | Result objects and diagnostics | Terminal output and files under the instance output directory | Recalculate business logic, silently patch data, reach around lower-layer APIs |

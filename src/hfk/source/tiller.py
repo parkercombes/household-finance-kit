@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import fnmatch
 import re
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -66,6 +67,44 @@ def read_tiller(path: str | Path) -> Ledger:
             balances=balances,
             accounts=_accounts(transactions, balances),
         )
+    finally:
+        workbook.close()
+
+
+@dataclass(frozen=True)
+class SheetRows:
+    """One optional sheet as raw cells keyed by header name, read without modifying it.
+
+    ``headers`` lists the row-1 header names in sheet order (first occurrence
+    wins); each row is ``(row_number, {header: value})`` with all-blank rows
+    skipped. Cell values are whatever openpyxl returns with ``data_only=True``;
+    the caller validates them.
+    """
+
+    path: Path
+    sheet: str
+    headers: tuple[str, ...]
+    rows: tuple[tuple[int, dict[str, Any]], ...]
+
+
+def read_optional_sheet(path: str | Path, sheet_name: str) -> SheetRows | None:
+    """Read one sheet by header name, or return ``None`` when the workbook lacks it."""
+
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        if sheet_name not in workbook.sheetnames:
+            return None
+        row_iter = workbook[sheet_name].iter_rows(values_only=True)
+        headers = _headers(next(row_iter, ()))
+        rows = tuple(
+            (
+                row_number,
+                {header: (row[index] if index < len(row) else None) for header, index in headers.items()},
+            )
+            for row_number, row in enumerate(row_iter, start=2)
+            if not _blank_row(tuple(row[index] for index in headers.values() if index < len(row)))
+        )
+        return SheetRows(path=Path(path), sheet=sheet_name, headers=tuple(headers), rows=rows)
     finally:
         workbook.close()
 

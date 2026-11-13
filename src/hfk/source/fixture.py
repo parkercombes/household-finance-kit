@@ -55,11 +55,29 @@ BALANCE_HISTORY_HEADERS = [
 
 ACCOUNTS_HEADERS = ["Account", "Institution", "Type", "Class", "Account Status"]
 
+# The optional, user-added plan sheet (TILLER-SCHEMA "HFK Plan"; ADR-0013).
+PLAN_TAB_HEADERS = [
+    "Description",
+    "Who",
+    "Bucket",
+    "Monthly",
+    "Categories",
+    "Paced",
+    "Effective From",
+    "Effective Until",
+    "Annual Bill",
+    "Annual Full",
+    "Account",
+    "Due Month",
+    "Due Day",
+]
+
 SHEET_HEADERS = {
     "Transactions": TRANSACTION_HEADERS,
     "Categories": CATEGORY_HEADERS,
     "Balance History": BALANCE_HISTORY_HEADERS,
     "Accounts": ACCOUNTS_HEADERS,
+    "HFK Plan": PLAN_TAB_HEADERS,
 }
 
 _CENTS = Decimal("0.01")
@@ -75,8 +93,14 @@ def build_fixture(
     drop_columns: Iterable[tuple[str, str]] = (),
     extra_columns: Iterable[tuple[str, str]] = (),
     balance_gap: bool = True,
+    plan_tab: bool = False,
 ) -> Path:
-    """Create a deterministic synthetic Tiller-like workbook and return its path."""
+    """Create a deterministic synthetic Tiller-like workbook and return its path.
+
+    ``plan_tab`` adds an ``HFK Plan`` sheet holding the same lines as
+    ``examples/instance/plan.yaml``. This is the only code that writes such a
+    sheet, and it writes only this synthetic workbook.
+    """
 
     if months < 1:
         raise ValueError("months must be at least 1")
@@ -124,6 +148,16 @@ def build_fixture(
         extras=extras_by_sheet.get("Accounts", ()),
         shuffle_headers=shuffle_headers,
     )
+
+    if plan_tab:
+        _write_sheet(
+            workbook,
+            "HFK Plan",
+            _plan_tab_rows(),
+            drop=drop,
+            extras=extras_by_sheet.get("HFK Plan", ()),
+            shuffle_headers=shuffle_headers,
+        )
 
     workbook.save(output)
     return output
@@ -306,6 +340,44 @@ def _account_rows() -> list[dict[str, object]]:
             "Account Status": "Open",
         },
     ]
+
+
+def _plan_tab_rows() -> list[dict[str, object]]:
+    """The lines of ``examples/instance/plan.yaml`` as sheet rows.
+
+    Cells deliberately mix the shapes a spreadsheet produces: whole and
+    fractional numbers, ``YYYY-MM`` text and date cells for months, and
+    ``yes``/``Yes``/blank for Paced, so the loader is exercised on each.
+    """
+
+    start = "2025-01"
+    blank: dict[str, object] = dict.fromkeys(PLAN_TAB_HEADERS)
+    rows: list[dict[str, object]] = [
+        {"Description": "Example Rent", "Who": "alex", "Bucket": "Fixed Essential",
+         "Monthly": 1200, "Categories": "Rent", "Effective From": start},
+        {"Description": "Example Utilities", "Who": "alex", "Bucket": "Variable Essential",
+         "Monthly": 90.0, "Categories": "Utilities", "Paced": "yes",
+         "Effective From": dt.date(2025, 1, 1)},
+        {"Description": "Example Utilities", "Who": "sam", "Bucket": "Variable Essential",
+         "Monthly": 90, "Categories": " Utilities ", "Paced": "Yes", "Effective From": start},
+        {"Description": "Example Grocer", "Who": "alex", "Bucket": "Variable Essential",
+         "Monthly": 500, "Categories": "Groceries", "Paced": "yes", "Effective From": start,
+         "Effective Until": "2025-06"},
+        {"Description": "Example Grocer", "Who": "alex", "Bucket": "Variable Essential",
+         "Monthly": 550, "Categories": "Groceries", "Paced": "yes",
+         "Effective From": dt.datetime(2025, 7, 1)},  # noqa: DTZ001 - cells are naive
+        {"Description": "Example Transit", "Who": "sam", "Bucket": "Variable Essential",
+         "Monthly": 80, "Categories": "Transit", "Paced": "yes", "Effective From": start},
+        {"Description": "Example Streaming", "Who": "alex", "Bucket": "Fixed Discretionary",
+         "Monthly": 20, "Paced": "no", "Effective From": start},
+        {"Description": "Example Cloud Renewal", "Who": "alex", "Bucket": "Fixed Discretionary",
+         "Monthly": 10, "Categories": "Annual Membership", "Effective From": start,
+         "Annual Bill": 120, "Annual Full": 120, "Account": "Alex Checking",
+         "Due Month": 7, "Due Day": 1},
+        {"Description": "Example Cafe", "Who": "sam", "Bucket": "Variable Discretionary",
+         "Monthly": 60, "Categories": "Dining", "Paced": "yes", "Effective From": start},
+    ]
+    return [blank | row for row in rows]
 
 
 def _month_starts(months: int, end_month: tuple[int, int]) -> list[dt.date]:
