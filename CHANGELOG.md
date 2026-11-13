@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- Proposed ADR-0018 asks the maintainer how tax enters the retirement income-vs-need gap: which streams are taxable, how fixed-dollar thresholds behave in today's dollars, and tax in the per-person view. Roadmap items `M8-05`, `M8-06` and `M10-02` are blocked until it is decided.
 - M8-04 (R4): versioned federal tax tables (YAML tagged with `tax_year` and the publication `source`), a staleness gate on `max_data_age_years` (ADR-0005), and pluggable `none`, `flat` and `bracket` state-tax modules, with bracket and Social Security taxability arithmetic. No federal table ships: irs.gov could not be reached to verify the figures, so the extension fails loudly until the maintainer adds a cited table.
 - M8-03 (R3): itemized retirement expenses in `retirement.yaml`, monthly in today's dollars and flat unless an item declares `real_growth` with a `reason` (ADR-0008); optional `who`, `start_year` and `end_year`. `seed_from_plan: {month: YYYY-MM}` starts from every `HFK Plan` line effective in that month, one expense per line.
 - M8-02 (R2): typed retirement income streams in `retirement.yaml`: `social_security` with a benefit per claim age (62 to 70) and claim-age scenarios that pick one age per person, plus `pension`, `account_drawdown` and `other` with `monthly`, `start_year` and `end_year`. `cola` is required on every stream: `full`, `none`, or a nominal rate, converted to today's dollars with `inflation` as ADR-0008 sets out.
