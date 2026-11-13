@@ -13,7 +13,6 @@ through ``hfk.source.read_tiller``.
 
 from __future__ import annotations
 
-import fnmatch
 import importlib.resources
 import json
 from collections.abc import Callable, Mapping
@@ -26,10 +25,15 @@ from hfk.config._yaml import load_mapping
 from hfk.config.declarations import available_profiles
 from hfk.config.household import SLUG
 from hfk.ledger import BalanceRow, Category, Ledger
-from hfk.source import read_tiller
+from hfk.source import find_workbooks, read_tiller, workbook_sort_key
 
 ANSWER_KEYS = ("people", "accounts", "profile", "groups", "history_start")
 WORKBOOK_GLOB = "Tiller*.xls*"
+# Tiller's Google Sheets download is named "<owner's name> Tiller Spreadsheet - <created
+# date>.xlsx", which Tiller*.xls* does not match (M3-07 parity run).
+SHEETS_GLOB = "*Tiller Spreadsheet*.xls*"
+WORKBOOK_GLOBS = (WORKBOOK_GLOB, SHEETS_GLOB)
+NON_SPEND = "non-spend"
 
 
 class InterviewError(Exception):
@@ -286,7 +290,8 @@ def _group_question(facts: GroupFacts, buckets: tuple[str, ...]) -> Question:
     names = ", ".join(buckets)
     return Question(
         key=f"group:{facts.name}",
-        text=f'Which bucket covers the "{facts.name}" group (categories {categories}): {names}?',
+        text=f'Which bucket covers the "{facts.name}" group (categories {categories}): {names}, '
+        f"or {NON_SPEND} if it is not spending (such as transfers or business costs)?",
     )
 
 
@@ -637,11 +642,14 @@ def _resolve_groups(
                 fix=f"use one of the {profile} buckets: {', '.join(buckets)}",
             )
         bucket = bucket.strip()
+        if bucket.lower() == NON_SPEND:
+            result[facts.name] = NON_SPEND
+            continue
         if bucket not in buckets:
             raise InterviewError(
                 f"bucket {bucket!r} is not one of the {profile} buckets",
                 question=f"group:{facts.name}",
-                fix=f"use one of: {', '.join(buckets)}",
+                fix=f"use one of: {', '.join(buckets)}, or {NON_SPEND}",
             )
         result[facts.name] = bucket
     return result
@@ -689,9 +697,28 @@ def _fact(value: str | None) -> str:
 
 
 def _tiller_glob(workbook: Path) -> str:
-    if fnmatch.fnmatchcase(workbook.name.lower(), WORKBOOK_GLOB.lower()):
-        return WORKBOOK_GLOB
+    """The pattern for household.yaml: generic when it still picks this workbook.
+
+    When ``data/`` holds several matching workbooks and the chosen one is not the
+    newest (``--workbook``), the exact file name is written instead, so later
+    commands read the same workbook the interview read.
+    """
+
+    for pattern in WORKBOOK_GLOBS:
+        matches = find_workbooks(workbook.parent, pattern)
+        if matches and matches[0].resolve() == workbook.resolve():
+            return pattern
     return workbook.name
+
+
+def find_interview_workbooks(data_dir: Path) -> tuple[Path, ...]:
+    """Every workbook in ``data_dir`` with a Tiller download name, newest first."""
+
+    found: dict[Path, Path] = {}
+    for pattern in WORKBOOK_GLOBS:
+        for path in find_workbooks(data_dir, pattern):
+            found.setdefault(path.resolve(), path)
+    return tuple(sorted(found.values(), key=workbook_sort_key, reverse=True))
 
 
 def _header(workbook: Path) -> list[str]:
@@ -778,16 +805,21 @@ def _render_declarations(
     lines.append(f"mapping_source: {_quote('tiller_group')}")
     lines.append("# groups: one bucket per expense group from the Categories sheet, "
                  "answered in the interview.")
-    lines.append("groups:")
+    mapped = [facts for facts in proposal.expense_groups if groups[facts.name] != NON_SPEND]
+    lines.append("groups:" if mapped else "groups: {}")
     for facts in proposal.expense_groups:
+        if groups[facts.name] == NON_SPEND:
+            continue
         categories = ", ".join(facts.categories)
         lines.append(f"  # {facts.name}: categories {categories} in the Categories sheet.")
         lines.append(f"  {_quote(facts.name)}: {_quote(groups[facts.name])}")
+    answered = [facts.name for facts in proposal.expense_groups if groups[facts.name] == NON_SPEND]
     lines.append(
-        "# non_spend_groups: these groups hold only Income or Transfer categories "
-        "in the Categories sheet."
+        "# non_spend_groups: groups that hold only Income or Transfer categories "
+        "in the Categories sheet"
+        + (f", plus {', '.join(answered)}, answered {NON_SPEND} in the interview." if answered else ".")
     )
-    non_spend = ", ".join(_quote(name) for name in proposal.non_spend_groups)
+    non_spend = ", ".join(_quote(name) for name in (*proposal.non_spend_groups, *answered))
     lines.append(f"non_spend_groups: [{non_spend}]")
     lines.append("# overrides: per-category bucket changes, each with a reason.")
     lines.append("overrides: {}")
@@ -825,6 +857,8 @@ def _render_plan(
     lines.append("  # hfk plan check validates this file.")
     lines.append("  lines:")
     for facts in proposal.expense_groups:
+        if groups[facts.name] == NON_SPEND:
+            continue
         categories = ", ".join(facts.categories)
         quoted = ", ".join(_quote(name) for name in facts.categories)
         lines.append(f"    # {facts.name} starter: placeholder target for {categories}.")

@@ -17,6 +17,8 @@ files:
   tiller_glob: "Tiller*.xls*"
 ```
 
+A workbook downloaded from Google Sheets is named after its owner, then `Tiller Spreadsheet - <created date>.xlsx`, which `Tiller*.xls*` does not match. `hfk init` looks for both names in `data/` and writes the pattern that finds the workbook it read: `Tiller*.xls*`, `*Tiller Spreadsheet*.xls*`, or, when `--workbook` chose a workbook that neither pattern would pick as the newest, its exact file name. When `data/` holds several matching workbooks, `hfk init` names the one it read and lists the others.
+
 Temporary lock files beginning with `~$` are ignored. The reader accepts `.xlsx` and `.xlsm` files through `openpyxl` in read-only mode with `data_only=True`. It never saves the workbook.
 
 ## Sheets

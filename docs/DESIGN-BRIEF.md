@@ -136,7 +136,8 @@ Sheets used (header names verified against a real Tiller workbook):
 
 Amount sign: expenses negative, income positive (Tiller convention). Workbooks may be
 named `Tiller Finance v5.xlsm` (version bumps; newest `vN` in `data/` wins; glob
-configurable). Lock files `~$*` are ignored. Extra columns are tolerated (Tiller adds
+configurable), and a Google Sheets download is named after its owner, then
+`Tiller Spreadsheet - <created date>.xlsx`; `hfk init` recognises both. Lock files `~$*` are ignored. Extra columns are tolerated (Tiller adds
 them over time); missing required columns are a loud error naming the sheet and column.
 
 ## 6. Configuration

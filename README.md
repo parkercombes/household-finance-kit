@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` are done, and `M5-17` (interview fixes from real data) is next. `M5-14` and `M5-15` are blocked on the maintainer. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13`, `M5-16` and `M5-17` are done, and `M5-18` (the `HFK Plan` sheet as the only plan source) is next. `M5-14` and `M5-15` are blocked on the maintainer. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 

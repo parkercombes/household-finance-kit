@@ -46,7 +46,13 @@ from hfk.engine import (
     run_doctor,
 )
 from hfk.instance import InstanceError, InstanceReport, write_instance
-from hfk.interview import InterviewError, Question, load_answers, run_interview
+from hfk.interview import (
+    InterviewError,
+    Question,
+    find_interview_workbooks,
+    load_answers,
+    run_interview,
+)
 from hfk.render import money, render_csv, render_html, render_text
 from hfk.serve import DEFAULT_HOST, DEFAULT_PORT, ServeError, make_server, server_url
 from hfk.source import TillerFormatError, find_workbook, read_tiller
@@ -453,14 +459,32 @@ def _prompt(question: Question) -> str:
     return input("> ")
 
 
-def _init_workbook(home: Path) -> Path | None:
+def _init_workbooks(home: Path) -> tuple[Path, ...]:
     data_dir = home / "data"
     if not data_dir.is_dir():
-        return None
-    try:
-        return find_workbook(data_dir)
-    except TillerFormatError:
-        return None
+        return ()
+    return find_interview_workbooks(data_dir)
+
+
+def _chosen_workbook(home: Path, option: str) -> Path:
+    """The ``--workbook`` path, which must be a file inside the instance's ``data/``."""
+
+    path = Path(option)
+    if not path.is_absolute() and not path.exists():
+        path = home / "data" / option
+    if not path.is_file():
+        raise InterviewError(
+            f"--workbook {option} is not a file",
+            question="workbook",
+            fix="pass the path of a workbook in data/",
+        )
+    if path.resolve().parent != (home / "data").resolve():
+        raise InterviewError(
+            f"--workbook {option} is not in {home / 'data'}",
+            question="workbook",
+            fix="copy the workbook into data/ first; every hfk report reads it from there",
+        )
+    return path
 
 
 def _print_instance(report: InstanceReport, args: argparse.Namespace) -> None:
@@ -487,7 +511,9 @@ def _init_plain(args: argparse.Namespace) -> int:
     return 0
 
 
-def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int:
+def _init_interview(
+    args: argparse.Namespace, home: Path, workbook: Path, candidates: tuple[Path, ...]
+) -> int:
     if args.answers is None and not sys.stdin.isatty():
         print(
             "init: no terminal attached for the interview: fix=pass --answers <file>",
@@ -513,6 +539,14 @@ def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int
     _print_instance(report, args)
     for line in result.summary:
         print(line)
+    others = [path.name for path in candidates if path.resolve() != workbook.resolve()]
+    if others:
+        reason = "chosen with --workbook" if args.workbook is not None else "the newest"
+        print(
+            f"note: data/ holds {len(candidates)} Tiller workbooks; read {workbook.name} "
+            f"({reason}); not read: {', '.join(others)}; "
+            "pass --workbook <path> to read another"
+        )
     print(f"next: run hfk doctor --home {args.dir}")
     print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
     print(f"then: set your targets in plan.yaml and run hfk plan check --home {args.dir}")
@@ -521,7 +555,16 @@ def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int
 
 def _init(args: argparse.Namespace) -> int:
     home = Path(args.dir)
-    workbook = _init_workbook(home)
+    candidates = _init_workbooks(home)
+    workbook = candidates[0] if candidates else None
+    if args.workbook is not None:
+        try:
+            workbook = _chosen_workbook(home, args.workbook)
+        except InterviewError as error:
+            print(f"init: {error}", file=sys.stderr)
+            return 1
+        if workbook.resolve() not in {path.resolve() for path in candidates}:
+            candidates = (*candidates, workbook)
     if workbook is None and args.answers is not None:
         print(
             f"init: --answers given but no Tiller workbook found in {home / 'data'}: "
@@ -531,7 +574,7 @@ def _init(args: argparse.Namespace) -> int:
         return 1
     if workbook is None:
         return _init_plain(args)
-    return _init_interview(args, home, workbook)
+    return _init_interview(args, home, workbook, candidates)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -737,6 +780,10 @@ def _build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument(
         "--answers",
         help="YAML file of interview answers; required when no terminal is attached.",
+    )
+    init_parser.add_argument(
+        "--workbook",
+        help="Workbook in data/ to interview from (default: the newest Tiller workbook there).",
     )
     init_parser.set_defaults(func=_init)
 

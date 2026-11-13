@@ -565,3 +565,115 @@ def test_sheets_active_status_counts_as_open(tmp_path: Path) -> None:
     assert "Old Card" not in [facts.name for facts in proposal.accounts]
     for name in ("Alex Checking", "Sam Checking", "Joint Card", "Savings", "No Status Card"):
         assert name in [facts.name for facts in proposal.accounts], name
+
+
+SHEETS_NAME = "Alex Example Tiller Spreadsheet - 2026-04-01.xlsx"
+
+
+def test_group_answered_non_spend_is_excluded_from_spend(tmp_path: Path) -> None:
+    answers = four_bucket_answers()
+    answers["groups"]["Subscriptions"] = "non-spend"
+    result = init_with_answers(tmp_path, answers)
+    home = tmp_path / "finances"
+
+    assert result.returncode == 0, result.stderr
+    declarations = load_declarations(home, people=("alex", "sam"))
+    assert "Subscriptions" not in dict(declarations.groups)
+    assert declarations.non_spend_groups == ("Income", "Transfers", "Subscriptions")
+    text = (home / "declarations.yaml").read_text(encoding="utf-8")
+    assert "Subscriptions, answered non-spend in the interview" in text
+    plan = (home / "plan.yaml").read_text(encoding="utf-8")
+    assert "Subscriptions starter" not in plan
+    assert "Housing starter" in plan
+
+    doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
+    assert doctor.returncode == 0, doctor.stdout
+    check = run_hfk("plan", "check", "--home", str(home))
+    assert check.returncode == 0, check.stdout
+
+
+def test_non_spend_answer_is_offered_in_the_prompt(tmp_path: Path) -> None:
+    home = make_home(tmp_path)
+    replies = {**prompt_replies(), "group:Subscriptions": "Non-Spend"}
+    scripted = ScriptedAsk(replies)
+    result = run_interview(
+        home / "data" / "Tiller-Example.xlsx", answers=None, ask=scripted
+    )
+    question = next(q for q in scripted.asked if q.key == "group:Subscriptions")
+    assert "or non-spend" in question.text
+    assert '"Subscriptions"' in result.documents["declarations.yaml"]
+    assert "Subscriptions starter" not in result.documents["plan.yaml"]
+
+
+def test_sheets_download_name_is_found(tmp_path: Path) -> None:
+    home = tmp_path / "finances"
+    build_fixture(home / "data" / SHEETS_NAME)
+    answers_path = write_answers(tmp_path, four_bucket_answers())
+
+    result = run_hfk("init", str(home), "--answers", str(answers_path))
+
+    assert result.returncode == 0, result.stderr
+    assert f"workbook: {SHEETS_NAME}" in result.stdout
+    household = load_household(home)
+    assert household.tiller_glob == "*Tiller Spreadsheet*.xls*"
+    doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
+    assert doctor.returncode == 0, doctor.stdout
+    assert "doctor: 0 errors" in doctor.stdout
+
+
+def test_several_workbooks_name_the_one_read_and_workbook_overrides(tmp_path: Path) -> None:
+    def setup(name: str) -> Path:
+        home = tmp_path / name
+        build_fixture(home / "data" / "Tiller-Example.xlsx")
+        build_fixture(home / "data" / SHEETS_NAME, months=4)
+        os.utime(home / "data" / "Tiller-Example.xlsx", (1_700_000_000, 1_700_000_000))
+        os.utime(home / "data" / SHEETS_NAME, (1_800_000_000, 1_800_000_000))
+        return home
+
+    answers_path = write_answers(tmp_path, four_bucket_answers())
+
+    home = setup("newest")
+    result = run_hfk("init", str(home), "--answers", str(answers_path))
+    assert result.returncode == 0, result.stderr
+    assert f"workbook: {SHEETS_NAME}" in result.stdout
+    assert (
+        f"note: data/ holds 2 Tiller workbooks; read {SHEETS_NAME} (the newest); "
+        "not read: Tiller-Example.xlsx; pass --workbook <path> to read another"
+    ) in result.stdout
+    assert load_household(home).tiller_glob == "*Tiller Spreadsheet*.xls*"
+
+    home = setup("chosen")
+    result = run_hfk(
+        "init", str(home), "--answers", str(answers_path),
+        "--workbook", str(home / "data" / "Tiller-Example.xlsx"),
+    )
+    assert result.returncode == 0, result.stderr
+    assert "workbook: Tiller-Example.xlsx" in result.stdout
+    assert "read Tiller-Example.xlsx (chosen with --workbook)" in result.stdout
+    # Tiller*.xls* still picks this file, so the generic pattern is kept.
+    assert load_household(home).tiller_glob == "Tiller*.xls*"
+    doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
+    assert doctor.returncode == 0, doctor.stdout
+
+    outside = tmp_path / "elsewhere.xlsx"
+    build_fixture(outside)
+    result = run_hfk(
+        "init", str(tmp_path / "third"), "--answers", str(answers_path),
+        "--workbook", str(outside),
+    )
+    assert result.returncode == 1
+    assert "copy the workbook into data/" in result.stderr
+
+
+def test_older_workbook_chosen_gets_its_exact_name(tmp_path: Path) -> None:
+    home = tmp_path / "finances"
+    build_fixture(home / "data" / "Tiller Finance v4.xlsx")
+    build_fixture(home / "data" / "Tiller Finance v5.xlsx")
+    answers_path = write_answers(tmp_path, four_bucket_answers())
+
+    result = run_hfk(
+        "init", str(home), "--answers", str(answers_path), "--workbook", "Tiller Finance v4.xlsx"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert load_household(home).tiller_glob == "Tiller Finance v4.xlsx"
