@@ -194,10 +194,7 @@ Implemented (M8-02, `hfk.ext.retirement.income`): `income` lists typed streams, 
 
 Implemented (M8-03, `hfk.ext.retirement.expenses`): `expenses.items` lists monthly costs in today's dollars, each for the household or one person (`who`), optionally limited by `start_year` and `end_year`. They stay flat in today's dollars: `inflation` never touches them (ADR-0008). One item may declare `real_growth`, a yearly rate above prices, and must then give a `reason`. `expenses.seed_from_plan: {month: YYYY-MM}` turns every line of the household's `HFK Plan` sheet effective in that month into an expense, with its description, person and amount, before the listed items.
 
-The planned rest of the schema includes:
-
-- Versioned tax data tagged with tax year.
-- State-tax module selection, such as none, flat, or bracket.
+Implemented (M8-04, `hfk.ext.retirement.tax`): federal tax tables are versioned YAML data files tagged with `tax_year` and a `source` naming the official IRS or SSA publication behind every figure. They ship in `hfk/ext/retirement/tax_data/`. `retirement.yaml`'s `tax` section declares `filing_status` (`married_joint` or `single`), `max_data_age_years` (the staleness limit), and `state`: the `none`, `flat` or `bracket` module, with the household's own state figures. The newest table is refused when it is more than `max_data_age_years` older than the current year (ADR-0005). **No federal table ships yet**: the 2026 figures could not be read from irs.gov while M8-04 was built, so the extension stops with "no federal tax table is installed" until the maintainer adds a cited one.
 
 Claim-age scenarios are mutually exclusive alternatives, not a timeline. For example, a Social Security claim-age scenario compares separate possible starts; it does not imply that a person claims at several ages over time.
 

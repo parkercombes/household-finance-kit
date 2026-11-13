@@ -35,6 +35,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "hfk.profiles" = ["*.yaml"]
+"hfk.ext.retirement" = ["tax_data/*.yaml", "tax_data/*.md"]
 "hfk.templates" = ["*.yaml", "*.md", "*.json", "gitignore", "pre-commit", "tiller_guard"]
 
 [tool.pytest.ini_options]

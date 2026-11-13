@@ -26,3 +26,7 @@ expenses:
     - {label: "Healthcare", who: alex, monthly: 400, real_growth: 0.02, reason: "medical costs have outpaced prices"}
     - {label: "Healthcare", who: sam, monthly: 400, real_growth: 0.02, reason: "medical costs have outpaced prices"}
     - {label: "Car", monthly: 250, start_year: 2035, end_year: 2044}
+tax:
+  filing_status: married_joint   # married_joint or single
+  max_data_age_years: 1          # refuse federal tax data older than this
+  state: {module: flat, rate: 0.04}   # none, flat, or bracket, with your state's figures
