@@ -5,7 +5,7 @@ Last verified: 2026-11-13
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M10-03`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+The next item is `M10-05`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
 `tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -173,7 +173,7 @@ Goal: document and preserve clean boundaries for useful extensions that are outs
 |---|---|---:|---|---|
 | `M10-01` | Document FSA and reimbursement tracking as a community extension candidate rather than core behavior. | `done` | `M6-05` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms [EXTENSIONS](docs/EXTENSIONS.md) lists FSA or reimbursement tracking as out-of-core. Result 2026-11-13: passed; privacy scan clean. [EXTENSIONS](EXTENSIONS.md) has a "Community extension candidates" section saying these features are not core and will not be added to it. It lists FSA and reimbursement tracking as out of core, with why (plan-specific rules), the shape of an extension package (its own config file, read-only ledger use, a deadline `doctor()`, a claims report), and the boundary that reimbursements never rewrite core shares or buckets. |
 | `M10-02` | Document employer pension add-ons as separate public, private, or community packages, not built into the generic retirement extension. | `blocked` | `M8-06` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms employer-specific pension schedules are extension candidates only. Blocked 2026-11-13: depends on `M8-06`, which waits on proposed ADR-0018. |
-| `M10-03` | Document home purchase modelling as a separate extension candidate, not part of core budgeting or retirement mechanics. | `todo` | `M6-05` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms home purchase modelling is named as out-of-core. |
+| `M10-03` | Document home purchase modelling as a separate extension candidate, not part of core budgeting or retirement mechanics. | `done` | `M6-05` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms home purchase modelling is named as out-of-core. Result 2026-11-13: passed; privacy scan clean. [EXTENSIONS](EXTENSIONS.md) lists home purchase modelling under "Community extension candidates" as out of core and out of the built-in `retirement` extension. It says why (core does not project, and `retirement` models no balances), the shape of a package (its own `home.yaml`, amortisation arithmetic, a report beside the plan, no writes), and the mechanics-not-advice boundary. |
 | `M10-05` | Leave settle-up for more than two people to other implementers and document the boundary clearly. | `todo` | `M7-01` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms core `settle_up` remains exactly two people while N-person ownership stays in the core engine. |
 
 ## Open questions

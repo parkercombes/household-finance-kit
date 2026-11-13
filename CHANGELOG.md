@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M10-03: [EXTENSIONS](docs/EXTENSIONS.md) lists home purchase modelling as a community extension candidate, out of core and out of `retirement`, with why, the shape of a package, and the mechanics-not-advice boundary.
 - M10-01: [EXTENSIONS](docs/EXTENSIONS.md) gains a "Community extension candidates" section listing FSA and reimbursement tracking as out of core, with why, the shape of an extension, and its boundary with core.
 - Proposed ADR-0018 asks the maintainer how tax enters the retirement income-vs-need gap: which streams are taxable, how fixed-dollar thresholds behave in today's dollars, and tax in the per-person view. Roadmap items `M8-05`, `M8-06` and `M10-02` are blocked until it is decided.
 - M8-04 (R4): versioned federal tax tables (YAML tagged with `tax_year` and the publication `source`), a staleness gate on `max_data_age_years` (ADR-0005), and pluggable `none`, `flat` and `bracket` state-tax modules, with bracket and Social Security taxability arithmetic. No federal table ships: irs.gov could not be reached to verify the figures, so the extension fails loudly until the maintainer adds a cited table.
