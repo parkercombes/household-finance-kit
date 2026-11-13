@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M8-03 (R3): itemized retirement expenses in `retirement.yaml`, monthly in today's dollars and flat unless an item declares `real_growth` with a `reason` (ADR-0008); optional `who`, `start_year` and `end_year`. `seed_from_plan: {month: YYYY-MM}` starts from every `HFK Plan` line effective in that month, one expense per line.
 - M8-02 (R2): typed retirement income streams in `retirement.yaml`: `social_security` with a benefit per claim age (62 to 70) and claim-age scenarios that pick one age per person, plus `pension`, `account_drawdown` and `other` with `monthly`, `start_year` and `end_year`. `cola` is required on every stream: `full`, `none`, or a nominal rate, converted to today's dollars with `inflation` as ADR-0008 sets out.
 - M8-01 (R1): the built-in `retirement` extension, registered through this distribution's entry point, with its `retirement.yaml` schema: `people` (every household person, with `birth` year-month and `retire_year`) and `assumptions` (`until_age` required, `inflation` optional and capped at 0.20). `hfk doctor` checks it when the extension is enabled. Example: `examples/retirement.example.yaml`.
 - Proposed ADR-0017 asks the maintainer who paid a shared account's charges in a settle-up statement, which decides the net transfer. Roadmap items `M7-04` to `M7-07` are blocked until it is decided.

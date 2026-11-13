@@ -192,9 +192,10 @@ Implemented (M8-02, `hfk.ext.retirement.income`): `income` lists typed streams, 
 - `pension`, `account_drawdown` and `other` take `monthly`, `start_year` and an optional inclusive `end_year`. An `account_drawdown` is the withdrawal the household declares; no account balance is modelled.
 - `cola: full` keeps a stream flat in today's dollars. `cola: none` keeps it flat in nominal dollars, so its real value falls by `inflation` each year after it starts. A number is a nominal growth rate, converted to real with `inflation`. `inflation` is required as soon as any stream is not `full` (ADR-0008).
 
+Implemented (M8-03, `hfk.ext.retirement.expenses`): `expenses.items` lists monthly costs in today's dollars, each for the household or one person (`who`), optionally limited by `start_year` and `end_year`. They stay flat in today's dollars: `inflation` never touches them (ADR-0008). One item may declare `real_growth`, a yearly rate above prices, and must then give a `reason`. `expenses.seed_from_plan: {month: YYYY-MM}` turns every line of the household's `HFK Plan` sheet effective in that month into an expense, with its description, person and amount, before the listed items.
+
 The planned rest of the schema includes:
 
-- Itemized expenses in today's dollars, with inflation assumptions.
 - Versioned tax data tagged with tax year.
 - State-tax module selection, such as none, flat, or bracket.
 

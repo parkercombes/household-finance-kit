@@ -24,11 +24,14 @@ def example() -> dict[str, Any]:
 
 
 def without_sam() -> dict[str, Any]:
-    """The example with Sam, and Sam's income streams, removed."""
+    """The example with Sam, and Sam's income streams and expenses, removed."""
 
     data = example()
     del data["people"]["sam"]
     data["income"] = [stream for stream in data["income"] if stream["who"] != "sam"]
+    data["expenses"]["items"] = [
+        item for item in data["expenses"]["items"] if item.get("who") != "sam"
+    ]
     return data
 
 

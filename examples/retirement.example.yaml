@@ -17,3 +17,12 @@ income:
   - {type: pension, who: sam, monthly: 1500, start_year: 2037, cola: none}
   - {type: account_drawdown, who: alex, monthly: 1000, start_year: 2035, end_year: 2060, cola: full}
   - {type: other, label: "Example rent", who: sam, monthly: 300, start_year: 2037, end_year: 2041, cola: 0.02}
+expenses:
+  # Monthly, in today's dollars, flat unless an item declares real_growth with a reason.
+  # seed_from_plan: {month: 2026-08}   # optionally start from your HFK Plan lines that month
+  items:
+    - {label: "Housing", monthly: 1500}
+    - {label: "Food", monthly: 800}
+    - {label: "Healthcare", who: alex, monthly: 400, real_growth: 0.02, reason: "medical costs have outpaced prices"}
+    - {label: "Healthcare", who: sam, monthly: 400, real_growth: 0.02, reason: "medical costs have outpaced prices"}
+    - {label: "Car", monthly: 250, start_year: 2035, end_year: 2044}
