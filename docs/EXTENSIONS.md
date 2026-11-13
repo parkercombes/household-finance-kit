@@ -107,12 +107,17 @@ The imports show the rule: extensions may import the engine, ledger, and config 
 
 ## Config sections and validation
 
-Each extension owns its configuration. Small extensions may own a section in `household.yaml` or `declarations.yaml`. Larger features may own a separate file in the private instance directory, such as `retirement.yaml`. Either way, validation is part of the extension contract.
+Each extension owns its configuration. Implemented (M6-03): an extension's config is a separate YAML file in the private instance directory, named by its `config_section`, such as `retirement.yaml`. Whether a small extension may instead own a section inside `household.yaml` or `declarations.yaml` is open: see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance).
 
-The planned behavior is fail-loud:
+`hfk.ext.load_enabled_extensions(home, household=..., installed=...)` reads config only for the extensions listed under `extensions` in `household.yaml`. The file of an extension that is not enabled is never opened, so a stale or half-written file cannot break anything. For an enabled extension, every problem is a `ConfigError` naming the file, key path, and fix:
 
-- If an enabled extension's section is missing, `hfk doctor` reports the file, key path, and fix.
-- If a key has the wrong type, validation reports the exact key path and expected shape.
+- An enabled extension that is not installed names its `extensions[N]` entry in `household.yaml`.
+- An enabled extension whose required extensions (`requires.extensions`) are not enabled names the missing one.
+- A missing config file, unparseable YAML, or a value the extension's `schema` rejects names the extension's file.
+
+Behaviour that is still planned:
+
+- `hfk doctor` reports these problems (M6-04).
 - If an extension requires a ledger field that the selected source adapter cannot provide, the command stops before producing numbers.
 - If config conflicts, the extension reports the conflict instead of guessing.
 

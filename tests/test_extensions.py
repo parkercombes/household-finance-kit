@@ -8,20 +8,24 @@ from pathlib import Path
 from typing import ClassVar
 
 import pytest
+import yaml
 from ext_fixture import forget, install_extension
 
+from hfk.config import ConfigError, Household, load_household
 from hfk.ext import (
     ENTRY_POINT_GROUP,
     ContractError,
     ExtensionCommand,
     ReportSection,
     discover_extensions,
+    load_enabled_extensions,
     load_extensions,
     validate_extension,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src" / "hfk"
+INSTANCE_EXAMPLE = ROOT / "examples" / "instance"
 
 EXAMPLE_SOURCE = '''
 class ExampleExtension:
@@ -269,3 +273,80 @@ def test_the_documented_minimal_extension_passes_the_contract():
 
     assert extension.config_section == "example.yaml"
     assert [command.name for command in extension.commands] == ["example"]
+
+
+def _schema(data, path):
+    if not isinstance(data.get("enabled_reason"), str):
+        raise ConfigError(
+            "enabled_reason must be text",
+            file=path,
+            key="enabled_reason",
+            fix="write one sentence",
+        )
+    return {"enabled_reason": data["enabled_reason"]}
+
+
+class Configured(Complete):
+    config_section = "example.yaml"
+    schema = staticmethod(_schema)
+
+
+def household_with(tmp_path: Path, extensions: list[str]) -> Household:
+    data = yaml.safe_load((INSTANCE_EXAMPLE / "household.yaml").read_text(encoding="utf-8"))
+    data["extensions"] = extensions
+    path = tmp_path / "household.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return load_household(path)
+
+
+def test_extension_config_sections(tmp_path):
+    installed = (validate_extension(Configured(), entry_point="example"),)
+    (tmp_path / "example.yaml").write_text("enabled_reason: [not, text\n", encoding="utf-8")
+
+    # Disabled: the malformed file is never read.
+    disabled = household_with(tmp_path, [])
+    assert load_enabled_extensions(tmp_path, household=disabled, installed=installed) == ()
+
+    # Enabled and malformed: a loud error naming the file.
+    enabled = household_with(tmp_path, ["example"])
+    with pytest.raises(ConfigError) as caught:
+        load_enabled_extensions(tmp_path, household=enabled, installed=installed)
+    assert caught.value.file == tmp_path / "example.yaml"
+
+    (tmp_path / "example.yaml").write_text("enabled_reason: 7\n", encoding="utf-8")
+    with pytest.raises(ConfigError) as caught:
+        load_enabled_extensions(tmp_path, household=enabled, installed=installed)
+    assert (caught.value.key, caught.value.fix) == ("enabled_reason", "write one sentence")
+
+    (tmp_path / "example.yaml").write_text("enabled_reason: we share a card\n", encoding="utf-8")
+    loaded = load_enabled_extensions(tmp_path, household=enabled, installed=installed)
+    assert [item.extension.name for item in loaded] == ["example"]
+    assert loaded[0].config == {"enabled_reason": "we share a card"}
+
+    (tmp_path / "example.yaml").unlink()
+    with pytest.raises(ConfigError) as caught:
+        load_enabled_extensions(tmp_path, household=enabled, installed=installed)
+    assert "config file is missing" in caught.value.problem
+
+
+def test_enabled_extension_must_be_installed_and_have_its_requirements(tmp_path):
+    installed = (validate_extension(Complete(), entry_point="example"),)
+
+    missing = household_with(tmp_path, ["example", "settle_up"])
+    with pytest.raises(ConfigError) as caught:
+        load_enabled_extensions(tmp_path, household=missing, installed=installed)
+    assert caught.value.key == "extensions[1]"
+    assert "'settle_up' is enabled but not installed (installed: example)" in caught.value.problem
+
+    needy = type("Needy", (Complete,), {"requires": {"extensions": ["settle_up"]}})
+    installed = (validate_extension(needy(), entry_point="example"),)
+    alone = household_with(tmp_path, ["example"])
+    with pytest.raises(ConfigError, match="requires extension 'settle_up'"):
+        load_enabled_extensions(tmp_path, household=alone, installed=installed)
+
+
+def test_extension_without_config_loads_none(tmp_path):
+    installed = (validate_extension(Complete(), entry_point="example"),)
+    enabled = household_with(tmp_path, ["example"])
+    loaded = load_enabled_extensions(tmp_path, household=enabled, installed=installed)
+    assert loaded[0].config is None

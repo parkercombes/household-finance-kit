@@ -1,4 +1,4 @@
-"""Extensions layer: entry-point discovery (M6-01) and the contract (M6-02; ADR-0006).
+"""Extensions layer: discovery (M6-01), the contract (M6-02), and config sections (M6-03).
 
 Extensions are installed Python packages that register an object, or a
 factory returning one, under the entry-point group ``hfk.extensions``. Core
@@ -15,6 +15,12 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
+from hfk.ext.config import (
+    EnabledExtension,
+    enabled_extension,
+    load_enabled_extensions,
+    load_extension_config,
+)
 from hfk.ext.contract import (
     CONTRACT_MAJOR,
     ContractError,
@@ -159,12 +165,16 @@ __all__ = [
     "DiscoveredExtension",
     "Discovery",
     "DiscoveryProblem",
+    "EnabledExtension",
     "Extension",
     "ExtensionCommand",
     "LoadedExtensions",
     "ReportSection",
     "Requirements",
     "discover_extensions",
+    "enabled_extension",
+    "load_enabled_extensions",
+    "load_extension_config",
     "load_extensions",
     "validate_extension",
 ]
