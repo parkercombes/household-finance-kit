@@ -9,3 +9,11 @@ people:
 assumptions:
   until_age: 95        # the track runs through the year the youngest person turns 95
   inflation: 0.025     # annual; converts streams that do not track inflation fully
+income:
+  # Social Security: the monthly benefit for each claim age to compare. A scenario
+  # picks one claim age per person; the ages are alternatives, not a timeline.
+  - {type: social_security, who: alex, cola: full, claim_ages: {62: 1400, 67: 2000, 70: 2480}}
+  - {type: social_security, who: sam, cola: full, claim_ages: {62: 1100, 67: 1600, 70: 2000}}
+  - {type: pension, who: sam, monthly: 1500, start_year: 2037, cola: none}
+  - {type: account_drawdown, who: alex, monthly: 1000, start_year: 2035, end_year: 2060, cola: full}
+  - {type: other, label: "Example rent", who: sam, monthly: 300, start_year: 2037, end_year: 2041, cola: 0.02}

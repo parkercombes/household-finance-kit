@@ -23,6 +23,15 @@ def example() -> dict[str, Any]:
     return copy.deepcopy(yaml.safe_load(EXAMPLE.read_text(encoding="utf-8")))
 
 
+def without_sam() -> dict[str, Any]:
+    """The example with Sam, and Sam's income streams, removed."""
+
+    data = example()
+    del data["people"]["sam"]
+    data["income"] = [stream for stream in data["income"] if stream["who"] != "sam"]
+    return data
+
+
 def load(tmp_path: Path, data: dict[str, Any]):
     from hfk.ext.retirement.schema import load_retirement
 
@@ -89,8 +98,7 @@ def test_people_must_match_household(tmp_path):
     household = load_household(INSTANCE_EXAMPLE)
     check_people(load(tmp_path, example()), household)
 
-    missing = example()
-    del missing["people"]["sam"]
+    missing = without_sam()
     with pytest.raises(ConfigError) as caught:
         check_people(load(tmp_path, missing), household)
     assert caught.value.key == "people"
@@ -129,8 +137,7 @@ def test_doctor_checks_retirement_when_enabled(tmp_path):
     shutil.copyfile(EXAMPLE, home / "retirement.yaml")
     assert doctor().ok
 
-    broken = example()
-    del broken["people"]["sam"]
+    broken = without_sam()
     (home / "retirement.yaml").write_text(yaml.safe_dump(broken), encoding="utf-8")
     errors = doctor().errors()
     assert [(d.code, d.where) for d in errors] == [("retirement-config", "retirement.yaml key=people")]

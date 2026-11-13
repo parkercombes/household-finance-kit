@@ -186,9 +186,14 @@ Input lives in `retirement.yaml` in the private instance. The extension is regis
 
 Implemented (M8-01, `hfk.ext.retirement.schema`): `people` maps every person slug from `household.yaml` to a `birth` year-month and a `retire_year`, and `assumptions` holds a required `until_age` (the track runs through the year the youngest person reaches it) and an optional annual `inflation` such as `0.025`. A rate above `0.20` is refused, because `2.5` meant as 2.5 percent would otherwise be read as 250 percent. `hfk doctor` checks the file when the extension is enabled. See `examples/retirement.example.yaml`.
 
+Implemented (M8-02, `hfk.ext.retirement.income`): `income` lists typed streams, each a monthly amount in today's dollars with a required `cola`:
+
+- `social_security` lists `claim_ages`, the monthly benefit for each claim age from 62 to 70 that the household wants to compare. A scenario picks one listed age per person; hfk never picks one. The stream starts in the year the person reaches that age, pays for the months from the birth month on in that year, and pays twelve months a year after that.
+- `pension`, `account_drawdown` and `other` take `monthly`, `start_year` and an optional inclusive `end_year`. An `account_drawdown` is the withdrawal the household declares; no account balance is modelled.
+- `cola: full` keeps a stream flat in today's dollars. `cola: none` keeps it flat in nominal dollars, so its real value falls by `inflation` each year after it starts. A number is a nominal growth rate, converted to real with `inflation`. `inflation` is required as soon as any stream is not `full` (ADR-0008).
+
 The planned rest of the schema includes:
-- Income streams with type `social_security`, `pension`, `account_drawdown`, or `other`.
-- Optional COLA per income stream. Income is flat after retirement unless COLA is declared.
+
 - Itemized expenses in today's dollars, with inflation assumptions.
 - Versioned tax data tagged with tax year.
 - State-tax module selection, such as none, flat, or bracket.

@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M8-02 (R2): typed retirement income streams in `retirement.yaml`: `social_security` with a benefit per claim age (62 to 70) and claim-age scenarios that pick one age per person, plus `pension`, `account_drawdown` and `other` with `monthly`, `start_year` and `end_year`. `cola` is required on every stream: `full`, `none`, or a nominal rate, converted to today's dollars with `inflation` as ADR-0008 sets out.
 - M8-01 (R1): the built-in `retirement` extension, registered through this distribution's entry point, with its `retirement.yaml` schema: `people` (every household person, with `birth` year-month and `retire_year`) and `assumptions` (`until_age` required, `inflation` optional and capped at 0.20). `hfk doctor` checks it when the extension is enabled. Example: `examples/retirement.example.yaml`.
 - Proposed ADR-0017 asks the maintainer who paid a shared account's charges in a settle-up statement, which decides the net transfer. Roadmap items `M7-04` to `M7-07` are blocked until it is decided.
 - M7-03: off-ledger shared items in `shared-items/YYYY-MM.yaml` for settle-up, validated for amount, `paid_by`, `weights` (people from `household.yaml`, summing to exactly 1), and bucket. `hfk doctor` reports every bad file, including one not named after a month. The instance's `shared-items/README.md` now explains the format.

@@ -1,5 +1,7 @@
 """``retirement.yaml``: people and household assumptions (M8-01, R1; ADR-0008).
 
+Income streams (``income``, R2) are validated by ``hfk.ext.retirement.income``.
+
 The retirement extension models arithmetic, not advice. Its input is the
 instance's own ``retirement.yaml`` (proposed ADR-0016, option 1)::
 
@@ -42,9 +44,10 @@ from hfk.config._yaml import (
 )
 from hfk.config.errors import key_path
 from hfk.config.household import SLUG
+from hfk.ext.retirement.income import IncomeStream, load_income
 
 CONFIG_FILE = "retirement.yaml"
-TOP_LEVEL_KEYS = ("schema_version", "people", "assumptions")
+TOP_LEVEL_KEYS = ("schema_version", "people", "assumptions", "income")
 PERSON_KEYS = ("birth", "retire_year")
 ASSUMPTION_KEYS = ("until_age", "inflation")
 BIRTH = re.compile(r"^(\d{4})-(\d{2})$")
@@ -81,6 +84,7 @@ class RetirementConfig:
     schema_version: int
     people: tuple[RetirementPerson, ...]
     assumptions: Assumptions
+    income: tuple[IncomeStream, ...] = ()
 
     def person(self, slug: str) -> RetirementPerson | None:
         for person in self.people:
@@ -109,8 +113,18 @@ def load_retirement(data: dict[str, Any], path: Path) -> RetirementConfig:
     schema_version = require_schema_version(data, path)
     assumptions = _assumptions(require(data, "assumptions", path), path)
     people = _people(require(data, "people", path), path, assumptions)
+    income = load_income(
+        data.get("income", []),
+        path,
+        people=tuple(person.slug for person in people),
+        inflation=assumptions.inflation,
+    )
     return RetirementConfig(
-        path=path, schema_version=schema_version, people=people, assumptions=assumptions
+        path=path,
+        schema_version=schema_version,
+        people=people,
+        assumptions=assumptions,
+        income=income,
     )
 
 
