@@ -182,9 +182,11 @@ Regression testing should compare the planned computation against a hand-built h
 
 Planned for M8, `retirement` is an income-vs-need model. It models mechanics, not advice. It must not recommend financial products, claiming strategies, Roth conversion plans, or optimized behavior.
 
-Input lives in `retirement.yaml` in the private instance. The planned schema includes:
+Input lives in `retirement.yaml` in the private instance. The extension is registered through this distribution's `hfk.extensions` entry point; a household enables it with `extensions: [retirement]`.
 
-- People, with birth year-month and retirement year.
+Implemented (M8-01, `hfk.ext.retirement.schema`): `people` maps every person slug from `household.yaml` to a `birth` year-month and a `retire_year`, and `assumptions` holds a required `until_age` (the track runs through the year the youngest person reaches it) and an optional annual `inflation` such as `0.025`. A rate above `0.20` is refused, because `2.5` meant as 2.5 percent would otherwise be read as 250 percent. `hfk doctor` checks the file when the extension is enabled. See `examples/retirement.example.yaml`.
+
+The planned rest of the schema includes:
 - Income streams with type `social_security`, `pension`, `account_drawdown`, or `other`.
 - Optional COLA per income stream. Income is flat after retirement unless COLA is declared.
 - Itemized expenses in today's dollars, with inflation assumptions.
