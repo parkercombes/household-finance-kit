@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -39,7 +39,7 @@ TOP_LEVEL_KEYS = (
     "plan",
 )
 PLAN_SOURCES = ("file", "workbook")
-ACCOUNT_KEYS = ("owner", "shared", "kind", "unsynced")
+ACCOUNT_KEYS = ("owner", "shared", "kind", "unsynced", "closed", "note")
 
 
 @dataclass(frozen=True)
@@ -60,6 +60,8 @@ class AccountOwnership:
     weights: tuple[tuple[str, Decimal], ...]
     kind: str | None = None
     unsynced: bool = False
+    closed: date | None = None
+    note: str | None = None
 
     @property
     def owner(self) -> str | None:
@@ -234,6 +236,12 @@ def _accounts(value: Any, slugs: set[str], path: Path) -> tuple[AccountOwnership
                     fix="write unsynced as true or false",
                 )
             unsynced = raw_unsynced
+        closed = None
+        if "closed" in entry:
+            closed = _closed_date(entry["closed"], path, *parents, "closed")
+        note = None
+        if "note" in entry:
+            note = require_text(entry["note"], path, *parents, "note")
         has_owner = "owner" in entry
         has_shared = "shared" in entry
         if has_owner == has_shared:
@@ -249,8 +257,38 @@ def _accounts(value: Any, slugs: set[str], path: Path) -> tuple[AccountOwnership
             weights: tuple[tuple[str, Decimal], ...] = ((owner, Decimal(1)),)
         else:
             weights = _shared_weights(entry["shared"], slugs, path, *parents, "shared")
-        accounts.append(AccountOwnership(name=name, weights=weights, kind=kind, unsynced=unsynced))
+        accounts.append(
+            AccountOwnership(
+                name=name,
+                weights=weights,
+                kind=kind,
+                unsynced=unsynced,
+                closed=closed,
+                note=note,
+            )
+        )
     return tuple(accounts)
+
+
+def _closed_date(value: Any, path: Path, *parents: str) -> date:
+    """``closed: YYYY-MM-DD`` on an account entry (ADR-0014)."""
+
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            parsed = date.fromisoformat(text)
+        except ValueError:
+            parsed = None
+        if parsed is not None and text == parsed.isoformat():
+            return parsed
+    raise ConfigError(
+        f"closed is not an ISO date: {value!r}",
+        file=path,
+        key=key_path(*parents),
+        fix="write closed as YYYY-MM-DD, the day the account closed",
+    )
 
 
 def _shared_weights(

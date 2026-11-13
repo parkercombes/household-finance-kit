@@ -156,13 +156,17 @@ accounts:
   "Sam Checking":  {owner: sam}
   "Savings":       {owner: alex, kind: savings}
   "House":         {shared: {alex: 0.5, sam: 0.5}, unsynced: true}   # hand-typed house value, not synced by Tiller
+  "Old Card":      {owner: sam, closed: 2025-06-30, note: "replaced by the Joint Card"}   # ADR-0014
 # no plan key: the plan is always the HFK Plan sheet (ADR-0015); M5-08's plan: {source} switch goes in M5-18
 extensions: [settle_up, retirement]  # opt-in
 ```
 **Ownership model.** Every account is either `owner: <slug>` or `shared: {slug: weight}`.
 An owner's *share* of a transaction is `amount * weight`. This one rule covers a solo
 user, a 50/50 couple, an income-proportional 60/40 split, and housemates. (Settle-up is
-limited to exactly two people; the ownership model itself is N-person.) Account weights
+limited to exactly two people; the ownership model itself is N-person.) A closed account
+keeps its entry and its weights and adds `closed: YYYY-MM-DD`: its transactions still score,
+balances and net worth stop at that date, and a transaction dated after it is a `doctor`
+error (ADR-0014). Account weights
 are only the default: `sharing` rules in `declarations.yaml` override them per transaction.
 One engine function computes shares from both, and every core report and every extension
 reads shares from it (ADR-0009).
@@ -194,8 +198,10 @@ sharing:                       # per-transaction share overrides; account weight
   - match: {category: "Sam Only"}
     weights: {sam: 1.0}
     reason: "charges Sam keeps whole on the joint card"
-closed_accounts: {}            # name -> {closed: date, note}
 ```
+Closed accounts are not declared here: closure is `closed: YYYY-MM-DD` (plus an optional
+`note`) on the account's `household.yaml` entry, which keeps its ownership (ADR-0014). A
+`closed_accounts` key in `declarations.yaml` is an error whose fix names the move.
 **Bucket model.** Buckets are defined by attributes (`essential`, `fixed`), not hard-coded
 names. Engine behaviour keys off attributes: fixed buckets are checked against the plan
 with tight tolerance; variable buckets are *paced* mid-month (rent landing on day 2 must

@@ -8,7 +8,6 @@ M2-03 implements ``plan.yaml``; M5-08 adds the ``HFK Plan`` workbook sheet.
 from .declarations import (
     DECLARATIONS_FILE,
     Bucket,
-    ClosedAccount,
     Declarations,
     Override,
     SharingRule,
@@ -49,7 +48,6 @@ __all__ = [
     "PLAN_SHEET",
     "AccountOwnership",
     "Bucket",
-    "ClosedAccount",
     "ConfigError",
     "Declarations",
     "Household",

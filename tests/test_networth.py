@@ -357,12 +357,8 @@ def test_closed_account_is_excluded_after_close(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
     household_path = home / "household.yaml"
     household = load_yaml(household_path)
-    del household["accounts"]["Savings"]
+    household["accounts"]["Savings"]["closed"] = "2026-07-01"
     dump_yaml(household_path, household)
-    declarations_path = home / "declarations.yaml"
-    declarations = load_yaml(declarations_path)
-    declarations["closed_accounts"] = {"Savings": {"closed": "2026-07-01"}}
-    dump_yaml(declarations_path, declarations)
 
     report = load_networth(home, date(2026, 9, 30))
     assert [line.account for line in report.lines] == [

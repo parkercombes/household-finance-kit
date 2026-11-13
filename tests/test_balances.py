@@ -297,12 +297,8 @@ def test_closed_account_stops_at_its_closed_date(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
     household_path = home / "household.yaml"
     household = load_yaml(household_path)
-    del household["accounts"]["Savings"]
+    household["accounts"]["Savings"]["closed"] = "2026-07-01"
     dump_yaml(household_path, household)
-    declarations_path = home / "declarations.yaml"
-    declarations = load_yaml(declarations_path)
-    declarations["closed_accounts"] = {"Savings": {"closed": "2026-07-01"}}
-    dump_yaml(declarations_path, declarations)
 
     report = load_balances(home, date(2026, 9, 30))
     assert [row.account for row in report.accounts] == [
@@ -328,8 +324,8 @@ def test_closed_account_stops_at_its_closed_date(tmp_path: Path) -> None:
     ) in lines
     assert "accounts 4  gaps 0" in lines
 
-    declarations["closed_accounts"] = {"Savings": {"closed": "2026-10-15"}}
-    dump_yaml(declarations_path, declarations)
+    household["accounts"]["Savings"]["closed"] = "2026-10-15"
+    dump_yaml(household_path, household)
     after = by_account(load_balances(home, date(2026, 9, 30)))["Savings"]
     assert after.balance == Decimal("5625.00")
     assert after.observed == date(2026, 9, 28)

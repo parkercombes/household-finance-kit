@@ -96,7 +96,7 @@ class InterviewResult:
 
 # Tiller's Sheets feed writes "ACTIVE" in Balance History's Account Status column; the
 # Excel template wrote "Open". Closure is declared, never inferred (ADR-0014), so only
-# an explicit closed-style status files an account under closed_accounts; anything else,
+# an explicit closed-style status marks an account closed; anything else,
 # including a missing column, counts as open.
 CLOSED_STATUSES = frozenset({"closed", "inactive"})
 
@@ -256,9 +256,12 @@ def _people_question() -> Question:
 def _account_question(facts: AccountFacts, people: tuple[tuple[str, str], ...]) -> Question:
     account_type = facts.account_type if facts.account_type is not None else "unknown"
     account_class = facts.account_class if facts.account_class is not None else "unknown"
+    closed = ""
+    if _is_closed_status(facts.status) and facts.last_balance is not None:
+        closed = f", closed, last balance {facts.last_balance.isoformat()}"
     return Question(
         key=f"account:{facts.name}",
-        text=f'Who owns "{facts.name}" (Type {account_type}, Class {account_class} in '
+        text=f'Who owns "{facts.name}" (Type {account_type}, Class {account_class}{closed} in '
         "Balance History): one person's slug, or slug=weight pairs separated by commas "
         "(like alex=0.5, sam=0.5) for a shared account?",
         default=_account_default(facts.name, people),
@@ -400,7 +403,9 @@ def _resolve_accounts(
     ask: Callable[[Question], str] | None,
 ) -> dict[str, tuple[str, object]]:
     single = len(people) == 1
-    open_names = [facts.name for facts in proposal.accounts]
+    # A closed account keeps its ownership (ADR-0014), so it is asked like an open one.
+    every_account = proposal.accounts + proposal.closed_accounts
+    open_names = [facts.name for facts in every_account]
     open_set = set(open_names)
     known = {slug for slug, _name in people}
     entries: dict[str, object] = {}
@@ -421,7 +426,7 @@ def _resolve_accounts(
     elif single:
         entries = {name: {"owner": people[0][0]} for name in open_names}
     else:
-        for facts in proposal.accounts:
+        for facts in every_account:
             entries[facts.name] = _prompt_answer(_account_question(facts, people), ask)
 
     for name in entries:
@@ -432,7 +437,7 @@ def _resolve_accounts(
                 fix=f"choose one of: {', '.join(open_names)}",
             )
     ownership: dict[str, tuple[str, object]] = {}
-    for facts in proposal.accounts:
+    for facts in every_account:
         name = facts.name
         if name not in entries:
             raise InterviewError(
@@ -705,6 +710,9 @@ def _account_entry(facts: AccountFacts, ownership: tuple[str, object]) -> str:
         parts.append(f"shared: {{{weights}}}")
     if facts.account_type is not None:
         parts.append(f"kind: {_quote(facts.account_type.lower())}")
+    if _is_closed_status(facts.status) and facts.last_balance is not None:
+        parts.append(f"closed: {facts.last_balance.isoformat()}")
+        parts.append(f"note: {_quote(f'{facts.status} in Balance History')}")
     joined = ", ".join(parts)
     return f'  {_quote(facts.name)}: {{{joined}}}'
 
@@ -733,13 +741,22 @@ def _render_household(
             f"({proposal.earliest_transaction.isoformat()})."
         )
     lines.append(f"history_start: {history_start.isoformat()}")
-    lines.append("# accounts: one entry per account that is Open in Balance History.")
+    lines.append(
+        "# accounts: one entry per account in Balance History; a closed account keeps its "
+        "owner and adds closed."
+    )
     lines.append("accounts:")
     for facts in proposal.accounts:
         lines.append(
             f"  # {facts.name}: Type {_fact(facts.account_type)}, "
             f"Class {_fact(facts.account_class)}, status {_fact(facts.status)} "
             "in Balance History."
+        )
+        lines.append(_account_entry(facts, ownership[facts.name]))
+    for facts in proposal.closed_accounts:
+        lines.append(
+            f"  # {facts.name}: status {_fact(facts.status)} in Balance History; closed is "
+            "its last Balance History observation, so check it against the real closing date."
         )
         lines.append(_account_entry(facts, ownership[facts.name]))
     lines.append("# extensions: settle_up and retirement can be listed here later.")
@@ -778,22 +795,6 @@ def _render_declarations(
     lines.append("splits: {}")
     lines.append("# sharing: per-transaction ownership overrides, each with a reason.")
     lines.append("sharing: []")
-    lines.append(
-        "# closed_accounts: accounts that are not Open in Balance History; ADR-0014 (M5-16) "
-        "will move closure onto the household.yaml account entry."
-    )
-    if proposal.closed_accounts:
-        lines.append("closed_accounts:")
-        for facts in proposal.closed_accounts:
-            closed = facts.last_balance
-            note = f"{facts.status} in Balance History"
-            lines.append(
-                f"  # {facts.name}: last Balance History observation {closed.isoformat()}."
-            )
-            entry = f"closed: {closed.isoformat()}, note: {_quote(note)}"
-            lines.append(f'  {_quote(facts.name)}: {{{entry}}}')
-    else:
-        lines.append("closed_accounts: {}")
     return "\n".join(lines) + "\n"
 
 

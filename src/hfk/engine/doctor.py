@@ -127,9 +127,9 @@ def run_doctor(
 
     if household is not None and ledger is not None:
         _check_accounts(household, declarations, ledger, diagnostics)
+        _check_closed_accounts(household, ledger, diagnostics)
         if declarations is not None:
             _check_category_orphans(declarations, ledger, diagnostics)
-            _check_closed_accounts(household, declarations, ledger, diagnostics)
             if plan is not None:
                 _check_plan_category_buckets(plan, declarations, ledger, diagnostics)
                 _check_plan_category_duplicates(plan, diagnostics)
@@ -375,12 +375,9 @@ def _check_accounts(
     diagnostics: list[Diagnostic],
 ) -> None:
     declared_accounts = {account.name for account in household.accounts}
-    closed_accounts = (
-        set() if declarations is None else {account.name for account in declarations.closed_accounts}
-    )
     ledger_accounts = set(ledger.account_names())
 
-    for name in sorted(ledger_accounts - declared_accounts - closed_accounts):
+    for name in sorted(ledger_accounts - declared_accounts):
         diagnostics.append(
             Diagnostic(
                 "error",
@@ -388,7 +385,7 @@ def _check_accounts(
                 "household.yaml",
                 f'ledger account "{name}" is not declared',
                 f'add "{name}" under accounts with owner or shared, '
-                "or under closed_accounts in declarations.yaml if it is closed",
+                "plus closed: YYYY-MM-DD if the account is closed",
             )
         )
 
@@ -507,27 +504,18 @@ def _category_excluded_from_spend(category: Category, non_spend_groups: set[str]
 
 def _check_closed_accounts(
     household: Household,
-    declarations: Declarations,
     ledger: Ledger,
     diagnostics: list[Diagnostic],
 ) -> None:
-    open_accounts = {account.name for account in household.accounts}
+    """A transaction dated after an account's ``closed`` date is an error (ADR-0014)."""
+
     transactions_by_account: dict[str, list[date]] = {}
     for transaction in ledger.transactions:
         transactions_by_account.setdefault(transaction.account, []).append(transaction.date)
 
-    for account in declarations.closed_accounts:
-        if account.name in open_accounts:
-            diagnostics.append(
-                Diagnostic(
-                    "error",
-                    "account-closed-and-open",
-                    "declarations.yaml",
-                    f'account "{account.name}" is declared as open and closed',
-                    "declare the account in exactly one place",
-                )
-            )
-
+    for account in household.accounts:
+        if account.closed is None:
+            continue
         latest = max(transactions_by_account.get(account.name, ()), default=None)
         if latest is None or latest <= account.closed:
             continue
@@ -535,11 +523,11 @@ def _check_closed_accounts(
             Diagnostic(
                 "error",
                 "closed-account-active",
-                "declarations.yaml",
+                "household.yaml",
                 f'account "{account.name}" closed {account.closed.isoformat()} but has '
                 f"activity through {latest.isoformat()}",
-                f"move it back under accounts in household.yaml, or set closed to "
-                f"{latest.isoformat()} or later",
+                f'in household.yaml set accounts."{account.name}".closed to '
+                f"{latest.isoformat()} or later, or remove closed if the account is still open",
             )
         )
 

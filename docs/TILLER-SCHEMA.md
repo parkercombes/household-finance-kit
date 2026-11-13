@@ -1,6 +1,6 @@
 # Tiller Schema
 
-Last verified: 2026-11-12
+Last verified: 2026-11-13
 
 This document describes the workbook contract for `hfk`. It is derived from [DESIGN-BRIEF](DESIGN-BRIEF.md), especially section 5. The M1 source adapter reads a local `.xlsx` or `.xlsm` workbook into the normalized ledger model. Current CLI analysis commands remain planned until later milestones.
 
@@ -103,7 +103,7 @@ The reader maps optional `Transaction ID`, `Account ID`, `Institution`, and `Ful
 | `Account Status` | No | Tiller account status metadata. |
 | `Date Added` | No | Tiller workbook field. |
 
-Balances support planned `hfk balances` and `hfk networth` reports in M4. Closed accounts are declared in private config; stale or undeclared account issues are planned `hfk doctor` errors.
+Balances support planned `hfk balances` and `hfk networth` reports in M4. A closed account is declared on its `household.yaml` account entry with `closed: YYYY-MM-DD` (ADR-0014); hfk never infers closure from `Account Status`. Stale data, undeclared accounts, and transactions after a declared closure are `hfk doctor` errors.
 
 The reader maps optional `Account ID`, `Institution`, `Type`, `Class`, and `Account Status` values to the ledger balance row when present. Empty `Balance` cells are represented as balance gaps (`None`), never as zero.
 

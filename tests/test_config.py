@@ -288,7 +288,6 @@ def test_example_declarations_load() -> None:
     assert rule.account == "Alex Checking"
     assert rule.description == "City Utilities*"
     assert rule.weights == (("alex", Decimal("0.5")), ("sam", Decimal("0.5")))
-    assert declarations.closed_accounts == ()
 
 
 def test_declarations_profile_import(tmp_path: Path) -> None:
@@ -410,22 +409,22 @@ def test_declarations_people_check(tmp_path: Path) -> None:
     )
 
 
-def test_declarations_closed_accounts(tmp_path: Path) -> None:
+def test_declarations_rejects_closed_accounts(tmp_path: Path) -> None:
     data = declarations_data()
     data["closed_accounts"] = {
         "Example Bank Card": {"closed": date(2025, 5, 1), "note": "Closed after payoff."}
     }
-    declarations = load_declarations(write_declarations(tmp_path, data))
-
-    closed = declarations.closed_account("Example Bank Card")
-    assert closed.closed == date(2025, 5, 1)
-    assert closed.note == "Closed after payoff."
-
-    data["closed_accounts"]["Example Bank Card"]["closed"] = "05/01/2025"
     with pytest.raises(ConfigError) as error:
         load_declarations(write_declarations(tmp_path, data))
 
-    assert error.value.key == 'closed_accounts."Example Bank Card".closed'
+    assert error.value.key == "closed_accounts"
+    assert "household.yaml" in error.value.fix
+    assert "Example Bank Card" in error.value.fix
+
+    data["closed_accounts"] = {}
+    with pytest.raises(ConfigError) as error:
+        load_declarations(write_declarations(tmp_path, data))
+    assert "delete closed_accounts" in error.value.fix
 
 
 def test_plan_loader_validates_annual_bill_math(tmp_path: Path) -> None:

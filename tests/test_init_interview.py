@@ -186,7 +186,6 @@ def test_interview_maps_every_fixture_expense_group(tmp_path: Path) -> None:
         "Subscriptions": "Fixed Discretionary",
     }
     assert declarations.non_spend_groups == ("Income", "Transfers")
-    assert declarations.closed_accounts == ()
 
 
 def test_interview_instance_passes_doctor_and_plan_check(tmp_path: Path) -> None:
@@ -441,7 +440,7 @@ def closed_ledger() -> Ledger:
     )
 
 
-def test_closed_accounts_are_declared_closed_not_asked(
+def test_closed_accounts_keep_owner_and_are_declared_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ledger = closed_ledger()
@@ -457,16 +456,28 @@ def test_closed_accounts_are_declared_closed_not_asked(
     assert proposal.closed_accounts[0].last_balance == date(2026, 3, 28)
 
     monkeypatch.setattr("hfk.interview.read_tiller", lambda _path: ledger)
-    scripted = ScriptedAsk(prompt_replies())
+    scripted = ScriptedAsk({**prompt_replies(), "account:Old Card": "sam"})
     result = run_interview(
         tmp_path / "Tiller-Example.xlsx", answers=None, ask=scripted
     )
 
-    assert all(question.key != "account:Old Card" for question in scripted.asked)
-    text = result.documents["declarations.yaml"]
-    assert "closed_accounts:" in text
-    assert "Old Card" in text
-    assert "2026-03-28" in text
+    # ADR-0014: a closed account keeps its ownership, so its owner is asked too.
+    old_card = [question for question in scripted.asked if question.key == "account:Old Card"]
+    assert len(old_card) == 1
+    assert "closed, last balance 2026-03-28" in old_card[0].text
+    assert "closed_accounts" not in result.documents["declarations.yaml"]
+    household = yaml.safe_load(result.documents["household.yaml"])
+    assert household["accounts"]["Old Card"] == {
+        "owner": "sam",
+        "kind": "credit",
+        "closed": date(2026, 3, 28),
+        "note": "Closed in Balance History",
+    }
+    path = tmp_path / "household.yaml"
+    path.write_text(result.documents["household.yaml"], encoding="utf-8")
+    loaded = load_household(path)
+    assert loaded.account("Old Card").closed == date(2026, 3, 28)
+    assert loaded.account("Old Card").owner == "sam"
 
 
 def test_workbook_is_never_modified(tmp_path: Path) -> None:

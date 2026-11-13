@@ -151,12 +151,12 @@ def test_undeclared_account_is_an_error(tmp_path: Path) -> None:
     ]
     assert any("Savings" in diagnostic.message for diagnostic in undeclared)
 
-    declarations_path = home / "declarations.yaml"
-    declarations = load_yaml(declarations_path)
-    declarations["closed_accounts"] = {
-        "Savings": {"closed": "2026-01-01", "note": "Closed in the example instance."}
+    household["accounts"]["Savings"] = {
+        "owner": "alex",
+        "closed": "2026-12-31",
+        "note": "Closed in the example instance.",
     }
-    dump_yaml(declarations_path, declarations)
+    dump_yaml(household_path, household)
 
     report = run_doctor(home, today=date(2026, 10, 1))
     assert not any(diagnostic.code == "account-undeclared" for diagnostic in report.errors())
@@ -241,16 +241,11 @@ def test_income_and_transfer_categories_need_no_mapping(tmp_path: Path) -> None:
 def test_closed_account_liveness(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
     household_path = home / "household.yaml"
-    declarations_path = home / "declarations.yaml"
 
     household = load_yaml(household_path)
-    savings_account = household["accounts"].pop("Savings")
+    household["accounts"]["Savings"]["closed"] = "2026-08-01"
+    household["accounts"]["Savings"]["note"] = "Closed in the example instance."
     dump_yaml(household_path, household)
-    declarations = load_yaml(declarations_path)
-    declarations["closed_accounts"] = {
-        "Savings": {"closed": "2026-08-01", "note": "Closed in the example instance."}
-    }
-    dump_yaml(declarations_path, declarations)
 
     report = run_doctor(home, today=date(2026, 10, 1))
     result = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
@@ -261,35 +256,26 @@ def test_closed_account_liveness(tmp_path: Path) -> None:
     assert len(active) == 1
     assert "Savings" in active[0].message
     assert "2026-08-01" in active[0].message
+    assert active[0].where == "household.yaml"
+    assert "household.yaml" in active[0].fix
     assert result.returncode == 1
     assert "Savings" in result.stdout
     assert "2026-08-01" in result.stdout
 
-    declarations["closed_accounts"]["Savings"]["closed"] = "2026-12-31"
-    declarations["closed_accounts"]["Old Card"] = {
+    household["accounts"]["Savings"]["closed"] = "2026-12-31"
+    household["accounts"]["Old Card"] = {
+        "owner": "sam",
         "closed": "2020-01-01",
         "note": "Closed before the example instance.",
     }
-    dump_yaml(declarations_path, declarations)
+    dump_yaml(household_path, household)
     report = run_doctor(home, today=date(2026, 10, 1))
 
     assert report.ok
     assert not any(
-        diagnostic.code in {"closed-account-active", "account-unused"}
-        and "Savings" in diagnostic.message
-        for diagnostic in report.diagnostics
+        diagnostic.code == "closed-account-active" for diagnostic in report.diagnostics
     )
-    assert not any("Old Card" in diagnostic.message for diagnostic in report.diagnostics)
-
-    household["accounts"]["Savings"] = savings_account
-    dump_yaml(household_path, household)
-    report = run_doctor(home, today=date(2026, 10, 1))
-    conflicts = [
-        diagnostic
-        for diagnostic in report.errors()
-        if diagnostic.code == "account-closed-and-open"
-    ]
-    assert any("Savings" in diagnostic.message for diagnostic in conflicts)
+    assert not any(diagnostic.code == "account-closed-and-open" for diagnostic in report.diagnostics)
 
 
 def test_unused_declared_account_is_a_warning(tmp_path: Path) -> None:

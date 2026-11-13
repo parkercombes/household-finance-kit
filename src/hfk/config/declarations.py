@@ -1,8 +1,8 @@
 """Load and validate ``declarations.yaml`` (design brief section 6; ADR-0011).
 
 The file declares bucket definitions, group/category bucket maps, judgment-call
-overrides and splits, transaction sharing rules, and closed accounts. Nothing is
-inferred: every error names the file, key path, and fix.
+overrides and splits, and transaction sharing rules. Closed accounts are
+declared in ``household.yaml`` (ADR-0014). Nothing is inferred: every error names the file, key path, and fix.
 """
 
 from __future__ import annotations
@@ -10,7 +10,6 @@ from __future__ import annotations
 import importlib.resources
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -38,14 +37,12 @@ TOP_LEVEL_KEYS = (
     "overrides",
     "splits",
     "sharing",
-    "closed_accounts",
 )
 BUCKET_KEYS = ("name", "essential", "fixed")
 OVERRIDE_KEYS = ("bucket", "reason")
 SPLIT_KEYS = ("weights", "reason")
 SHARING_KEYS = ("match", "weights", "reason")
 MATCH_KEYS = ("account", "description", "category")
-CLOSED_ACCOUNT_KEYS = ("closed", "note")
 MAPPING_SOURCES = ("tiller_group", "explicit")
 
 
@@ -80,13 +77,6 @@ class SharingRule:
 
 
 @dataclass(frozen=True)
-class ClosedAccount:
-    name: str
-    closed: date
-    note: str | None
-
-
-@dataclass(frozen=True)
 class Declarations:
     path: Path
     schema_version: int
@@ -99,7 +89,6 @@ class Declarations:
     overrides: tuple[Override, ...]
     splits: tuple[Split, ...]
     sharing: tuple[SharingRule, ...]
-    closed_accounts: tuple[ClosedAccount, ...]
 
     def bucket(self, name: str) -> Bucket | None:
         for bucket in self.buckets:
@@ -122,12 +111,6 @@ class Declarations:
                 return split
         return None
 
-    def closed_account(self, name: str) -> ClosedAccount | None:
-        for account in self.closed_accounts:
-            if account.name == name:
-                return account
-        return None
-
 
 def declarations_path(home: Path) -> Path:
     return Path(home) / DECLARATIONS_FILE
@@ -145,6 +128,7 @@ def load_declarations(
     if path.is_dir():
         path = declarations_path(path)
     data = load_mapping(path)
+    _reject_closed_accounts(data, path)
     reject_unknown_keys(data, TOP_LEVEL_KEYS, path)
 
     schema_version = require_schema_version(data, path)
@@ -190,7 +174,6 @@ def load_declarations(
     splits = _splits(data.get("splits", {}), declared_buckets, bucket_names, split_conflicts, path)
     known_people = None if people is None else set(people)
     sharing = _sharing(data.get("sharing", []), known_people, path)
-    closed_accounts = _closed_accounts(data.get("closed_accounts", {}), path)
     return Declarations(
         path=path,
         schema_version=schema_version,
@@ -203,7 +186,33 @@ def load_declarations(
         overrides=overrides,
         splits=splits,
         sharing=sharing,
-        closed_accounts=closed_accounts,
+    )
+
+
+def _reject_closed_accounts(data: dict[str, Any], path: Path) -> None:
+    """``closed_accounts`` moved to ``household.yaml`` (ADR-0014); there is no alias."""
+
+    if "closed_accounts" not in data:
+        return
+    entries = data["closed_accounts"]
+    names = sorted(str(name) for name in entries) if isinstance(entries, dict) else []
+    if names:
+        fix = (
+            "move each entry under accounts in household.yaml as "
+            '"<name>": {owner: <slug>, closed: YYYY-MM-DD, note: ...} '
+            "(or shared: weights instead of owner), then delete closed_accounts "
+            f"from declarations.yaml; entries to move: {', '.join(names)}"
+        )
+    else:
+        fix = (
+            "delete closed_accounts from declarations.yaml; declare a closed account "
+            "under accounts in household.yaml with closed: YYYY-MM-DD"
+        )
+    raise ConfigError(
+        "closed_accounts moved to household.yaml",
+        file=path,
+        key="closed_accounts",
+        fix=fix,
     )
 
 
@@ -529,41 +538,6 @@ def _person_weights(
         weights.append((slug, _decimal_weight(raw_weight, path, *parents, slug)))
     _require_sum_one(weights, path, *parents)
     return tuple(weights)
-
-
-def _closed_accounts(value: Any, path: Path) -> tuple[ClosedAccount, ...]:
-    rows = require_mapping(value, path, "closed_accounts")
-    result: list[ClosedAccount] = []
-    for raw_name, raw_entry in rows.items():
-        name = require_text(raw_name, path, "closed_accounts", str(raw_name))
-        parents = ("closed_accounts", name)
-        entry = require_mapping(raw_entry, path, *parents)
-        reject_unknown_keys(entry, CLOSED_ACCOUNT_KEYS, path, *parents)
-        closed = _closed_date(require(entry, "closed", path, *parents), path, *parents, "closed")
-        note = None
-        if "note" in entry:
-            note = require_text(entry["note"], path, *parents, "note")
-        result.append(ClosedAccount(name=name, closed=closed, note=note))
-    return tuple(result)
-
-
-def _closed_date(value: Any, path: Path, *parents: str) -> date:
-    if isinstance(value, date) and not isinstance(value, datetime):
-        return value
-    if isinstance(value, str):
-        text = value.strip()
-        try:
-            parsed = date.fromisoformat(text)
-        except ValueError:
-            parsed = None
-        if parsed is not None and text == parsed.isoformat():
-            return parsed
-    raise ConfigError(
-        f"closed is not an ISO date: {value!r}",
-        file=path,
-        key=key_path(*parents),
-        fix="write closed as YYYY-MM-DD",
-    )
 
 
 def _require_bool(value: Any, path: Path, *parents: str) -> bool:

@@ -11,4 +11,6 @@ accounts:
   "Sam Checking": {owner: sam}
   "Joint Card": {shared: {alex: 0.5, sam: 0.5}}
   "Savings": {owner: alex, kind: savings}
+  # A closed account keeps its owner and adds its closing date (ADR-0014), for example:
+  # "Old Card": {owner: sam, closed: 2025-06-30, note: "replaced by the Joint Card"}
 extensions: [settle_up, retirement]
