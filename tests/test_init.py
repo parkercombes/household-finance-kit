@@ -334,3 +334,20 @@ def test_init_git_installs_pre_commit_hook(tmp_path: Path) -> None:
         line.startswith("!!") and line.endswith("data/")
         for line in status.stdout.splitlines()
     )
+
+
+def test_init_writes_agents_template(tmp_path: Path) -> None:
+    home = init_home(tmp_path)
+    agents = (home / "AGENTS.md").read_text(encoding="utf-8")
+    packaged = importlib.resources.files("hfk.templates").joinpath("AGENTS.md")
+
+    assert agents == packaged.read_text(encoding="utf-8")
+    assert "## Never read the workbook" in agents
+    assert "must never read\nthe Tiller workbook or any statement" in agents
+    assert "`data/`" in agents and "`out/`" in agents
+    assert "it does not block\n  reads" in agents
+    assert "hfk doctor --home ." in agents
+    assert "financial advice" in agents
+    assert (home / "CLAUDE.md").read_text(encoding="utf-8") == "@AGENTS.md\n"
+    readme = (home / "README.md").read_text(encoding="utf-8")
+    assert "`AGENTS.md`" in readme

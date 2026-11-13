@@ -20,6 +20,9 @@ workbook.
 - `data/` — where your Tiller workbook export goes. hfk only reads it.
 - `out/` — where generated reports land.
 - `.gitignore` — keeps workbooks and reports out of git.
+- `AGENTS.md` and `CLAUDE.md` — instructions for an AI assistant you open in
+  this folder. The main rule: it may read your settings, but never your
+  workbook or statements.
 - `.claude/` — holds a small safety rule for AI coding assistants (Claude
   Code reads it) that stops them from changing the Tiller workbook. It does
   nothing if you never use an AI assistant, and it is safe to leave in place.

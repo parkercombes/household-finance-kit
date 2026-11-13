@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-12` are done and `M5-13` (the working-with-AI guide) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` are done and `M5-16` (closed-account ownership) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -108,7 +108,8 @@ What has landed by milestone, and what is still planned:
 - Available now (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
 - Available now (M5): `hfk init <dir>` as an interview that writes the config from your workbook, the `HFK Plan` sheet as a plan source, `--format text|csv|html` on the reports, a readiness section in `hfk doctor`, `hfk serve` for a local read-only page, and `hfk open` with double-click launchers.
 - Available now (M5): a one-line install from a built wheel (`uv tool install`); the PyPI name works once the package is published (`M0-07`).
-- Planned (M5): non-programmer docs, and the sheet as the only plan source (M5-18).
+- Available now (M5): [WORKING-WITH-AI](docs/WORKING-WITH-AI.md) and an `AGENTS.md` in every new instance.
+- Planned (M5): the non-programmer README rewrite, and the sheet as the only plan source (M5-18).
 - Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
 
 ## Milestones
@@ -152,6 +153,7 @@ The second planned extension is `retirement` (M8). It models income-vs-need mech
 - [EXTENSIONS](docs/EXTENSIONS.md): extension API and planned first extensions.
 - [TILLER-SCHEMA](docs/TILLER-SCHEMA.md): Tiller sheets and headers.
 - [PRIVACY](docs/PRIVACY.md): public-repo privacy model.
+- [WORKING-WITH-AI](docs/WORKING-WITH-AI.md): using `hfk` with or without an AI assistant, and keeping your data private.
 
 ## Safety And Privacy
 This is a public repo, so it must contain no real financial data, no personal names, no account numbers, no addresses, no emails, no employer names, and no private balances. Examples use fictional names Alex and Sam, `Example Bank`, and round numbers. The privacy scan is part of the M0 safety system and should be run before sharing changes:

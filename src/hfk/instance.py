@@ -4,7 +4,8 @@
 instance directory: the three example YAML files, a README, a ``.gitignore``,
 ``shared-items/``, the empty ``data/`` and ``out/`` directories, and the
 ``.claude/`` wiring (``settings.json`` plus the ``tiller_guard`` hook) that
-blocks AI assistants from writing the workbook, and the two double-click
+blocks AI assistants from writing the workbook, an ``AGENTS.md`` (with a
+``CLAUDE.md`` pointer) that tells assistants never to read it (M5-13), and the two double-click
 launchers ``Open HFK.command`` and ``Open HFK.bat`` (M5-11). With ``git=True`` it also
 runs ``git init`` and installs the privacy pre-commit hook. The M5-06
 interview passes ``documents`` to replace the three YAML files with
@@ -27,6 +28,8 @@ _INSTANCE_FILES = (
     ("declarations.yaml", "declarations.yaml"),
     ("plan.yaml", "plan.yaml"),
     ("README.md", "README.md"),
+    ("AGENTS.md", "AGENTS.md"),
+    ("CLAUDE.md", "CLAUDE.md"),
     (".gitignore", "gitignore"),
     ("shared-items/README.md", "shared-items-README.md"),
     (".claude/settings.json", "claude-settings.json"),
