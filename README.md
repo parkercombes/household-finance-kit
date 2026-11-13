@@ -1,6 +1,6 @@
 # household-finance-kit
 
-Last verified: 2026-11-12
+Last verified: 2026-11-13
 
 ## What Is This
 
@@ -12,12 +12,12 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-08` are done and `M5-09` (a doctor readiness section for new users) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-09` are done and `M5-10` (`hfk serve`, a local read-only web page) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
 - `hfk init <dir>` interviews you from the newest workbook in `data/` and writes a private instance with `household.yaml` and `declarations.yaml`, plus the Tiller read-only hook (`--git` also sets up git and the privacy hook).
-- `hfk doctor` checks config and data quality and fails loudly on stale data, unmapped categories, conflicts and undeclared closed accounts.
+- `hfk doctor` checks config and data quality and fails loudly on stale data, unmapped categories, conflicts and undeclared closed accounts. It ends with a readiness section that says, in plain words, whether the workbook, history, category mapping and plan are ready and what to fix.
 - `hfk scorecard`, `hfk categories`, `hfk balances`, `hfk networth`, `hfk renewals` and `hfk rebaseline` report from closed months, each with `--format text|csv|html`.
 - `hfk plan check` validates the budget plan.
 - `hfk dev fixture --out PATH [--plan-tab]` writes a synthetic workbook for tests and demos.
@@ -87,8 +87,8 @@ What has landed by milestone, and what is still planned:
 - Available now (M2): `hfk doctor` for config validation and loud data-quality checks, including plan-line and sharing-rule conflicts.
 - Available now (M3): `hfk scorecard --month YYYY-MM [--who SLUG]` for closed-month plan-vs-actual by bucket, using the selected person's share.
 - Available now (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
-- Available now (M5): `hfk init <dir>` as an interview that writes the config from your workbook, the `HFK Plan` sheet as a plan source, and `--format text|csv|html` on the reports.
-- Planned (M5): a doctor readiness section, `hfk serve` and `hfk open` for a local read-only page, a double-click launcher, one-line install, non-programmer docs, and the sheet as the only plan source (M5-18).
+- Available now (M5): `hfk init <dir>` as an interview that writes the config from your workbook, the `HFK Plan` sheet as a plan source, `--format text|csv|html` on the reports, and a readiness section in `hfk doctor`.
+- Planned (M5): `hfk serve` and `hfk open` for a local read-only page, a double-click launcher, one-line install, non-programmer docs, and the sheet as the only plan source (M5-18).
 - Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
 
 ## Milestones

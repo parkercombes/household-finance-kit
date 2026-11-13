@@ -20,6 +20,7 @@ REQUIRED_COLUMNS = {
     "Categories": ("Category", "Group", "Type"),
     "Balance History": ("Date", "Account", "Balance"),
 }
+REQUIRED_SHEETS = tuple(REQUIRED_COLUMNS)
 # Tiller writes "Hide" in Categories.Hide From Reports; the others are tolerated spellings.
 HIDDEN_TRUE = frozenset({"hide", "hidden", "true", "yes", "y", "1", "x"})
 HIDDEN_FALSE = frozenset({"", "show", "false", "no", "n", "0"})
@@ -67,6 +68,16 @@ def read_tiller(path: str | Path) -> Ledger:
             balances=balances,
             accounts=_accounts(transactions, balances),
         )
+    finally:
+        workbook.close()
+
+
+def workbook_sheet_names(path: str | Path) -> tuple[str, ...]:
+    """The workbook's sheet names in tab order, read without modifying it."""
+
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        return tuple(workbook.sheetnames)
     finally:
         workbook.close()
 

@@ -12,6 +12,7 @@ import yaml
 from openpyxl import load_workbook
 
 from hfk.engine import run_doctor
+from hfk.source import read_tiller
 from hfk.source.fixture import build_fixture
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -424,3 +425,97 @@ def test_plan_and_sharing_conflicts(tmp_path: Path) -> None:
     result = run_hfk("doctor", "--home", str(conflict_home), "--today", "2026-10-01")
     assert result.returncode == 1
     assert "conflicting sharing rules match first transaction" in result.stdout
+
+
+def readiness_by_name(report: Any) -> dict[str, Any]:
+    return {check.name: check for check in report.readiness}
+
+
+def test_readiness_section(tmp_path: Path) -> None:
+    def child_instance(name: str, **fixture_kwargs: Any) -> Path:
+        home = tmp_path / name
+        home.mkdir()
+        return make_instance(home, **fixture_kwargs)
+
+    today = date(2026, 10, 1)
+    names = ["workbook sheets", "transaction history", "category mapping", "budget plan"]
+
+    # The fixture instance is ready on every check, and doctor still exits 0.
+    ready_home = child_instance("ready")
+    report = run_doctor(ready_home, today=today)
+    result = run_hfk("doctor", "--home", str(ready_home), "--today", "2026-10-01")
+    assert [check.name for check in report.readiness] == names
+    assert report.ready and report.ok
+    checks = readiness_by_name(report)
+    assert checks["category mapping"].detail == "every expense category has a bucket"
+    assert "Transactions, Categories, Balance History" in checks["workbook sheets"].detail
+    assert "load from plan.yaml" in checks["budget plan"].detail
+    assert result.returncode == 0
+    assert "readiness: ready" in result.stdout
+    assert "  ready: category mapping: every expense category has a bucket" in result.stdout
+    assert result.stdout.rstrip().endswith("doctor: 0 errors, 0 warnings")
+
+    # The plan read from the HFK Plan sheet is named as such.
+    sheet_home = child_instance("sheet", plan_tab=True)
+    household = load_yaml(sheet_home / "household.yaml")
+    household["plan"] = {"source": "workbook"}
+    dump_yaml(sheet_home / "household.yaml", household)
+    (sheet_home / "plan.yaml").unlink()
+    report = run_doctor(sheet_home, today=today)
+    assert report.ready
+    assert "load from the HFK Plan sheet" in readiness_by_name(report)["budget plan"].detail
+
+    # A missing required sheet: not ready with a fix, and the existing error exit.
+    sheet_missing = child_instance("missing-sheet")
+    workbook_path = fixture_workbook(sheet_missing)
+    workbook = load_workbook(workbook_path)
+    del workbook["Balance History"]
+    workbook.save(workbook_path)
+    workbook.close()
+    report = run_doctor(sheet_missing, today=today)
+    result = run_hfk("doctor", "--home", str(sheet_missing), "--today", "2026-10-01")
+    sheets = readiness_by_name(report)["workbook sheets"]
+    assert not report.ready and not sheets.ready
+    assert "missing Balance History" in sheets.detail
+    assert "Balance History" in sheets.fix
+    assert result.returncode == 1
+    assert "readiness: not ready" in result.stdout
+    assert "  not ready: workbook sheets: " in result.stdout
+    assert "Fix: download a fresh copy of your Tiller workbook" in result.stdout
+
+    # An empty plan: not ready with a fix, and the existing config-error exit.
+    empty_plan = child_instance("empty-plan")
+    plan_data = load_yaml(empty_plan / "plan.yaml")
+    plan_data["lines"] = []
+    dump_yaml(empty_plan / "plan.yaml", plan_data)
+    report = run_doctor(empty_plan, today=today)
+    result = run_hfk("doctor", "--home", str(empty_plan), "--today", "2026-10-01")
+    plan_check = readiness_by_name(report)["budget plan"]
+    assert not report.ready and not plan_check.ready
+    assert "hfk plan check" in plan_check.fix
+    assert result.returncode == 1
+    assert "  not ready: budget plan: the plan did not load. Fix: " in result.stdout
+
+    # Unmapped categories are counted.
+    unmapped_home = child_instance("unmapped")
+    rename_first_transaction_category(unmapped_home, "Groceries", "Groceries (old)")
+    mapping = readiness_by_name(run_doctor(unmapped_home, today=today))["category mapping"]
+    assert not mapping.ready
+    assert mapping.detail == "1 expense category still has no bucket"
+
+    # Only an unfinished month after history_start: not ready, yet no new error and exit 0.
+    young_home = child_instance("young")
+    latest = max(t.date for t in read_tiller(fixture_workbook(young_home)).transactions)
+    household = load_yaml(young_home / "household.yaml")
+    household["history_start"] = latest.replace(day=1).isoformat()
+    dump_yaml(young_home / "household.yaml", household)
+    report = run_doctor(young_home, today=latest)
+    result = run_hfk("doctor", "--home", str(young_home), "--today", latest.isoformat())
+    history = readiness_by_name(report)["transaction history"]
+    assert not report.ready and not history.ready
+    assert history.detail.startswith("1 month of Transactions on or after ")
+    assert history.detail.endswith("0 of them finished")
+    assert f"wait for {latest:%Y-%m} to end" in history.fix
+    assert report.ok
+    assert result.returncode == 0
+    assert "readiness: not ready" in result.stdout

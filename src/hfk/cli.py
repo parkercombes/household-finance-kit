@@ -106,6 +106,9 @@ def _doctor(args: argparse.Namespace) -> int:
     )
     for diagnostic in report.diagnostics:
         print(diagnostic.render())
+    print(f"readiness: {'ready' if report.ready else 'not ready'}")
+    for check in report.readiness:
+        print(check.render())
     print(f"doctor: {len(report.errors())} errors, {len(report.warnings())} warnings")
     return 0 if report.ok else 1
 

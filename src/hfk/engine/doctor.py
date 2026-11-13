@@ -23,7 +23,13 @@ from hfk.config import (
 from hfk.engine.buckets import BucketError, resolve_category
 from hfk.engine.shares import ShareConflictError, ShareError, share_weights
 from hfk.ledger import Category, Ledger, Transaction
-from hfk.source import TillerFormatError, find_workbook, read_tiller
+from hfk.source import (
+    REQUIRED_SHEETS,
+    TillerFormatError,
+    find_workbook,
+    read_tiller,
+    workbook_sheet_names,
+)
 
 DIAGNOSTIC_LEVELS = frozenset({"error", "warning"})
 WORKBOOK_FIX = "download the Tiller workbook into data/ (or fix files.tiller_glob)"
@@ -47,12 +53,34 @@ class Diagnostic:
 
 
 @dataclass(frozen=True)
+class ReadinessCheck:
+    """One plain-language answer to "can I start using hfk?" for a new user."""
+
+    name: str
+    ready: bool
+    detail: str
+    fix: str = ""
+
+    def render(self) -> str:
+        status = "ready" if self.ready else "not ready"
+        text = f"  {status}: {self.name}: {self.detail}"
+        return text if self.ready else f"{text}. Fix: {self.fix}"
+
+
+@dataclass(frozen=True)
 class DoctorReport:
     diagnostics: tuple[Diagnostic, ...]
+    readiness: tuple[ReadinessCheck, ...] = ()
 
     @property
     def ok(self) -> bool:
         return not self.errors()
+
+    @property
+    def ready(self) -> bool:
+        """True when every readiness check passes; it never changes the exit code."""
+
+        return bool(self.readiness) and all(check.ready for check in self.readiness)
 
     def errors(self) -> tuple[Diagnostic, ...]:
         return tuple(diagnostic for diagnostic in self.diagnostics if diagnostic.level == "error")
@@ -113,7 +141,115 @@ def run_doctor(
     if plan is not None and not plan_duplicates_checked:
         _check_plan_category_duplicates(plan, diagnostics)
 
-    return DoctorReport(tuple(diagnostics))
+    readiness = (
+        _sheets_readiness(workbook_path),
+        _history_readiness(household, ledger, today),
+        _mapping_readiness(declarations, ledger),
+        _plan_readiness(plan),
+    )
+    return DoctorReport(tuple(diagnostics), readiness)
+
+
+def _count(number: int, noun: str, plural: str | None = None) -> str:
+    return f"{number} {noun if number == 1 else (plural or noun + 's')}"
+
+
+def _sheets_readiness(workbook_path: Path | None) -> ReadinessCheck:
+    name = "workbook sheets"
+    if workbook_path is None:
+        return ReadinessCheck(name, False, "no Tiller workbook was found in data/", WORKBOOK_FIX)
+    sheet_names = set(workbook_sheet_names(workbook_path))
+    missing = [sheet for sheet in REQUIRED_SHEETS if sheet not in sheet_names]
+    required = ", ".join(REQUIRED_SHEETS)
+    if missing:
+        return ReadinessCheck(
+            name,
+            False,
+            f"{workbook_path.name} is missing {', '.join(missing)}",
+            f"download a fresh copy of your Tiller workbook into data/; hfk needs the "
+            f"{required} sheets",
+        )
+    return ReadinessCheck(name, True, f"{workbook_path.name} has {required}")
+
+
+def _history_readiness(
+    household: Household | None, ledger: Ledger | None, today: date
+) -> ReadinessCheck:
+    name = "transaction history"
+    if household is None or ledger is None:
+        return ReadinessCheck(
+            name,
+            False,
+            "transactions could not be read",
+            "fix the household.yaml or workbook error above, then rerun doctor",
+        )
+    start = household.history_start
+    months = {
+        Month(transaction.date.year, transaction.date.month)
+        for transaction in ledger.transactions
+        if start is None or transaction.date >= start
+    }
+    current = Month(today.year, today.month)
+    finished = sum(1 for month in months if month < current)
+    since = "in the workbook" if start is None else f"on or after {start.isoformat()}"
+    detail = (
+        f"{_count(len(months), 'month')} of Transactions {since}, "
+        f"{finished} of them finished"
+    )
+    if finished:
+        return ReadinessCheck(name, True, detail)
+    if not months:
+        fix = (
+            "download a workbook with transactions on or after history_start, "
+            "or move history_start earlier in household.yaml"
+        )
+    else:
+        fix = (
+            f"reports cover finished months only; wait for {current} to end, "
+            "or move history_start earlier in household.yaml"
+        )
+    return ReadinessCheck(name, False, detail, fix)
+
+
+def _mapping_readiness(declarations: Declarations | None, ledger: Ledger | None) -> ReadinessCheck:
+    name = "category mapping"
+    if declarations is None:
+        return ReadinessCheck(
+            name,
+            False,
+            "declarations.yaml did not load",
+            "fix the declarations.yaml error above, then rerun doctor",
+        )
+    if ledger is None:
+        return ReadinessCheck(
+            name,
+            False,
+            "categories could not be read from the workbook",
+            "fix the workbook error above, then rerun doctor",
+        )
+    unmapped = len(_unmapped_spend_categories(declarations, ledger))
+    if not unmapped:
+        return ReadinessCheck(name, True, "every expense category has a bucket")
+    return ReadinessCheck(
+        name,
+        False,
+        f"{_count(unmapped, 'expense category', 'expense categories')} still "
+        f"{'has' if unmapped == 1 else 'have'} no bucket",
+        "give each one a bucket in declarations.yaml; the errors above name them",
+    )
+
+
+def _plan_readiness(plan: Plan | None) -> ReadinessCheck:
+    name = "budget plan"
+    if plan is None:
+        return ReadinessCheck(
+            name,
+            False,
+            "the plan did not load",
+            "fix the plan error above, then run hfk plan check",
+        )
+    source = "the HFK Plan sheet" if plan.source == "workbook" else "plan.yaml"
+    return ReadinessCheck(name, True, f"{_count(len(plan.lines), 'line')} load from {source}")
 
 
 def _load_household(home: Path, diagnostics: list[Diagnostic]) -> Household | None:
@@ -268,40 +404,60 @@ def _check_accounts(
         )
 
 
-def _check_category_orphans(
-    declarations: Declarations, ledger: Ledger, diagnostics: list[Diagnostic]
-) -> None:
+@dataclass(frozen=True)
+class _UnmappedCategory:
+    name: str
+    category: Category | None  # None: in Transactions but not in the Categories sheet
+
+
+def _unmapped_spend_categories(
+    declarations: Declarations, ledger: Ledger
+) -> tuple[_UnmappedCategory, ...]:
+    """Spend categories with no bucket and no override or split, in ledger order."""
+
     visible_categories = [category for category in ledger.categories if not category.hidden]
-    ordered_names = _category_names_in_ledger_order(visible_categories, ledger)
     groups = dict(declarations.groups)
     categories = dict(declarations.categories)
     non_spend_groups = set(declarations.non_spend_groups)
-    reported_groups: set[str] = set()
-
-    for name in ordered_names:
+    unmapped: list[_UnmappedCategory] = []
+    for name in _category_names_in_ledger_order(visible_categories, ledger):
         category = ledger.category(name)
-        if category is None:
-            if not _has_category_judgment(declarations, name):
-                diagnostics.append(
-                    Diagnostic(
-                        "error",
-                        "category-orphan",
-                        "declarations.yaml",
-                        f'category "{name}" appears in transactions but not in the '
-                        "Categories sheet",
-                        f'add "{name}" back to the Categories sheet in Tiller, or add '
-                        f'overrides."{name}" with a bucket and reason in declarations.yaml; '
-                        "history is never remapped silently",
-                    )
-                )
-            continue
-
-        if _category_excluded_from_spend(category, non_spend_groups):
-            continue
         if _has_category_judgment(declarations, name):
             continue
+        if category is None:
+            unmapped.append(_UnmappedCategory(name, None))
+            continue
+        if _category_excluded_from_spend(category, non_spend_groups):
+            continue
         if declarations.mapping_source == "tiller_group":
-            if category.group in groups or category.group in reported_groups:
+            if category.group not in groups:
+                unmapped.append(_UnmappedCategory(name, category))
+        elif name not in categories:
+            unmapped.append(_UnmappedCategory(name, category))
+    return tuple(unmapped)
+
+
+def _check_category_orphans(
+    declarations: Declarations, ledger: Ledger, diagnostics: list[Diagnostic]
+) -> None:
+    reported_groups: set[str] = set()
+    for unmapped in _unmapped_spend_categories(declarations, ledger):
+        name, category = unmapped.name, unmapped.category
+        if category is None:
+            diagnostics.append(
+                Diagnostic(
+                    "error",
+                    "category-orphan",
+                    "declarations.yaml",
+                    f'category "{name}" appears in transactions but not in the '
+                    "Categories sheet",
+                    f'add "{name}" back to the Categories sheet in Tiller, or add '
+                    f'overrides."{name}" with a bucket and reason in declarations.yaml; '
+                    "history is never remapped silently",
+                )
+            )
+        elif declarations.mapping_source == "tiller_group":
+            if category.group in reported_groups:
                 continue
             reported_groups.add(category.group)
             diagnostics.append(
@@ -314,9 +470,7 @@ def _check_category_orphans(
                     "or list it under non_spend_groups",
                 )
             )
-            continue
-
-        if name not in categories:
+        else:
             diagnostics.append(
                 Diagnostic(
                     "error",

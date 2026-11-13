@@ -23,7 +23,7 @@ from hfk.engine.categories import (
     CategoryLine,
     build_categories,
 )
-from hfk.engine.doctor import Diagnostic, DoctorReport, run_doctor
+from hfk.engine.doctor import Diagnostic, DoctorReport, ReadinessCheck, run_doctor
 from hfk.engine.networth import (
     NetWorthError,
     NetWorthLine,
@@ -74,6 +74,7 @@ __all__ = [
     "NetWorthError",
     "NetWorthLine",
     "NetWorthReport",
+    "ReadinessCheck",
     "RebaselineError",
     "RebaselineReport",
     "Renewal",

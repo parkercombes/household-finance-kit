@@ -325,7 +325,9 @@ lines. The sheet is ADR-0013, implemented in M5-08; the single source is ADR-001
 - `hfk renewals` — annual obligations by month, sinking-fund adequacy.
 - `hfk rebaseline` — proposes new targets from history, flags lumpy/spiky categories.
 - `hfk doctor` — config validation, unmapped categories, closed-account liveness, stale
-  data, history_start clamps.
+  data, history_start clamps, and a closing readiness section for new users (required
+  sheets, finished months since `history_start`, unmapped expense categories, plan loads),
+  each with a plain-language fix; readiness never changes the exit code.
 - `hfk init`, `hfk plan check`, `hfk dev fixture` (generate synthetic Tiller workbook).
 - Hard invariant: any analysis window is clamped to `history_start`.
 
