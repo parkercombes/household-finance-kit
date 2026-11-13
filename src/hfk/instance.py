@@ -4,7 +4,8 @@
 instance directory: the three example YAML files, a README, a ``.gitignore``,
 ``shared-items/``, the empty ``data/`` and ``out/`` directories, and the
 ``.claude/`` wiring (``settings.json`` plus the ``tiller_guard`` hook) that
-blocks AI assistants from writing the workbook. With ``git=True`` it also
+blocks AI assistants from writing the workbook, and the two double-click
+launchers ``Open HFK.command`` and ``Open HFK.bat`` (M5-11). With ``git=True`` it also
 runs ``git init`` and installs the privacy pre-commit hook. The M5-06
 interview passes ``documents`` to replace the three YAML files with
 interview-rendered text; everything else is copied as before. The module
@@ -30,6 +31,36 @@ _INSTANCE_FILES = (
     ("shared-items/README.md", "shared-items-README.md"),
     (".claude/settings.json", "claude-settings.json"),
     (".claude/hooks/tiller_guard.py", "tiller_guard"),
+)
+# Double-click launchers (M5-11). Each runs ``hfk open`` on the folder it sits
+# in, found at run time, so the instance can be moved or renamed. They are
+# written from code, not package data, so the Windows file keeps its CRLF line
+# endings whatever git or an editor does to the toolkit checkout.
+LAUNCHER_COMMAND = "Open HFK.command"
+LAUNCHER_BAT = "Open HFK.bat"
+_LAUNCHERS: tuple[tuple[str, str, str], ...] = (
+    (
+        LAUNCHER_COMMAND,
+        (
+            "#!/bin/sh\n"
+            "# Double-click to open this folder's hfk reports in your browser.\n"
+            "# Close this window, or press Ctrl+C in it, to stop.\n"
+            'cd "$(dirname "$0")" || exit 1\n'
+            'exec hfk open --home "$(pwd)"\n'
+        ),
+        "\n",
+    ),
+    (
+        LAUNCHER_BAT,
+        (
+            "@echo off\n"
+            "rem Double-click to open this folder's hfk reports in your browser.\n"
+            "rem Close this window to stop.\n"
+            'hfk open --home "%~dp0."\n'
+            "if errorlevel 1 pause\n"
+        ),
+        "\r\n",
+    ),
 )
 _INSTANCE_DOCUMENTS = ("household.yaml", "declarations.yaml", "plan.yaml")
 _EMPTY_DIRECTORIES = ("data", "out")
@@ -93,6 +124,12 @@ def write_instance(
         if relative == _GUARD_NAME:
             destination.chmod(0o755)
         created.append(destination)
+    for name, text, newline in _LAUNCHERS:
+        destination = home / name
+        with destination.open("w", encoding="utf-8", newline=newline) as handle:
+            handle.write(text)
+        destination.chmod(0o755)
+        created.append(destination)
     for name in _EMPTY_DIRECTORIES:
         directory = home / name
         directory.mkdir(exist_ok=True)
@@ -112,6 +149,7 @@ def _require_free_target(home: Path) -> None:
     existing = [
         relative for relative, _template in _INSTANCE_FILES if (home / relative).exists()
     ]
+    existing += [name for name, _text, _newline in _LAUNCHERS if (home / name).exists()]
     existing += [
         name
         for name in _EMPTY_DIRECTORIES

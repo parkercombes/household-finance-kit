@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
+import webbrowser
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
@@ -393,6 +395,41 @@ def _serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _open(args: argparse.Namespace) -> int:
+    """``hfk open``: serve on a free loopback port and open the browser on it."""
+
+    today = args.today
+    try:
+        server = make_server(
+            Path(args.home),
+            port=0,
+            today=(lambda: today) if today is not None else None,
+        )
+    except (ServeError, OSError) as error:
+        print(f"open: {error}", file=sys.stderr)
+        return 1
+    url = server_url(server)
+    print(f"hfk is open at {url}", flush=True)
+    print("leave this window open while you read; close it or press Ctrl+C to stop", flush=True)
+    previous = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGTERM, _stop_on_signal)
+    try:
+        if not args.no_browser:
+            webbrowser.open(url)
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        server.server_close()
+    print("hfk stopped", flush=True)
+    return 0
+
+
+def _stop_on_signal(_signum: int, _frame: object) -> None:
+    raise KeyboardInterrupt
+
+
 def _month_before(value: date) -> Month:
     year, month = value.year, value.month - 1
     if month == 0:
@@ -444,6 +481,7 @@ def _init_plain(args: argparse.Namespace) -> int:
         return 1
 
     _print_instance(report, args)
+    print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
     print("next: put the Tiller workbook export in data/")
     print(f"then run: hfk plan check --home {args.dir} and hfk doctor --home {args.dir}")
     return 0
@@ -476,6 +514,7 @@ def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int
     for line in result.summary:
         print(line)
     print(f"next: run hfk doctor --home {args.dir}")
+    print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
     print(f"then: set your targets in plan.yaml and run hfk plan check --home {args.dir}")
     return 0
 
@@ -659,6 +698,21 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     serve_parser.set_defaults(func=_serve)
+
+    open_parser = subparsers.add_parser("open")
+    open_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        dest="no_browser",
+        help="Print the address but do not open a browser.",
+    )
+    open_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pages.")
+    open_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    open_parser.set_defaults(func=_open)
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", metavar="command")

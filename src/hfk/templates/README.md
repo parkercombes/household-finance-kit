@@ -12,6 +12,9 @@ workbook.
   which buckets, and any exceptions you decide.
 - `plan.yaml` — your monthly budget plan.
 - `README.md` — this note.
+- `Open HFK.command` (Mac, Linux) and `Open HFK.bat` (Windows) — double-click
+  one to see your reports in your web browser. Close the window it opens to
+  stop.
 - `shared-items/` — for shared costs that are not in the workbook. Leave it
   empty until the settle-up report is released.
 - `data/` — where your Tiller workbook export goes. hfk only reads it.
