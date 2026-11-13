@@ -226,6 +226,18 @@ Boundaries for every extension package, public or private:
 | Privacy | A public package carries only Alex, Sam, `Example Bank`, and round numbers, and runs a privacy scan before publishing. A private package stays in a private repository. |
 | Advice | Show arithmetic and scenarios only. Never recommend products, tax strategy, claiming strategy, or investments. |
 
+## Community extension candidates
+
+These features are useful to some households but are deliberately **not core** and not built-in. Each is a candidate for a separate extension package, public or private, built on the contract above. Core will not grow them; a pull request adding one to core should be redirected to a package.
+
+### FSA and reimbursement tracking
+
+Flexible spending accounts, health savings reimbursements, and employer or insurer reimbursements are out of core.
+
+- **Why not core:** these balances follow plan-specific rules: deadlines, carry-over limits, eligible expenses, and employer matching. The rules differ by employer and plan year, and getting one wrong produces a believable but wrong balance.
+- **Shape of an extension:** its own config file (for example `reimbursements.yaml`) listing each claim with a date, amount, category, status, and reason; read-only use of the ledger to find the matching transactions; a `doctor()` that flags claims past their deadline; and a report of open and settled claims. It must not change how core shares or buckets a transaction.
+- **Boundary:** a reimbursement does not rewrite the scorecard. If a household wants reimbursed spending excluded from a bucket, that judgement call belongs in `declarations.yaml` (an override or a non-spend group), not in the extension.
+
 ## Testing extensions
 
 Extensions should test against the synthetic fixture (`hfk dev fixture`, or `hfk.source.fixture.build_fixture` from Python) and avoid real workbooks. `tests/ext_fixture.py` in this repository shows how to install a throwaway extension package for a test without pip: write the module and a `*.dist-info` directory with an `entry_points.txt`, then put the directory on `sys.path`. A good extension test suite should cover:
