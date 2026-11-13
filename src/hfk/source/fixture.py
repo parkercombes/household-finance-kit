@@ -93,12 +93,15 @@ def build_fixture(
     drop_columns: Iterable[tuple[str, str]] = (),
     extra_columns: Iterable[tuple[str, str]] = (),
     balance_gap: bool = True,
-    plan_tab: bool = False,
+    plan_tab: bool = True,
+    plan_rows: Iterable[dict[str, object]] | None = None,
 ) -> Path:
     """Create a deterministic synthetic Tiller-like workbook and return its path.
 
-    ``plan_tab`` adds an ``HFK Plan`` sheet holding the same lines as
-    ``examples/instance/plan.yaml``. This is the only code that writes such a
+    ``plan_tab`` (on by default, since the ``HFK Plan`` sheet is the only plan
+    source, ADR-0015) adds an ``HFK Plan`` sheet holding the example plan shown
+    in ``examples/instance/README.md``; ``plan_rows`` replaces those rows with
+    the given header-to-cell mappings. This is the only code that writes such a
     sheet, and it writes only this synthetic workbook.
     """
 
@@ -153,7 +156,7 @@ def build_fixture(
         _write_sheet(
             workbook,
             "HFK Plan",
-            _plan_tab_rows(),
+            _plan_tab_rows() if plan_rows is None else _custom_plan_rows(plan_rows),
             drop=drop,
             extras=extras_by_sheet.get("HFK Plan", ()),
             shuffle_headers=shuffle_headers,
@@ -342,8 +345,13 @@ def _account_rows() -> list[dict[str, object]]:
     ]
 
 
+def _custom_plan_rows(rows: Iterable[dict[str, object]]) -> list[dict[str, object]]:
+    blank: dict[str, object] = dict.fromkeys(PLAN_TAB_HEADERS)
+    return [blank | dict(row) for row in rows]
+
+
 def _plan_tab_rows() -> list[dict[str, object]]:
-    """The lines of ``examples/instance/plan.yaml`` as sheet rows.
+    """The example plan (``examples/instance/README.md``) as sheet rows.
 
     Cells deliberately mix the shapes a spreadsheet produces: whole and
     fractional numbers, ``YYYY-MM`` text and date cells for months, and

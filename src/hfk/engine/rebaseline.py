@@ -5,7 +5,7 @@ report looks at the person's share of actual spend in each spend category
 over a window of closed months and proposes a monthly target per category
 next to the current plan target, with a classification that says whether the
 history is steady enough to trust. The command proposes only: it never edits
-``plan.yaml``; changing the plan stays a human decision.
+the plan (the workbook's ``HFK Plan`` sheet); changing it stays a human decision.
 
 Classification rules, applied in this order:
 

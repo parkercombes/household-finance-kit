@@ -17,8 +17,6 @@ from hfk.config import (
     load_declarations,
     load_household,
     load_instance_plan,
-    load_plan,
-    unused_plan_file,
 )
 from hfk.engine.buckets import BucketError, resolve_category
 from hfk.engine.shares import ShareConflictError, ShareError, share_weights
@@ -103,22 +101,21 @@ def run_doctor(
     declarations = _load_declarations(home, people=people, diagnostics=diagnostics)
     plan: Plan | None = None
     plan_duplicates_checked = False
-    if declarations is None:
+    if declarations is None or household is None:
+        failed = "household.yaml" if household is None else "declarations.yaml"
         diagnostics.append(
             Diagnostic(
                 "error",
                 "config-error",
-                "plan.yaml",
-                "plan.yaml was not checked because declarations.yaml failed key=plan",
-                "fix declarations.yaml first, then rerun doctor",
+                "HFK Plan",
+                f"the HFK Plan sheet was not checked because {failed} failed",
+                f"fix {failed} first, then rerun doctor",
             )
         )
     else:
         plan = _load_plan(
             home, household=household, declarations=declarations, diagnostics=diagnostics
         )
-    if household is not None:
-        _check_unused_plan_file(home, household, diagnostics)
 
     workbook_path: Path | None = None
     ledger: Ledger | None = None
@@ -127,9 +124,9 @@ def run_doctor(
 
     if household is not None and ledger is not None:
         _check_accounts(household, declarations, ledger, diagnostics)
+        _check_closed_accounts(household, ledger, diagnostics)
         if declarations is not None:
             _check_category_orphans(declarations, ledger, diagnostics)
-            _check_closed_accounts(household, declarations, ledger, diagnostics)
             if plan is not None:
                 _check_plan_category_buckets(plan, declarations, ledger, diagnostics)
                 _check_plan_category_duplicates(plan, diagnostics)
@@ -248,8 +245,9 @@ def _plan_readiness(plan: Plan | None) -> ReadinessCheck:
             "the plan did not load",
             "fix the plan error above, then run hfk plan check",
         )
-    source = "the HFK Plan sheet" if plan.source == "workbook" else "plan.yaml"
-    return ReadinessCheck(name, True, f"{_count(len(plan.lines), 'line')} load from {source}")
+    return ReadinessCheck(
+        name, True, f"{_count(len(plan.lines), 'line')} load from the HFK Plan sheet"
+    )
 
 
 def _load_household(home: Path, diagnostics: list[Diagnostic]) -> Household | None:
@@ -273,45 +271,23 @@ def _load_declarations(
 def _load_plan(
     home: Path,
     *,
-    household: Household | None,
+    household: Household,
     declarations: Declarations,
     diagnostics: list[Diagnostic],
 ) -> Plan | None:
     try:
-        if household is None:
-            return load_plan(home, declarations=declarations, people=None)
         return load_instance_plan(home, household=household, declarations=declarations)
     except ConfigError as error:
         diagnostics.append(_config_diagnostic(error))
         return None
 
 
-def _check_unused_plan_file(
-    home: Path, household: Household, diagnostics: list[Diagnostic]
-) -> None:
-    unused = unused_plan_file(home, household)
-    if unused is None:
-        return
-    diagnostics.append(
-        Diagnostic(
-            "warning",
-            "plan-file-unused",
-            unused.name,
-            "plan.yaml is ignored because household.yaml sets plan: {source: workbook} "
-            "and the plan is read from the HFK Plan sheet",
-            "delete or rename plan.yaml, or set plan: {source: file} to use it",
-        )
-    )
-
-
-def _plan_where(plan: Plan) -> str:
-    return "HFK Plan" if plan.source == "workbook" else "plan.yaml"
+def _plan_where(_plan: Plan) -> str:
+    return "HFK Plan"
 
 
 def _plan_categories_ref(plan: Plan, index: int) -> str:
-    if plan.source == "workbook":
-        return f"{plan.describe_line(index)} Categories"
-    return f"{plan.describe_line(index)}.categories"
+    return f"{plan.describe_line(index)} Categories"
 
 
 def _config_diagnostic(error: ConfigError) -> Diagnostic:
@@ -375,12 +351,9 @@ def _check_accounts(
     diagnostics: list[Diagnostic],
 ) -> None:
     declared_accounts = {account.name for account in household.accounts}
-    closed_accounts = (
-        set() if declarations is None else {account.name for account in declarations.closed_accounts}
-    )
     ledger_accounts = set(ledger.account_names())
 
-    for name in sorted(ledger_accounts - declared_accounts - closed_accounts):
+    for name in sorted(ledger_accounts - declared_accounts):
         diagnostics.append(
             Diagnostic(
                 "error",
@@ -388,7 +361,7 @@ def _check_accounts(
                 "household.yaml",
                 f'ledger account "{name}" is not declared',
                 f'add "{name}" under accounts with owner or shared, '
-                "or under closed_accounts in declarations.yaml if it is closed",
+                "plus closed: YYYY-MM-DD if the account is closed",
             )
         )
 
@@ -507,27 +480,18 @@ def _category_excluded_from_spend(category: Category, non_spend_groups: set[str]
 
 def _check_closed_accounts(
     household: Household,
-    declarations: Declarations,
     ledger: Ledger,
     diagnostics: list[Diagnostic],
 ) -> None:
-    open_accounts = {account.name for account in household.accounts}
+    """A transaction dated after an account's ``closed`` date is an error (ADR-0014)."""
+
     transactions_by_account: dict[str, list[date]] = {}
     for transaction in ledger.transactions:
         transactions_by_account.setdefault(transaction.account, []).append(transaction.date)
 
-    for account in declarations.closed_accounts:
-        if account.name in open_accounts:
-            diagnostics.append(
-                Diagnostic(
-                    "error",
-                    "account-closed-and-open",
-                    "declarations.yaml",
-                    f'account "{account.name}" is declared as open and closed',
-                    "declare the account in exactly one place",
-                )
-            )
-
+    for account in household.accounts:
+        if account.closed is None:
+            continue
         latest = max(transactions_by_account.get(account.name, ()), default=None)
         if latest is None or latest <= account.closed:
             continue
@@ -535,11 +499,11 @@ def _check_closed_accounts(
             Diagnostic(
                 "error",
                 "closed-account-active",
-                "declarations.yaml",
+                "household.yaml",
                 f'account "{account.name}" closed {account.closed.isoformat()} but has '
                 f"activity through {latest.isoformat()}",
-                f"move it back under accounts in household.yaml, or set closed to "
-                f"{latest.isoformat()} or later",
+                f'in household.yaml set accounts."{account.name}".closed to '
+                f"{latest.isoformat()} or later, or remove closed if the account is still open",
             )
         )
 

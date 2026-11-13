@@ -19,8 +19,7 @@ income-vs-need modelling.
 - **Requires Tiller** as its only data source. It stands on its own otherwise: no other
   spreadsheet, macro, or service is needed. Its only other inputs are small YAML files the
   user owns (`household.yaml`, `declarations.yaml`) and an `HFK Plan` sheet the user adds
-  to their own workbook for the budget plan (ADR-0015; `plan.yaml` is still read until
-  M5-18 removes it).
+  to their own workbook for the budget plan (ADR-0015).
 - **Never writes to the Tiller workbook.** It produces output files and reports.
 - Package name `hfk`, CLI `hfk`, Python >= 3.10, dependencies: `openpyxl`, `PyYAML`;
   dev: `pytest`, `ruff`.
@@ -61,8 +60,7 @@ Two kinds of repo, strictly separated:
 my-finances/               # private folder (git optional)
   household.yaml           # people, files, account ownership (tracked in git; contains no balances)
   declarations.yaml        # judgement calls: buckets, overrides, splits, targets
-                           # the budget plan is the HFK Plan sheet in the workbook (ADR-0015);
-                           # plan.yaml is removed in M5-18
+                           # the budget plan is the HFK Plan sheet in the workbook (ADR-0015)
   shared-items/            # settle-up extension: YYYY-MM.yaml off-ledger shared items
   retirement.yaml          # retirement extension input
   data/                    # GITIGNORED: Tiller workbook(s), statements, snapshots
@@ -84,7 +82,7 @@ household-finance-kit/
   pyproject.toml  .gitignore
   docs/            ARCHITECTURE ROADMAP DECISIONS EXTENSIONS TILLER-SCHEMA PRIVACY DESIGN-BRIEF
   src/hfk/         package (reader, ledger, config, engine, ext, cli, render)
-  examples/        household.example.yaml declarations.example.yaml plan.example.yaml ...
+  examples/        household.example.yaml declarations.example.yaml instance/ (plan as a table)
   src/hfk/profiles/  shipped presets (package data): simple.yaml  four-bucket.yaml  fifty-thirty-twenty.yaml
   profiles/        documented copy of the presets: simple.yaml  four-bucket.yaml  fifty-thirty-twenty.yaml
   tests/           pytest suite using the synthetic fixture only
@@ -102,8 +100,7 @@ household-finance-kit/
    `BalanceRow`, and `Ledger` (collections + helpers). Amounts are `Decimal`. No Tiller
    specifics leak above this layer.
 3. **Config** (`hfk.config`). Loads and validates `household.yaml`, `declarations.yaml`,
-   and the `HFK Plan` sheet's rows handed over by the source adapter (until M5-18 also
-   `plan.yaml`). Errors name the file, key path and fix, or the sheet, row, column and
+   and the `HFK Plan` sheet's rows handed over by the source adapter. Errors name the file, key path and fix, or the sheet, row, column and
    fix. Sections are optional unless a loaded feature requires them.
 4. **Engine** (`hfk.engine`). Pure functions over `Ledger` + config: ownership/share
    allocation, bucket mapping, monthly scorecard, plan-vs-actual, category targets,
@@ -136,7 +133,8 @@ Sheets used (header names verified against a real Tiller workbook):
 
 Amount sign: expenses negative, income positive (Tiller convention). Workbooks may be
 named `Tiller Finance v5.xlsm` (version bumps; newest `vN` in `data/` wins; glob
-configurable). Lock files `~$*` are ignored. Extra columns are tolerated (Tiller adds
+configurable), and a Google Sheets download is named after its owner, then
+`Tiller Spreadsheet - <created date>.xlsx`; `hfk init` recognises both. Lock files `~$*` are ignored. Extra columns are tolerated (Tiller adds
 them over time); missing required columns are a loud error naming the sheet and column.
 
 ## 6. Configuration
@@ -156,13 +154,17 @@ accounts:
   "Sam Checking":  {owner: sam}
   "Savings":       {owner: alex, kind: savings}
   "House":         {shared: {alex: 0.5, sam: 0.5}, unsynced: true}   # hand-typed house value, not synced by Tiller
-# no plan key: the plan is always the HFK Plan sheet (ADR-0015); M5-08's plan: {source} switch goes in M5-18
+  "Old Card":      {owner: sam, closed: 2025-06-30, note: "replaced by the Joint Card"}   # ADR-0014
+# no plan key: the plan is always the HFK Plan sheet (ADR-0015); a plan: key is an error
 extensions: [settle_up, retirement]  # opt-in
 ```
 **Ownership model.** Every account is either `owner: <slug>` or `shared: {slug: weight}`.
 An owner's *share* of a transaction is `amount * weight`. This one rule covers a solo
 user, a 50/50 couple, an income-proportional 60/40 split, and housemates. (Settle-up is
-limited to exactly two people; the ownership model itself is N-person.) Account weights
+limited to exactly two people; the ownership model itself is N-person.) A closed account
+keeps its entry and its weights and adds `closed: YYYY-MM-DD`: its transactions still score,
+balances and net worth stop at that date, and a transaction dated after it is a `doctor`
+error (ADR-0014). Account weights
 are only the default: `sharing` rules in `declarations.yaml` override them per transaction.
 One engine function computes shares from both, and every core report and every extension
 reads shares from it (ADR-0009).
@@ -194,8 +196,10 @@ sharing:                       # per-transaction share overrides; account weight
   - match: {category: "Sam Only"}
     weights: {sam: 1.0}
     reason: "charges Sam keeps whole on the joint card"
-closed_accounts: {}            # name -> {closed: date, note}
 ```
+Closed accounts are not declared here: closure is `closed: YYYY-MM-DD` (plus an optional
+`note`) on the account's `household.yaml` entry, which keeps its ownership (ADR-0014). A
+`closed_accounts` key in `declarations.yaml` is an error whose fix names the move.
 **Bucket model.** Buckets are defined by attributes (`essential`, `fixed`), not hard-coded
 names. Engine behaviour keys off attributes: fixed buckets are checked against the plan
 with tight tolerance; variable buckets are *paced* mid-month (rent landing on day 2 must
@@ -229,42 +233,37 @@ reports the conflict and analysis stops. Because the scorecard, the categories v
 settle-up all read shares from the same function, a joint bill paid from one person's
 account lands on both people everywhere, not only in settle-up.
 
-### Plan lines (`plan.yaml` until M5-18)
+### Plan lines (the `HFK Plan` sheet)
 
-ADR-0015 moves the plan into the `HFK Plan` sheet, and M5-18 stops reading `plan.yaml`.
-The line rules below apply unchanged to sheet rows, except that there is no plan-level
-`effective_from`: every row carries its own `Effective From`.
+The plan lives only in the `HFK Plan` sheet (ADR-0015). Each row is one plan line: one
+person's share of one budget item (ADR-0010). Column names are in the next section;
+the rules are:
 
-```yaml
-schema_version: 1
-plan:
-  effective_from: 2025-01         # default start month for every line
-  lines:
-    - {desc: "Streaming", who: alex, bucket: Fixed Discretionary, monthly: 15.99,
-       categories: [Streaming]}
-    - {desc: "Groceries", who: alex, bucket: Variable Essential, monthly: 250.00,
-       categories: [Groceries], paced: true, effective_until: 2025-06}
-    - {desc: "Groceries", who: alex, bucket: Variable Essential, monthly: 275.00,
-       categories: [Groceries], paced: true, effective_from: 2025-07}
-    - {desc: "Domain renewal", who: alex, bucket: Fixed Discretionary, monthly: 1.67,
-       annual_bill: 20.00, annual_full: 20.00, account: "Alex Card", due: {month: 7, day: 6}}
-```
-Each line is one person's share of one budget item (ADR-0010).
-- `bucket` must name a declared bucket from `buckets` or the imported profile. The key is
-  `bucket`, not `type`, because `Type` already means Expense/Income/Transfer in Tiller.
-- Lines are dated. A line applies to month M when `effective_from <= M <= effective_until`
-  (months as `YYYY-MM`, inclusive; `effective_until` optional; `plan.effective_from` is the
-  default start). A report for a past month uses the lines effective in that month, never
-  today's plan. To change an amount, end the old line and add a new one.
-- Optional `categories` ties a line to Tiller categories for `hfk categories`. For one
-  person, a category may appear on at most one line effective in a given month, and each
-  listed category must map to the line's `bucket`; either violation is a `doctor` conflict.
-  Lines without `categories` count only in the bucket total.
-- `paced` marks a variable line for mid-month pacing.
-- `annual_bill` is the owner's share of an annual renewal; `monthly` must equal
-  `annual_bill / 12` (validated).
+- `Bucket` must name a declared bucket from `buckets` or the imported profile. The column
+  is `Bucket`, not `Type`, because `Type` already means Expense/Income/Transfer in Tiller.
+- Rows are dated. A row applies to month M when `Effective From <= M <= Effective Until`
+  (months as `YYYY-MM`, inclusive; `Effective Until` optional). Every row carries its own
+  `Effective From`; there is no plan-level default. A report for a past month uses the
+  rows effective in that month, never today's plan. To change an amount, end the old row
+  and add a new one.
+- Optional `Categories` ties a row to Tiller categories for `hfk categories`. For one
+  person, a category may appear on at most one row effective in a given month, and each
+  listed category must map to the row's `Bucket`; either violation is a `doctor` conflict.
+  Rows without `Categories` count only in the bucket total.
+- `Paced` marks a variable row for mid-month pacing.
+- `Annual Bill` is the owner's share of an annual renewal; `Monthly` must equal
+  `Annual Bill / 12` (validated).
 
-`hfk plan check` validates the file against `declarations.yaml` and names each problem.
+Example rows (the full example plan is the table in `examples/instance/README.md`):
+
+| Description | Who | Bucket | Monthly | Categories | Paced | Effective From | Effective Until | Annual Bill | Annual Full | Account | Due Month | Due Day |
+|---|---|---|---:|---|---|---|---|---:|---:|---|---:|---:|
+| Streaming | alex | Fixed Discretionary | 15.99 | Streaming | | 2025-01 | | | | | | |
+| Groceries | alex | Variable Essential | 250.00 | Groceries | yes | 2025-01 | 2025-06 | | | | | |
+| Groceries | alex | Variable Essential | 275.00 | Groceries | yes | 2025-07 | | | | | | |
+| Domain renewal | alex | Fixed Discretionary | 1.67 | | | 2025-01 | | 20.00 | 20.00 | Alex Card | 7 | 6 |
+
+`hfk plan check` validates the sheet against `declarations.yaml` and names each problem.
 `hfk plan edit` (M10) is superseded by the `HFK Plan` tab (ADR-0013).
 
 ### HFK Plan tab (M5-08)
@@ -278,12 +277,12 @@ tab is `hfk dev fixture --plan-tab` (M5-08), which writes the synthetic
 fixture workbook, never a user's workbook.
 
 Row 1 holds the headers. Each later row is one plan line — one person's share of one
-budget item — with exactly the meaning a `plan.yaml` line has today (ADR-0010). Rows
+budget item, with the rules in the previous section (ADR-0010). Rows
 whose cells are all blank are skipped; row order is the plan's line order. Extra
 columns are tolerated. A missing required column is the existing loud error shape with
 `sheet=HFK Plan`; a bad cell is an error naming sheet, row, column, and fix.
 
-| Header | plan.yaml key | Required | Value |
+| Header | Former plan.yaml key | Required | Value |
 |---|---|---:|---|
 | `Description` | `desc` | Yes | Free text. |
 | `Who` | `who` | Yes | A person slug from `household.yaml`. |
@@ -293,26 +292,26 @@ columns are tolerated. A missing required column is the existing loud error shap
 | `Paced` | `paced` | No | `yes` or `no` (case-insensitive); blank means `no`; any other value is an error. |
 | `Effective From` | `effective_from` | Yes | `YYYY-MM` text or a date cell, of which the month is used. A tab has no plan-level default month, so every row carries its own. |
 | `Effective Until` | `effective_until` | No | `YYYY-MM` inclusive; blank means open-ended. |
-| `Annual Bill` | `annual_bill` | No | Dollars; when present, `Monthly` must equal `Annual Bill` divided by 12, the same validation `plan.yaml` has. |
+| `Annual Bill` | `annual_bill` | No | Dollars; when present, `Monthly` must equal `Annual Bill` divided by 12, within one cent. |
 | `Annual Full` | `annual_full` | No | Dollars. |
 | `Account` | `account` | No | An account name from `household.yaml`. |
 | `Due Month` | `due: {month, day}` | No | Integer 1-12; `Due Month` and `Due Day` are both present or both blank. |
 | `Due Day` | `due: {month, day}` | No | Integer 1-31; both present or both blank. |
 
-The sheet is the only plan source (ADR-0015, implemented in M5-18; until then the M5-08
-`plan: {source: file | workbook}` switch in `household.yaml` still selects between the
-sheet and `plan.yaml`). After M5-18:
+The sheet is the only plan source (ADR-0015, implemented in M5-18):
 
-- A `plan.yaml` in the instance is an error naming the file, with the fix: move its lines
-  into the sheet, then delete it.
+- A `plan.yaml` in the instance is an error naming the file, with the fix: convert it with
+  `hfk plan to-sheet`, paste the rows into the sheet, then delete it.
 - A `plan:` key in `household.yaml` is an unknown-key error.
 - hfk never writes the workbook, so lines reach the sheet by paste or import. The
   `hfk init` interview writes its starter lines to `out/hfk-plan-starter.csv`, and the
   one-time `hfk plan to-sheet` converts an existing `plan.yaml` to the same CSV.
-- `hfk plan check` validates the sheet.
+- `hfk plan check` validates the sheet, and every plan command needs the workbook.
+- `hfk dev fixture` writes the example plan into the synthetic workbook's sheet by default
+  (`--no-plan-tab` leaves it out).
 
 To change an amount, end the old row with `Effective Until` and add a new row — the
-same append-and-end rule ADR-0010 set for `plan.yaml`; `hfk doctor` reports overlapping
+same append-and-end rule ADR-0010 set; `hfk doctor` reports overlapping
 lines. The sheet is ADR-0013, implemented in M5-08; the single source is ADR-0015.
 
 ## 7. Engine capabilities (core)
@@ -328,7 +327,12 @@ lines. The sheet is ADR-0013, implemented in M5-08; the single source is ADR-001
   data, history_start clamps, and a closing readiness section for new users (required
   sheets, finished months since `history_start`, unmapped expense categories, plan loads),
   each with a plain-language fix; readiness never changes the exit code.
-- `hfk init`, `hfk plan check`, `hfk dev fixture` (generate synthetic Tiller workbook).
+- `hfk serve` — the reports as a local read-only web page bound to `127.0.0.1` only, with a
+  month picker and a Regenerate action that re-reads the workbook; GET only, and its one
+  write path is `out/`. `hfk open` starts it on a free port and opens the browser; the
+  instance's `Open HFK.command` and `Open HFK.bat` launchers run `hfk open` on their own folder.
+- `hfk init`, `hfk plan check`, `hfk plan to-sheet` (one-time `plan.yaml` conversion),
+  `hfk dev fixture` (generate synthetic Tiller workbook).
 - Hard invariant: any analysis window is clamped to `history_start`.
 
 ## 8. Extensions (see docs/EXTENSIONS.md)
@@ -380,7 +384,7 @@ A generic income-vs-need model, input `retirement.yaml` (no Excel dependency):
 
 - Fresh git history; no commit ever contains real data. The toolkit's own `.gitignore`
   blocks `*.xlsx *.xlsm *.xls *.csv *.tsv *.pdf *.numbers`, `data/`, `out/`, and any
-  `household.yaml`, `declarations.yaml`, `plan.yaml` outside `examples/`.
+  `household.yaml`, `declarations.yaml`, and a retired `plan.yaml` outside `examples/`.
 - `scripts/privacy_scan.py` (CI + optional pre-commit): fails on staged workbook/CSV/PDF
   files; account-number patterns (`xxxx\d{4}`, `\b\d{9,}\b`); email addresses (except an
   allowlist like `noreply@`); and every term in a **local, gitignored denylist file**

@@ -10,8 +10,9 @@ from typing import Any
 
 import pytest
 import yaml
+from plan_fixture import example_plan, write_plan
 
-from hfk.config import Month, load_declarations, load_household, load_plan
+from hfk.config import Month, load_declarations, load_household, load_instance_plan
 from hfk.engine import Renewal, RenewalsError, RenewalsReport, build_renewals
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,11 +21,16 @@ PYTHONPATH = str(ROOT / "src")
 
 
 def make_instance(tmp_path: Path) -> Path:
-    """Copy the example YAML files; the renewals report never opens a workbook."""
+    """Copy the example YAML files; the plan comes from the fixture's HFK Plan sheet.
+
+    The renewals report reads no transactions, but since ADR-0015 its plan lives
+    in the workbook.
+    """
 
     tmp_path.mkdir(parents=True, exist_ok=True)
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
+    write_plan(tmp_path, example_plan())
     return tmp_path
 
 
@@ -52,9 +58,9 @@ def dump_yaml(path: Path, data: dict[str, Any]) -> None:
 
 
 def append_plan_lines(home: Path, lines: list[dict[str, Any]]) -> None:
-    plan = load_yaml(home / "plan.yaml")
+    plan = example_plan()
     plan["plan"]["lines"].extend(lines)
-    dump_yaml(home / "plan.yaml", plan)
+    write_plan(home, plan)
 
 
 def set_history_start(home: Path, iso_date: str) -> None:
@@ -67,7 +73,7 @@ def set_history_start(home: Path, iso_date: str) -> None:
 def build_report(home: Path, month: str, who: str | None = None) -> RenewalsReport:
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     return build_renewals(plan=plan, household=household, month=Month.parse(month), who=who)
 
 

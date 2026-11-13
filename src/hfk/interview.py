@@ -13,7 +13,6 @@ through ``hfk.source.read_tiller``.
 
 from __future__ import annotations
 
-import fnmatch
 import importlib.resources
 import json
 from collections.abc import Callable, Mapping
@@ -25,11 +24,18 @@ from pathlib import Path
 from hfk.config._yaml import load_mapping
 from hfk.config.declarations import available_profiles
 from hfk.config.household import SLUG
+from hfk.config.plan import Month, PlanLine
+from hfk.config.plan_sheet import plan_csv
 from hfk.ledger import BalanceRow, Category, Ledger
-from hfk.source import read_tiller
+from hfk.source import find_workbooks, read_tiller, workbook_sort_key
 
 ANSWER_KEYS = ("people", "accounts", "profile", "groups", "history_start")
 WORKBOOK_GLOB = "Tiller*.xls*"
+# Tiller's Google Sheets download is named "<owner's name> Tiller Spreadsheet - <created
+# date>.xlsx", which Tiller*.xls* does not match (M3-07 parity run).
+SHEETS_GLOB = "*Tiller Spreadsheet*.xls*"
+WORKBOOK_GLOBS = (WORKBOOK_GLOB, SHEETS_GLOB)
+NON_SPEND = "non-spend"
 
 
 class InterviewError(Exception):
@@ -92,11 +98,12 @@ class InterviewResult:
     proposal: Proposal
     documents: dict[str, str]
     summary: tuple[str, ...]
+    starter_plan: str = ""
 
 
 # Tiller's Sheets feed writes "ACTIVE" in Balance History's Account Status column; the
 # Excel template wrote "Open". Closure is declared, never inferred (ADR-0014), so only
-# an explicit closed-style status files an account under closed_accounts; anything else,
+# an explicit closed-style status marks an account closed; anything else,
 # including a missing column, counts as open.
 CLOSED_STATUSES = frozenset({"closed", "inactive"})
 
@@ -174,8 +181,8 @@ def run_interview(
     documents = {
         "household.yaml": _render_household(proposal, people, ownership, history_start, answered),
         "declarations.yaml": _render_declarations(proposal, profile, buckets, groups),
-        "plan.yaml": _render_plan(proposal, people, groups, history_start),
     }
+    starter_plan = _render_plan(proposal, people, groups, history_start)
     accounts_line = (
         f"accounts: {len(proposal.accounts)} open from Balance History, "
         f"{len(proposal.closed_accounts)} closed"
@@ -194,7 +201,9 @@ def run_interview(
         groups_line,
         history_line,
     )
-    return InterviewResult(proposal=proposal, documents=documents, summary=summary)
+    return InterviewResult(
+        proposal=proposal, documents=documents, summary=summary, starter_plan=starter_plan
+    )
 
 
 def _account_facts(ledger: Ledger) -> dict[str, AccountFacts]:
@@ -256,9 +265,12 @@ def _people_question() -> Question:
 def _account_question(facts: AccountFacts, people: tuple[tuple[str, str], ...]) -> Question:
     account_type = facts.account_type if facts.account_type is not None else "unknown"
     account_class = facts.account_class if facts.account_class is not None else "unknown"
+    closed = ""
+    if _is_closed_status(facts.status) and facts.last_balance is not None:
+        closed = f", closed, last balance {facts.last_balance.isoformat()}"
     return Question(
         key=f"account:{facts.name}",
-        text=f'Who owns "{facts.name}" (Type {account_type}, Class {account_class} in '
+        text=f'Who owns "{facts.name}" (Type {account_type}, Class {account_class}{closed} in '
         "Balance History): one person's slug, or slug=weight pairs separated by commas "
         "(like alex=0.5, sam=0.5) for a shared account?",
         default=_account_default(facts.name, people),
@@ -283,7 +295,8 @@ def _group_question(facts: GroupFacts, buckets: tuple[str, ...]) -> Question:
     names = ", ".join(buckets)
     return Question(
         key=f"group:{facts.name}",
-        text=f'Which bucket covers the "{facts.name}" group (categories {categories}): {names}?',
+        text=f'Which bucket covers the "{facts.name}" group (categories {categories}): {names}, '
+        f"or {NON_SPEND} if it is not spending (such as transfers or business costs)?",
     )
 
 
@@ -400,7 +413,9 @@ def _resolve_accounts(
     ask: Callable[[Question], str] | None,
 ) -> dict[str, tuple[str, object]]:
     single = len(people) == 1
-    open_names = [facts.name for facts in proposal.accounts]
+    # A closed account keeps its ownership (ADR-0014), so it is asked like an open one.
+    every_account = proposal.accounts + proposal.closed_accounts
+    open_names = [facts.name for facts in every_account]
     open_set = set(open_names)
     known = {slug for slug, _name in people}
     entries: dict[str, object] = {}
@@ -421,7 +436,7 @@ def _resolve_accounts(
     elif single:
         entries = {name: {"owner": people[0][0]} for name in open_names}
     else:
-        for facts in proposal.accounts:
+        for facts in every_account:
             entries[facts.name] = _prompt_answer(_account_question(facts, people), ask)
 
     for name in entries:
@@ -432,7 +447,7 @@ def _resolve_accounts(
                 fix=f"choose one of: {', '.join(open_names)}",
             )
     ownership: dict[str, tuple[str, object]] = {}
-    for facts in proposal.accounts:
+    for facts in every_account:
         name = facts.name
         if name not in entries:
             raise InterviewError(
@@ -632,11 +647,14 @@ def _resolve_groups(
                 fix=f"use one of the {profile} buckets: {', '.join(buckets)}",
             )
         bucket = bucket.strip()
+        if bucket.lower() == NON_SPEND:
+            result[facts.name] = NON_SPEND
+            continue
         if bucket not in buckets:
             raise InterviewError(
                 f"bucket {bucket!r} is not one of the {profile} buckets",
                 question=f"group:{facts.name}",
-                fix=f"use one of: {', '.join(buckets)}",
+                fix=f"use one of: {', '.join(buckets)}, or {NON_SPEND}",
             )
         result[facts.name] = bucket
     return result
@@ -684,9 +702,28 @@ def _fact(value: str | None) -> str:
 
 
 def _tiller_glob(workbook: Path) -> str:
-    if fnmatch.fnmatchcase(workbook.name.lower(), WORKBOOK_GLOB.lower()):
-        return WORKBOOK_GLOB
+    """The pattern for household.yaml: generic when it still picks this workbook.
+
+    When ``data/`` holds several matching workbooks and the chosen one is not the
+    newest (``--workbook``), the exact file name is written instead, so later
+    commands read the same workbook the interview read.
+    """
+
+    for pattern in WORKBOOK_GLOBS:
+        matches = find_workbooks(workbook.parent, pattern)
+        if matches and matches[0].resolve() == workbook.resolve():
+            return pattern
     return workbook.name
+
+
+def find_interview_workbooks(data_dir: Path) -> tuple[Path, ...]:
+    """Every workbook in ``data_dir`` with a Tiller download name, newest first."""
+
+    found: dict[Path, Path] = {}
+    for pattern in WORKBOOK_GLOBS:
+        for path in find_workbooks(data_dir, pattern):
+            found.setdefault(path.resolve(), path)
+    return tuple(sorted(found.values(), key=workbook_sort_key, reverse=True))
 
 
 def _header(workbook: Path) -> list[str]:
@@ -705,6 +742,9 @@ def _account_entry(facts: AccountFacts, ownership: tuple[str, object]) -> str:
         parts.append(f"shared: {{{weights}}}")
     if facts.account_type is not None:
         parts.append(f"kind: {_quote(facts.account_type.lower())}")
+    if _is_closed_status(facts.status) and facts.last_balance is not None:
+        parts.append(f"closed: {facts.last_balance.isoformat()}")
+        parts.append(f"note: {_quote(f'{facts.status} in Balance History')}")
     joined = ", ".join(parts)
     return f'  {_quote(facts.name)}: {{{joined}}}'
 
@@ -733,13 +773,22 @@ def _render_household(
             f"({proposal.earliest_transaction.isoformat()})."
         )
     lines.append(f"history_start: {history_start.isoformat()}")
-    lines.append("# accounts: one entry per account that is Open in Balance History.")
+    lines.append(
+        "# accounts: one entry per account in Balance History; a closed account keeps its "
+        "owner and adds closed."
+    )
     lines.append("accounts:")
     for facts in proposal.accounts:
         lines.append(
             f"  # {facts.name}: Type {_fact(facts.account_type)}, "
             f"Class {_fact(facts.account_class)}, status {_fact(facts.status)} "
             "in Balance History."
+        )
+        lines.append(_account_entry(facts, ownership[facts.name]))
+    for facts in proposal.closed_accounts:
+        lines.append(
+            f"  # {facts.name}: status {_fact(facts.status)} in Balance History; closed is "
+            "its last Balance History observation, so check it against the real closing date."
         )
         lines.append(_account_entry(facts, ownership[facts.name]))
     lines.append("# extensions: settle_up and retirement can be listed here later.")
@@ -761,16 +810,21 @@ def _render_declarations(
     lines.append(f"mapping_source: {_quote('tiller_group')}")
     lines.append("# groups: one bucket per expense group from the Categories sheet, "
                  "answered in the interview.")
-    lines.append("groups:")
+    mapped = [facts for facts in proposal.expense_groups if groups[facts.name] != NON_SPEND]
+    lines.append("groups:" if mapped else "groups: {}")
     for facts in proposal.expense_groups:
+        if groups[facts.name] == NON_SPEND:
+            continue
         categories = ", ".join(facts.categories)
         lines.append(f"  # {facts.name}: categories {categories} in the Categories sheet.")
         lines.append(f"  {_quote(facts.name)}: {_quote(groups[facts.name])}")
+    answered = [facts.name for facts in proposal.expense_groups if groups[facts.name] == NON_SPEND]
     lines.append(
-        "# non_spend_groups: these groups hold only Income or Transfer categories "
-        "in the Categories sheet."
+        "# non_spend_groups: groups that hold only Income or Transfer categories "
+        "in the Categories sheet"
+        + (f", plus {', '.join(answered)}, answered {NON_SPEND} in the interview." if answered else ".")
     )
-    non_spend = ", ".join(_quote(name) for name in proposal.non_spend_groups)
+    non_spend = ", ".join(_quote(name) for name in (*proposal.non_spend_groups, *answered))
     lines.append(f"non_spend_groups: [{non_spend}]")
     lines.append("# overrides: per-category bucket changes, each with a reason.")
     lines.append("overrides: {}")
@@ -778,22 +832,6 @@ def _render_declarations(
     lines.append("splits: {}")
     lines.append("# sharing: per-transaction ownership overrides, each with a reason.")
     lines.append("sharing: []")
-    lines.append(
-        "# closed_accounts: accounts that are not Open in Balance History; ADR-0014 (M5-16) "
-        "will move closure onto the household.yaml account entry."
-    )
-    if proposal.closed_accounts:
-        lines.append("closed_accounts:")
-        for facts in proposal.closed_accounts:
-            closed = facts.last_balance
-            note = f"{facts.status} in Balance History"
-            lines.append(
-                f"  # {facts.name}: last Balance History observation {closed.isoformat()}."
-            )
-            entry = f"closed: {closed.isoformat()}, note: {_quote(note)}"
-            lines.append(f'  {_quote(facts.name)}: {{{entry}}}')
-    else:
-        lines.append("closed_accounts: {}")
     return "\n".join(lines) + "\n"
 
 
@@ -803,34 +841,31 @@ def _render_plan(
     groups: dict[str, str],
     history_start: date,
 ) -> str:
+    """Starter plan rows as CSV for the ``HFK Plan`` sheet (ADR-0015).
+
+    One placeholder row per expense group with a bucket, ``Monthly`` 0.00,
+    starting the month of ``history_start``. hfk never writes the workbook, so
+    the household pastes or imports this file into the sheet.
+    """
+
     who = people[0][0]
-    effective = f"{history_start.year:04d}-{history_start.month:02d}"
-    lines = _header(proposal.workbook)
-    lines.append("schema_version: 1")
-    lines.append("plan:")
-    lines.append(
-        f"  # effective_from: the month the plan starts, from history_start "
-        f"{history_start.isoformat()}."
-    )
-    lines.append(f"  effective_from: {effective}")
-    lines.append(
-        "  # lines: one starter line per expense group from the Categories sheet, "
-        "placeholders with monthly: 0.00 targets."
-    )
-    lines.append(
-        "  # Set each target yourself; you may split lines per person, add paced: true, "
-        "and model annual renewals with annual_bill."
-    )
-    lines.append("  # hfk plan check validates this file.")
-    lines.append("  lines:")
-    for facts in proposal.expense_groups:
-        categories = ", ".join(facts.categories)
-        quoted = ", ".join(_quote(name) for name in facts.categories)
-        lines.append(f"    # {facts.name} starter: placeholder target for {categories}.")
-        rendered = (
-            f"desc: {_quote(f'{facts.name} starter')}, who: {_quote(who)}, "
-            f"bucket: {_quote(groups[facts.name])}, monthly: 0.00, "
-            f"categories: [{quoted}]"
+    start = Month(history_start.year, history_start.month)
+    lines = [
+        PlanLine(
+            desc=f"{facts.name} starter",
+            who=who,
+            bucket=groups[facts.name],
+            monthly=Decimal("0.00"),
+            categories=facts.categories,
+            paced=False,
+            effective_from=start,
+            effective_until=None,
+            annual_bill=None,
+            annual_full=None,
+            account=None,
+            due=None,
         )
-        lines.append(f"    - {{{rendered}}}")
-    return "\n".join(lines) + "\n"
+        for facts in proposal.expense_groups
+        if groups[facts.name] != NON_SPEND
+    ]
+    return plan_csv(lines)

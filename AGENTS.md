@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last verified: 2026-10-08
+Last verified: 2026-11-13
 
 This is the LLM entry point for `household-finance-kit` (`hfk`). Read it before changing code, docs, tests, examples, hooks, or workflows. The repository is public, and real user data belongs only in private instances. Implementation status is recorded once, in the [README milestone table](README.md#milestones); do not restate it in other docs.
 
@@ -99,12 +99,12 @@ The six design layers are:
 |---|---|---|
 | Source adapter | `hfk.source` | Read Tiller by header name and produce a normalized Ledger |
 | Ledger | `hfk.ledger` | Frozen dataclasses and helpers using `Decimal` amounts |
-| Config | `hfk.config` | Load and validate `household.yaml`, `declarations.yaml`, and `plan.yaml` |
+| Config | `hfk.config` | Load and validate `household.yaml`, `declarations.yaml`, and the `HFK Plan` sheet's rows |
 | Engine | `hfk.engine` | Pure budgeting, ownership, scorecard, balances, renewals, and doctor logic |
 | Extensions | `hfk.ext` | Entry-point plugins such as `settle_up` and `retirement` |
 | Presentation | `hfk.cli`, `hfk.render` | CLI and text, CSV, HTML output |
 
-Private instances are separate from this repo and may contain `household.yaml`, `declarations.yaml`, `plan.yaml`, `shared-items/`, `retirement.yaml`, `data/`, `out/`, `.claude/settings.json`, and a `.gitignore`. Never copy private instance data into the public toolkit.
+Private instances are separate from this repo and may contain `household.yaml`, `declarations.yaml`, `shared-items/`, `retirement.yaml`, `data/`, `out/`, `.claude/settings.json`, and a `.gitignore`. Never copy private instance data into the public toolkit.
 
 ## Things That Look Right But Are Wrong
 

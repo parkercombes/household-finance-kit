@@ -5,10 +5,12 @@ from .tiller import (
     SheetRows,
     TillerFormatError,
     find_workbook,
+    find_workbooks,
     load_ledger,
     read_optional_sheet,
     read_tiller,
     workbook_sheet_names,
+    workbook_sort_key,
 )
 
 __all__ = [
@@ -16,8 +18,10 @@ __all__ = [
     "SheetRows",
     "TillerFormatError",
     "find_workbook",
+    "find_workbooks",
     "load_ledger",
     "read_optional_sheet",
     "read_tiller",
     "workbook_sheet_names",
+    "workbook_sort_key",
 ]

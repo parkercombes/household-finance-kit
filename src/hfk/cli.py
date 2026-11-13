@@ -8,13 +8,18 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
+import webbrowser
 from collections.abc import Sequence
 from datetime import date
 from pathlib import Path
 
 from hfk import __version__
 from hfk.config import (
+    PLAN_FILE,
+    PLAN_SHEET,
+    STARTER_CSV,
     ConfigError,
     Declarations,
     Household,
@@ -24,8 +29,9 @@ from hfk.config import (
     load_declarations,
     load_household,
     load_instance_plan,
-    unused_plan_file,
+    plan_csv,
 )
+from hfk.config.plan_convert import load_plan_file
 from hfk.engine import (
     BalancesError,
     BucketError,
@@ -44,8 +50,15 @@ from hfk.engine import (
     run_doctor,
 )
 from hfk.instance import InstanceError, InstanceReport, write_instance
-from hfk.interview import InterviewError, Question, load_answers, run_interview
+from hfk.interview import (
+    InterviewError,
+    Question,
+    find_interview_workbooks,
+    load_answers,
+    run_interview,
+)
 from hfk.render import money, render_csv, render_html, render_text
+from hfk.serve import DEFAULT_HOST, DEFAULT_PORT, ServeError, make_server, server_url
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
@@ -83,18 +96,7 @@ def _parse_month(value: str) -> Month:
         raise argparse.ArgumentTypeError("write months as YYYY-MM") from exc
 
 
-def _warn_unused_plan_file(home: Path, household: Household) -> None:
-    unused = unused_plan_file(home, household)
-    if unused is not None:
-        print(
-            f"warning: {unused} is ignored because household.yaml sets plan: "
-            "{source: workbook}; fix=delete or rename it, or set plan: {source: file}",
-            file=sys.stderr,
-        )
-
-
 def _load_plan(home: Path, household: Household, declarations: Declarations) -> Plan:
-    _warn_unused_plan_file(home, household)
     return load_instance_plan(home, household=household, declarations=declarations)
 
 
@@ -258,7 +260,7 @@ def _renewals(args: argparse.Namespace) -> int:
             month=args.month,
             who=args.who,
         )
-    except (ConfigError, RenewalsError) as error:
+    except (ConfigError, TillerFormatError, RenewalsError) as error:
         print(f"renewals: {error}", file=sys.stderr)
         return 1
 
@@ -344,10 +346,9 @@ def _plan_check(args: argparse.Namespace) -> int:
         print(f"plan check: {error}", file=sys.stderr)
         return 1
 
-    _warn_unused_plan_file(home, household)
     report = check_instance_plan(home, household=household, declarations=declarations)
-    if report.source == "workbook":
-        print(f"plan check {report.path} (sheet HFK Plan)")
+    if report.path.suffix.lower().startswith(".xls"):
+        print(f"plan check {report.path} (sheet {PLAN_SHEET})")
     else:
         print(f"plan check {report.path}")
     for problem in report.problems:
@@ -368,6 +369,100 @@ def _plan_check(args: argparse.Namespace) -> int:
     plural = "problem" if count == 1 else "problems"
     print(f"{count} {plural}")
     return 1
+
+
+def _serve(args: argparse.Namespace) -> int:
+    today = args.today
+    try:
+        server = make_server(
+            Path(args.home),
+            host=args.host,
+            port=args.port,
+            today=(lambda: today) if today is not None else None,
+        )
+    except (ServeError, OSError) as error:
+        print(f"serve: {error}", file=sys.stderr)
+        return 1
+    print(f"serving {server_url(server)} (read-only; press Ctrl+C to stop)", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
+def _open(args: argparse.Namespace) -> int:
+    """``hfk open``: serve on a free loopback port and open the browser on it."""
+
+    today = args.today
+    try:
+        server = make_server(
+            Path(args.home),
+            port=0,
+            today=(lambda: today) if today is not None else None,
+        )
+    except (ServeError, OSError) as error:
+        print(f"open: {error}", file=sys.stderr)
+        return 1
+    url = server_url(server)
+    print(f"hfk is open at {url}", flush=True)
+    print("leave this window open while you read; close it or press Ctrl+C to stop", flush=True)
+    previous = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGTERM, _stop_on_signal)
+    try:
+        if not args.no_browser:
+            webbrowser.open(url)
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        server.server_close()
+    print("hfk stopped", flush=True)
+    return 0
+
+
+def _stop_on_signal(_signum: int, _frame: object) -> None:
+    raise KeyboardInterrupt
+
+
+def _plan_to_sheet(args: argparse.Namespace) -> int:
+    """``hfk plan to-sheet``: convert a retired ``plan.yaml`` to the sheet's CSV shape."""
+
+    home = Path(args.home)
+    source = home / PLAN_FILE
+    output = Path(args.out) if args.out is not None else home / STARTER_CSV
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        if not source.exists():
+            print(
+                f"plan to-sheet: {source} does not exist: fix=nothing to convert; "
+                f"the plan already lives in the {PLAN_SHEET} sheet",
+                file=sys.stderr,
+            )
+            return 1
+        plan = load_plan_file(source, declarations=declarations, people=household.slugs)
+    except ConfigError as error:
+        print(f"plan to-sheet: {error}", file=sys.stderr)
+        return 1
+    if output.exists():
+        print(
+            f"plan to-sheet: {output} already exists: fix=move or delete it, or pass --out",
+            file=sys.stderr,
+        )
+        return 1
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(plan_csv(plan.lines), encoding="utf-8")
+    print(f"wrote {len(plan.lines)} plan lines to {output}")
+    print(
+        f"next: add a sheet named {PLAN_SHEET} to your workbook, paste or import {output.name} "
+        "into it starting at cell A1, download the workbook into data/, run "
+        f"hfk plan check --home {home}, then delete {source.name}"
+    )
+    return 0
 
 
 def _month_before(value: date) -> Month:
@@ -393,14 +488,32 @@ def _prompt(question: Question) -> str:
     return input("> ")
 
 
-def _init_workbook(home: Path) -> Path | None:
+def _init_workbooks(home: Path) -> tuple[Path, ...]:
     data_dir = home / "data"
     if not data_dir.is_dir():
-        return None
-    try:
-        return find_workbook(data_dir)
-    except TillerFormatError:
-        return None
+        return ()
+    return find_interview_workbooks(data_dir)
+
+
+def _chosen_workbook(home: Path, option: str) -> Path:
+    """The ``--workbook`` path, which must be a file inside the instance's ``data/``."""
+
+    path = Path(option)
+    if not path.is_absolute() and not path.exists():
+        path = home / "data" / option
+    if not path.is_file():
+        raise InterviewError(
+            f"--workbook {option} is not a file",
+            question="workbook",
+            fix="pass the path of a workbook in data/",
+        )
+    if path.resolve().parent != (home / "data").resolve():
+        raise InterviewError(
+            f"--workbook {option} is not in {home / 'data'}",
+            question="workbook",
+            fix="copy the workbook into data/ first; every hfk report reads it from there",
+        )
+    return path
 
 
 def _print_instance(report: InstanceReport, args: argparse.Namespace) -> None:
@@ -421,12 +534,18 @@ def _init_plain(args: argparse.Namespace) -> int:
         return 1
 
     _print_instance(report, args)
-    print("next: put the Tiller workbook export in data/")
+    print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
+    print(
+        f"next: put the Tiller workbook download in data/; it needs an {PLAN_SHEET} sheet "
+        "for your budget plan (see the README in the new folder)"
+    )
     print(f"then run: hfk plan check --home {args.dir} and hfk doctor --home {args.dir}")
     return 0
 
 
-def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int:
+def _init_interview(
+    args: argparse.Namespace, home: Path, workbook: Path, candidates: tuple[Path, ...]
+) -> int:
     if args.answers is None and not sys.stdin.isatty():
         print(
             "init: no terminal attached for the interview: fix=pass --answers <file>",
@@ -444,7 +563,9 @@ def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int
         return 1
 
     try:
-        report = write_instance(home, git=args.git, documents=result.documents)
+        report = write_instance(
+            home, git=args.git, documents=result.documents, starter_plan=result.starter_plan
+        )
     except InstanceError as error:
         print(f"init: {error}", file=sys.stderr)
         return 1
@@ -452,14 +573,36 @@ def _init_interview(args: argparse.Namespace, home: Path, workbook: Path) -> int
     _print_instance(report, args)
     for line in result.summary:
         print(line)
+    others = [path.name for path in candidates if path.resolve() != workbook.resolve()]
+    if others:
+        reason = "chosen with --workbook" if args.workbook is not None else "the newest"
+        print(
+            f"note: data/ holds {len(candidates)} Tiller workbooks; read {workbook.name} "
+            f"({reason}); not read: {', '.join(others)}; "
+            "pass --workbook <path> to read another"
+        )
     print(f"next: run hfk doctor --home {args.dir}")
-    print(f"then: set your targets in plan.yaml and run hfk plan check --home {args.dir}")
+    print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
+    print(
+        f"then: add a sheet named {PLAN_SHEET} to your workbook, paste or import "
+        f"{STARTER_CSV} into it starting at cell A1, set your targets, download the "
+        f"workbook into data/ again, and run hfk plan check --home {args.dir}"
+    )
     return 0
 
 
 def _init(args: argparse.Namespace) -> int:
     home = Path(args.dir)
-    workbook = _init_workbook(home)
+    candidates = _init_workbooks(home)
+    workbook = candidates[0] if candidates else None
+    if args.workbook is not None:
+        try:
+            workbook = _chosen_workbook(home, args.workbook)
+        except InterviewError as error:
+            print(f"init: {error}", file=sys.stderr)
+            return 1
+        if workbook.resolve() not in {path.resolve() for path in candidates}:
+            candidates = (*candidates, workbook)
     if workbook is None and args.answers is not None:
         print(
             f"init: --answers given but no Tiller workbook found in {home / 'data'}: "
@@ -469,7 +612,7 @@ def _init(args: argparse.Namespace) -> int:
         return 1
     if workbook is None:
         return _init_plain(args)
-    return _init_interview(args, home, workbook)
+    return _init_interview(args, home, workbook, candidates)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -617,6 +760,41 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     rebaseline_parser.set_defaults(func=_rebaseline)
 
+    serve_parser = subparsers.add_parser("serve")
+    serve_parser.add_argument(
+        "--host",
+        default=DEFAULT_HOST,
+        help=f"Loopback address to bind (default: {DEFAULT_HOST}); anything else is refused.",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"Port to listen on (default: {DEFAULT_PORT}; 0 picks a free port).",
+    )
+    serve_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pages.")
+    serve_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    serve_parser.set_defaults(func=_serve)
+
+    open_parser = subparsers.add_parser("open")
+    open_parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        dest="no_browser",
+        help="Print the address but do not open a browser.",
+    )
+    open_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pages.")
+    open_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    open_parser.set_defaults(func=_open)
+
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", metavar="command")
     plan_check_parser = plan_subparsers.add_parser("check")
@@ -626,6 +804,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     plan_check_parser.set_defaults(func=_plan_check)
+    to_sheet_parser = plan_subparsers.add_parser("to-sheet")
+    to_sheet_parser.add_argument(
+        "--out",
+        help=f"CSV file to write (default: {STARTER_CSV} in the instance).",
+    )
+    to_sheet_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    to_sheet_parser.set_defaults(func=_plan_to_sheet)
     plan_parser.set_defaults(
         func=lambda _args, plan_parser=plan_parser: _subcommand_help(plan_parser)
     )
@@ -640,6 +829,10 @@ def _build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument(
         "--answers",
         help="YAML file of interview answers; required when no terminal is attached.",
+    )
+    init_parser.add_argument(
+        "--workbook",
+        help="Workbook in data/ to interview from (default: the newest Tiller workbook there).",
     )
     init_parser.set_defaults(func=_init)
 
@@ -656,7 +849,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--plan-tab",
         action="store_true",
         dest="plan_tab",
-        help="Also write an HFK Plan sheet matching examples/instance/plan.yaml.",
+        default=True,
+        help="Write the example HFK Plan sheet (the default).",
+    )
+    fixture_parser.add_argument(
+        "--no-plan-tab",
+        action="store_false",
+        dest="plan_tab",
+        help="Leave out the HFK Plan sheet.",
     )
     fixture_parser.set_defaults(func=_dev_fixture)
     dev_parser.set_defaults(func=lambda _args, dev_parser=dev_parser: _subcommand_help(dev_parser))

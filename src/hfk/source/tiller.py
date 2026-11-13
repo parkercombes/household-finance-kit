@@ -33,6 +33,23 @@ class TillerFormatError(ValueError):
 def find_workbook(data_dir: str | Path, pattern: str = "Tiller*.xls*") -> Path:
     """Return the newest non-lock workbook matching ``pattern`` in ``data_dir``."""
 
+    candidates = find_workbooks(data_dir, pattern)
+    if not candidates:
+        raise TillerFormatError(
+            f"Missing Tiller workbook: directory={Path(data_dir)}, pattern={pattern}"
+        )
+    return candidates[0]
+
+
+def workbook_sort_key(path: Path) -> tuple[int, float]:
+    """Newest-wins order: the highest ``vN`` in the name, then modification time."""
+
+    return (_version_number(path.name), path.stat().st_mtime)
+
+
+def find_workbooks(data_dir: str | Path, pattern: str = "Tiller*.xls*") -> tuple[Path, ...]:
+    """Every non-lock workbook matching ``pattern`` in ``data_dir``, newest first."""
+
     directory = Path(data_dir)
     try:
         entries = tuple(directory.iterdir())
@@ -47,12 +64,7 @@ def find_workbook(data_dir: str | Path, pattern: str = "Tiller*.xls*") -> Path:
         and not entry.name.startswith("~$")
         and fnmatch.fnmatchcase(entry.name.lower(), pattern_lower)
     ]
-    if not candidates:
-        raise TillerFormatError(
-            f"Missing Tiller workbook: directory={directory}, pattern={pattern}"
-        )
-
-    return max(candidates, key=lambda path: (_version_number(path.name), path.stat().st_mtime))
+    return tuple(sorted(candidates, key=workbook_sort_key, reverse=True))
 
 
 def read_tiller(path: str | Path) -> Ledger:

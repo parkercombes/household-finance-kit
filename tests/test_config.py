@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 import yaml
+from plan_fixture import EXAMPLE_PLAN_YAML, example_plan
 
 from hfk.config import (
     ConfigError,
@@ -20,13 +21,12 @@ from hfk.config import (
     available_profiles,
     load_declarations,
     load_household,
-    load_plan,
 )
+from hfk.config.plan_convert import load_plan_file as load_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE = ROOT / "examples" / "household.example.yaml"
 DECLARATIONS_EXAMPLE = ROOT / "examples" / "declarations.example.yaml"
-PLAN_EXAMPLE = ROOT / "examples" / "plan.example.yaml"
 PROFILES = ROOT / "profiles"
 
 
@@ -51,7 +51,15 @@ def write_declarations(tmp_path: Path, data: dict[str, Any]) -> Path:
 
 
 def plan_data() -> dict[str, Any]:
-    return copy.deepcopy(yaml.safe_load(PLAN_EXAMPLE.read_text(encoding="utf-8")))
+    # The plan line rules are shared by the HFK Plan sheet loader and the
+    # plan.yaml converter (ADR-0015); these tests drive them through the converter.
+    return example_plan()
+
+
+def example_plan_file(tmp_path: Path) -> Path:
+    path = tmp_path / "former-plan.yaml"
+    path.write_text(EXAMPLE_PLAN_YAML, encoding="utf-8")
+    return path
 
 
 def write_plan(tmp_path: Path, data: dict[str, Any]) -> Path:
@@ -288,7 +296,6 @@ def test_example_declarations_load() -> None:
     assert rule.account == "Alex Checking"
     assert rule.description == "City Utilities*"
     assert rule.weights == (("alex", Decimal("0.5")), ("sam", Decimal("0.5")))
-    assert declarations.closed_accounts == ()
 
 
 def test_declarations_profile_import(tmp_path: Path) -> None:
@@ -410,27 +417,27 @@ def test_declarations_people_check(tmp_path: Path) -> None:
     )
 
 
-def test_declarations_closed_accounts(tmp_path: Path) -> None:
+def test_declarations_rejects_closed_accounts(tmp_path: Path) -> None:
     data = declarations_data()
     data["closed_accounts"] = {
         "Example Bank Card": {"closed": date(2025, 5, 1), "note": "Closed after payoff."}
     }
-    declarations = load_declarations(write_declarations(tmp_path, data))
-
-    closed = declarations.closed_account("Example Bank Card")
-    assert closed.closed == date(2025, 5, 1)
-    assert closed.note == "Closed after payoff."
-
-    data["closed_accounts"]["Example Bank Card"]["closed"] = "05/01/2025"
     with pytest.raises(ConfigError) as error:
         load_declarations(write_declarations(tmp_path, data))
 
-    assert error.value.key == 'closed_accounts."Example Bank Card".closed'
+    assert error.value.key == "closed_accounts"
+    assert "household.yaml" in error.value.fix
+    assert "Example Bank Card" in error.value.fix
+
+    data["closed_accounts"] = {}
+    with pytest.raises(ConfigError) as error:
+        load_declarations(write_declarations(tmp_path, data))
+    assert "delete closed_accounts" in error.value.fix
 
 
 def test_plan_loader_validates_annual_bill_math(tmp_path: Path) -> None:
     declarations = example_declarations()
-    plan = load_plan(PLAN_EXAMPLE, declarations=declarations, people=("alex", "sam"))
+    plan = load_plan(example_plan_file(tmp_path), declarations=declarations, people=("alex", "sam"))
     assert plan.lines[7].monthly == Decimal("10.00")
 
     data = plan_data()
@@ -466,8 +473,8 @@ def test_plan_loader_rejects_unknown_bucket(tmp_path: Path) -> None:
         assert bucket in message
 
 
-def test_example_plan_loads() -> None:
-    plan = load_plan(PLAN_EXAMPLE, declarations=example_declarations(), people=("alex", "sam"))
+def test_example_plan_loads(tmp_path: Path) -> None:
+    plan = load_plan(example_plan_file(tmp_path), declarations=example_declarations(), people=("alex", "sam"))
 
     assert isinstance(plan, Plan)
     assert len(plan.lines) == 9
@@ -570,3 +577,13 @@ def test_plan_rejects_unknown_line_keys(tmp_path: Path) -> None:
     assert error.value.key == "plan.lines[0].extra"
     assert error.value.file == path
     assert "extra" in str(error.value)
+
+
+def test_household_plan_key_is_an_unknown_key_error(tmp_path: Path) -> None:
+    data = example_data()
+    data["plan"] = {"source": "workbook"}
+    with pytest.raises(ConfigError) as error:
+        load_household(write_household(tmp_path, data))
+    assert error.value.key == "plan"
+    assert "Unknown key" in error.value.problem
+    assert error.value.fix == "delete the plan key from household.yaml"
