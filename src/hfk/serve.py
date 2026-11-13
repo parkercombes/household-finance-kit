@@ -52,6 +52,8 @@ from hfk.engine import (
     build_scorecard,
     run_doctor,
 )
+from hfk.ext import load_extensions
+from hfk.ext.doctor import extension_doctor_hooks
 from hfk.ledger import Ledger
 from hfk.render import render_doctor_html, render_html
 from hfk.source import TillerFormatError, find_workbook, read_tiller
@@ -207,7 +209,11 @@ class FrontDoor:
         """Render one report page, or an error page naming the problem."""
 
         if report == "doctor":
-            doctor = run_doctor(self.home, today=self.today())
+            doctor = run_doctor(
+                self.home,
+                today=self.today(),
+                hooks=extension_doctor_hooks(load_extensions()),
+            )
             return Page(HTTPStatus.OK, render_doctor_html(doctor))
         try:
             body = self._render(report, month=month, who=who)

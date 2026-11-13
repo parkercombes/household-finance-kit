@@ -2,13 +2,13 @@
 
 Last verified: 2026-11-13
 
-This document describes the planned extension API for `hfk`. It is a contract proposal for milestone M6 and later. Nothing in this file works yet: the extension system, config loader, and engine are planned. See the [README milestone table](../README.md#milestones) for what is implemented. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
+This document describes the extension API for `hfk`. Each section says whether it is implemented, with its roadmap item, or planned. See the [README milestone table](../README.md#milestones) for milestone status. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
 
 ## What an extension is
 
 An extension is a Python package that adds a bounded feature on top of the core household-finance-kit engine. It may add CLI commands, report sections, validation rules, and doctor checks, but it must not change the meaning of the core ledger or write to the user's Tiller workbook.
 
-The planned API treats extensions as clients of the lower layers:
+The API treats extensions as clients of the lower layers:
 
 - Source adapter reads Tiller into a normalized ledger.
 - Ledger exposes frozen transaction, category, account, balance, and ledger objects.
@@ -21,7 +21,7 @@ That boundary matters because `hfk` is public software used with private househo
 
 ## Discovery
 
-Planned for M6: `hfk` discovers extensions through the Python entry-point group `hfk.extensions`. An installed package registers one object factory under that group. Core discovers installed entry points, loads only extensions enabled by the private instance config, validates their declared config sections, and wires their CLI/report hooks.
+Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Wiring `commands()` into the `hfk` command line is planned for `M7-01`, where `settle_up` first needs it, and wiring `report_sections()` into the renderers and `hfk serve` is planned with the first extension report (`M7-04`).
 
 Illustrative `pyproject.toml` snippet:
 
@@ -35,60 +35,67 @@ dependencies = ["household-finance-kit"]
 example = "hfk_example_extension:extension"
 ```
 
-The name on the left is the entry-point name. The callable on the right returns or exposes the extension object described below. This is planned API text, not a working interface in M0.
+The name on the left is the entry-point name, which must equal the extension's `name`. The target on the right is the extension object described below, its class, or a function that returns it.
 
 ## The contract
 
-Planned for M6, an extension object provides these members:
+Implemented (M6-02): `hfk.ext.validate_extension` checks every member below and reports every problem at once in one `ContractError`. `hfk.ext.load_extensions()` discovers and validates; an extension that breaks the contract is refused and reported, never half-used.
 
-| Member | Required | Purpose |
+| Member | Required | Rule |
 |---|---:|---|
-| `name` | Yes | Stable machine name, such as `settle_up` or `retirement`. This is the value enabled from private instance config. |
-| `version` | Yes | Extension package version. This follows the package's own release version. |
-| `contract_version` | Yes | Extension API contract version the extension expects, using semver. Core rejects incompatible versions loudly. |
-| `config_section` | Yes | Name of the config section owned by the extension, or a pointer to the extension's own input file when the feature uses one. |
-| `schema` | Yes | Validation schema or validator for that config section. Missing or invalid required keys are errors. |
-| `requires` | Yes | Required ledger fields, config capabilities, or other extensions. Core checks these before running commands. |
-| `commands()` | Yes | Returns planned CLI subcommands contributed by the extension. Commands run through normal `hfk` presentation wiring. |
-| `report_sections()` | Optional | Returns report section builders for text, CSV, or HTML output. |
-| `doctor()` | Yes | Hook for extension-specific diagnostics, stale data checks, and configuration errors. |
+| `name` | Yes | A lowercase identifier, such as `settle_up`, equal to the entry-point name. Households enable it by listing it under `extensions` in `household.yaml`. |
+| `version` | Yes | The extension package's own version, as a non-empty string. |
+| `contract_version` | Yes | `MAJOR.MINOR.PATCH`. This hfk supports contract major version 1; any other major version is refused loudly. |
+| `config_section` | Yes | `None` when the extension needs no config, or the file name of its own input file in the instance, such as `retirement.yaml`. Core file names are refused. Sections inside `household.yaml` or `declarations.yaml` are not supported; see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance). |
+| `schema` | When `config_section` is set | A callable `schema(data, path)` that validates the loaded mapping and returns the extension's config object, raising `hfk.config.ConfigError` naming the file, key path, and fix. `None` when `config_section` is `None`. |
+| `requires` | Yes | A mapping with optional `ledger_fields` (names of `Ledger` fields: `transactions`, `categories`, `balances`, `accounts`) and `extensions` (other extension names). |
+| `commands()` | Yes | Returns `hfk.ext.ExtensionCommand` objects: `name`, `help`, `configure(parser)`, and `run(args, context)` returning an exit code. |
+| `report_sections()` | Optional | Returns `hfk.ext.ReportSection` objects: `name`, `title`, and `build(context)` returning a report object. |
+| `doctor` | Yes | A callable `doctor(context, config)` that returns `hfk.engine.Diagnostic` objects. |
 
 The contract is intentionally small. Extensions should use the core engine for shared calculations instead of each inventing its own ledger parser, date rules, money handling, or config semantics.
 
 ## A minimal extension
 
-Illustrative skeleton only. This is not executable against M0.
-
 ```python
-"""Example planned hfk extension skeleton."""
+"""A minimal hfk extension."""
 
-from hfk import config, engine, ledger
+from hfk.config import ConfigError
+from hfk.ext import ExtensionCommand
+
+
+def _schema(data, path):
+    reason = data.get("enabled_reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise ConfigError(
+            "enabled_reason is required",
+            file=path,
+            key="enabled_reason",
+            fix="write one sentence saying why the household uses this extension",
+        )
+    return {"enabled_reason": reason}
+
+
+def _run(args, context):
+    print("example report")
+    return 0
 
 
 class ExampleExtension:
     name = "example"
     version = "0.1.0"
     contract_version = "1.0.0"
-    config_section = "example"
-    schema = {
-        "type": "object",
-        "required": ["enabled_reason"],
-        "properties": {
-            "enabled_reason": {"type": "string"},
-        },
-    }
-    requires = {
-        "ledger_fields": ["transactions", "categories"],
-        "extensions": [],
-    }
+    config_section = "example.yaml"
+    schema = staticmethod(_schema)
+    requires = {"ledger_fields": ["transactions", "categories"], "extensions": []}
 
     def commands(self):
-        return []
+        return [ExtensionCommand("example", "Print the example report.", lambda parser: None, _run)]
 
     def report_sections(self):
         return []
 
-    def doctor(self, loaded_config: config.LoadedConfig, book: ledger.Ledger):
+    def doctor(self, context, config):
         return []
 
 
@@ -100,12 +107,20 @@ The imports show the rule: extensions may import the engine, ledger, and config 
 
 ## Config sections and validation
 
-Each extension owns its configuration. Small extensions may own a section in `household.yaml` or `declarations.yaml`. Larger features may own a separate file in the private instance directory, such as `retirement.yaml`. Either way, validation is part of the extension contract.
+Each extension owns its configuration. Implemented (M6-03): an extension's config is a separate YAML file in the private instance directory, named by its `config_section`, such as `retirement.yaml`. Whether a small extension may instead own a section inside `household.yaml` or `declarations.yaml` is open: see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance).
 
-The planned behavior is fail-loud:
+`hfk.ext.load_enabled_extensions(home, household=..., installed=...)` reads config only for the extensions listed under `extensions` in `household.yaml`. The file of an extension that is not enabled is never opened, so a stale or half-written file cannot break anything. For an enabled extension, every problem is a `ConfigError` naming the file, key path, and fix:
 
-- If an enabled extension's section is missing, `hfk doctor` reports the file, key path, and fix.
-- If a key has the wrong type, validation reports the exact key path and expected shape.
+- An enabled extension that is not installed names its `extensions[N]` entry in `household.yaml`.
+- An enabled extension whose required extensions (`requires.extensions`) are not enabled names the missing one.
+- A missing config file, unparseable YAML, or a value the extension's `schema` rejects names the extension's file.
+
+Implemented (M6-04): `hfk doctor` reports these problems and runs each enabled extension's own `doctor(context, config)` after the core checks. The context is an `hfk.engine.DoctorContext` with `home`, `household`, `declarations`, `ledger` (each `None` when it failed to load) and `today`.
+
+- An entry point that failed to load or broke the contract is `extension-unavailable`: an error when the household enabled it, a warning otherwise.
+- A config problem is `extension-config`, naming the file and key; the extension's own doctor is then skipped.
+- A doctor hook that raises, or returns something other than `Diagnostic` objects, is `extension-hook-failed` naming the extension. The core checks, the readiness section, and the other extensions still report.
+- A disabled extension's hook never runs.
 - If an extension requires a ledger field that the selected source adapter cannot provide, the command stops before producing numbers.
 - If config conflicts, the extension reports the conflict instead of guessing.
 
@@ -116,7 +131,7 @@ The public toolkit repo may include example config using Alex and Sam only. Real
 The extension boundary is part of the privacy and correctness model.
 
 - Core never imports an extension by package name. It only discovers entry points.
-- Extensions import only `hfk.engine`, `hfk.ledger`, and `hfk.config` APIs, plus their own package code.
+- Extensions import only `hfk.engine`, `hfk.ledger`, `hfk.config`, and the `hfk.ext` contract types (`ExtensionCommand`, `ReportSection`), plus their own package code. The core layers never import `hfk.ext`; `tests/test_extensions.py` checks that.
 - Extensions never write to Tiller. They may read the normalized ledger produced by the source adapter and may write generated reports under the user's private output directory.
 - Public extensions must not include real data. Tests and docs use the synthetic fixture, Alex, Sam, Example Bank, and round example numbers.
 - Extensions must be deterministic for the same input files.
@@ -125,7 +140,7 @@ The extension boundary is part of the privacy and correctness model.
 
 ## Built-in-first extensions
 
-`settle_up` and `retirement` are planned as built-in-first extensions: they exercise the M6 contract while remaining optional features. Their names and high-level behavior are part of the approved design, but the code does not exist in M0.
+`settle_up` (M7) and `retirement` (M8) are planned as built-in-first extensions. They ship inside the `household-finance-kit` distribution as subpackages of `hfk.ext` and register through its own `hfk.extensions` entry points, so one install brings them, yet core still discovers them like any other extension and never imports them. A household turns each on by listing it under `extensions` in `household.yaml`.
 
 ### `settle_up`
 
@@ -188,15 +203,27 @@ Out of scope for the built-in extension:
 - Product selection.
 - Personalized financial advice.
 
-## Private and community extensions
+## Public and private extension packages
 
 Some models belong outside the public toolkit. Employer-specific pension schedules, home-purchase modeling, reimbursement workflows, and local household conventions can live in separate packages. They may be public community packages when they contain no private data, or private repos when they encode employer rules or household-specific assumptions.
 
-A private extension can be kept in a private Git repository and installed into the same Python environment as `hfk`. The private instance enables it by name in config. There is no instance-local `extensions/` directory: discovery is entry points only (ADR-0006), so a private extension is installed, not dropped into the instance. The public toolkit should never import that private package directly and should never include its data in tests, examples, or docs.
+A private extension can be kept in a private Git repository and installed into the same Python environment as `hfk` (for example `uv tool install household-finance-kit --with <path or URL of the private package>`). The private instance enables it by name in config. There is no instance-local `extensions/` directory: discovery is entry points only (ADR-0006), so a private extension is installed, not dropped into the instance. The public toolkit should never import that private package directly and should never include its data in tests, examples, or docs.
+
+Boundaries for every extension package, public or private:
+
+| Boundary | Rule |
+|---|---|
+| Registration | One `hfk.extensions` entry point whose name equals the extension's `name`. |
+| Dependency | Depend on `household-finance-kit`; declare `contract_version` for the contract you built against. |
+| Imports | `hfk.config`, `hfk.ledger`, `hfk.engine`, and the `hfk.ext` contract types only. Never `hfk.cli`, `hfk.render` internals, or `hfk.source` file handling. |
+| Data | Read the ledger and config core hands over. Never open or write the Tiller workbook. Write only generated output under the instance's `out/`. |
+| Config | Your own YAML file in the instance, validated by your `schema` (proposed ADR-0016). |
+| Privacy | A public package carries only Alex, Sam, `Example Bank`, and round numbers, and runs a privacy scan before publishing. A private package stays in a private repository. |
+| Advice | Show arithmetic and scenarios only. Never recommend products, tax strategy, claiming strategy, or investments. |
 
 ## Testing extensions
 
-Extensions should test against the synthetic fixture planned for M1 and avoid real workbooks. A good extension test suite should cover:
+Extensions should test against the synthetic fixture (`hfk dev fixture`, or `hfk.source.fixture.build_fixture` from Python) and avoid real workbooks. `tests/ext_fixture.py` in this repository shows how to install a throwaway extension package for a test without pip: write the module and a `*.dist-info` directory with an `entry_points.txt`, then put the directory on `sys.path`. A good extension test suite should cover:
 
 - Config validation success and failure.
 - `doctor()` errors with exact file, key path, and fix guidance.
@@ -205,11 +232,11 @@ Extensions should test against the synthetic fixture planned for M1 and avoid re
 - Renderer output using fictional data only.
 - Privacy scan before publishing.
 
-Extension-specific command tests are planned for M6 and later; see the [README milestone table](../README.md#milestones) for current status.
+Command tests wait on the CLI wiring of `commands()`, planned for `M7-01`.
 
 ## Stability and versioning
 
-The extension contract will use semver. The extension object declares `contract_version`; core compares it with the supported API range and rejects incompatible extensions loudly. Extension packages also have their own package `version`, which may change for bug fixes or feature additions.
+The extension contract uses semver; this hfk supports contract `1.x`. The extension object declares `contract_version`; core compares it with the supported API range and rejects incompatible extensions loudly. Extension packages also have their own package `version`, which may change for bug fixes or feature additions.
 
 Contract stability goal:
 
@@ -217,4 +244,3 @@ Contract stability goal:
 - Minor changes add optional members or optional fields.
 - Major changes may require extension authors to update code.
 
-Until M6 lands, this document is a planned API reference, not a promise that current code can load extensions.

@@ -82,7 +82,7 @@ def test_example_household_loads() -> None:
     assert household.person("sam").name == "Sam"
     assert household.tiller_glob == "Tiller*.xls*"
     assert household.history_start == date(2025, 1, 1)
-    assert household.extensions == ("settle_up", "retirement")
+    assert household.extensions == ()
 
     joint = household.account("Joint Card")
     assert joint.owner is None
@@ -175,8 +175,8 @@ def test_extensions_default_to_none_enabled(tmp_path: Path) -> None:
         (lambda d: d["accounts"].clear(), "accounts"),
         (lambda d: d["files"].__setitem__("tiller_glob", "data/Tiller*.xlsx"), "files.tiller_glob"),
         (lambda d: d.__setitem__("extensions", "settle_up"), "extensions"),
-        (lambda d: d["extensions"].append("settle_up"), "extensions[2]"),
-        (lambda d: d["extensions"].append("Settle Up"), "extensions[2]"),
+        (lambda d: d.__setitem__("extensions", ["settle_up", "settle_up"]), "extensions[1]"),
+        (lambda d: d.__setitem__("extensions", ["settle_up", "Settle Up"]), "extensions[1]"),
     ],
 )
 def test_household_loader_rejects_invalid_values(tmp_path: Path, mutate: Any, expected_key: str) -> None:
