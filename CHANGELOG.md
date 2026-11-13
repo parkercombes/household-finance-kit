@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M10-05: [EXTENSIONS](docs/EXTENSIONS.md) records that built-in `settle_up` stays exactly two people while N-person ownership stays in core, and leaves settling up among three or more people to separate packages that state their netting rule. `tests/test_roadmap.py` now accepts a roadmap where no item is ready, provided the "Start here" block says so.
 - M10-03: [EXTENSIONS](docs/EXTENSIONS.md) lists home purchase modelling as a community extension candidate, out of core and out of `retirement`, with why, the shape of a package, and the mechanics-not-advice boundary.
 - M10-01: [EXTENSIONS](docs/EXTENSIONS.md) gains a "Community extension candidates" section listing FSA and reimbursement tracking as out of core, with why, the shape of an extension, and its boundary with core.
 - Proposed ADR-0018 asks the maintainer how tax enters the retirement income-vs-need gap: which streams are taxable, how fixed-dollar thresholds behave in today's dollars, and tax in the per-person view. Roadmap items `M8-05`, `M8-06` and `M10-02` are blocked until it is decided.
