@@ -4,13 +4,11 @@ Last verified: 2026-11-12
 
 ## What Is This
 
-`household-finance-kit` (`hfk`) is a public, open-source Python toolkit for households that use a Tiller spreadsheet as their financial ledger and want local budgeting analysis from it. It reads the workbook read-only, combines it with small YAML files owned by the household, and produces reports without becoming the place where private financial data lives.
+`household-finance-kit` (`hfk`) is a public, open-source toolkit for households that use a Tiller spreadsheet (it's a requirement) as their financial ledger and want local budgeting analysis and planning from it. 
 
-**Not affiliated with Tiller:** this project is unofficial. It is not affiliated with, endorsed by, or sponsored by Tiller, and "Tiller" is a trademark of its owner https://tiller.com/.  
+**Not affiliated with Tiller:** this project is unofficial. It is not affiliated with, endorsed by, or sponsored by Tiller, and "Tiller" is a trademark of its owner [Tiller](https://tiller.com/). 
 
-Background: I've used Tiller (in Excel for over a year, and now transitioned to using Google Sheets) for almost 2 years as I write this, and it has been fantastic about showing me how I spend my money.  However, it never really answered the question of am I under- or over-spending.  It has tools to help with budgeting but I didn't know how to leverage it (they have resources that I didn't use). So I started building this project for me and it has been immensely useful at getting me more involved in my finances.  This in turn has helped me curb some spending and know when I can spend more, to sock money away for trips and gifts etc. Therefore, I have redesigned it for public use. 
-
-Me vs You.  I've been a computer programmer my whole life, and while I'm comfortable using coding tools and AI, I have made sure the project is usable by anyone familiar with spreadsheets. You can use this project as is, or just go to Tiller's website and use that tool (it has an annual fee that provides more value than what it costs, IMO). 
+Background: I've used Tiller (in Excel and now transitioned to using Google Sheets), and it has been fantastic about showing me how I spend my money.  However, it never really answered the question of am I under- or over-spending.  It has tools to help with budgeting but I didn't know how to leverage it (they have resources that I didn't use). So I started building this project for me and it has been immensely useful at getting me more involved in my finances.  This in turn has helped me curb some spending, know when I can spend more, and how much I can save away for trips and gifts etc. Therefore, I have redesigned it for public use. I've been a computer programmer my whole life, and while I'm comfortable using coding tools and AI, my goal is to make it usable by anyone familiar with just spreadsheets.  Right now it needs a few terminal commands.  You can use this project as is, but understand that it does require use of Tiller which has an annual subscription cost that I find completely reasonable for the value I receive from it. 
 
 ## Current Status
 
