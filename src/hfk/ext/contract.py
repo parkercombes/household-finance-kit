@@ -31,8 +31,11 @@ import dataclasses
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
 from typing import Any
 
+from hfk.config import Declarations, Household
 from hfk.config.household import SLUG
 from hfk.ledger import Ledger
 
@@ -41,6 +44,24 @@ SUPPORTED_CONTRACT = f"{CONTRACT_MAJOR}.x"
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
 COMMAND_NAME = re.compile(r"^[a-z][a-z0-9-]*$")
 CORE_FILES = frozenset({"household.yaml", "declarations.yaml", "plan.yaml"})
+# Core subcommands an extension may not replace. ``settle`` and ``retirement``
+# are not listed: they are stubs reserved for the settle_up and retirement extensions.
+CORE_COMMANDS = frozenset(
+    {
+        "balances",
+        "categories",
+        "dev",
+        "doctor",
+        "init",
+        "networth",
+        "open",
+        "plan",
+        "rebaseline",
+        "renewals",
+        "scorecard",
+        "serve",
+    }
+)
 REQUIRES_KEYS = ("ledger_fields", "extensions")
 LEDGER_FIELDS = tuple(field.name for field in dataclasses.fields(Ledger))
 
@@ -57,6 +78,22 @@ class ExtensionCommand:
     help: str
     configure: Callable[[argparse.ArgumentParser], None]
     run: Callable[[argparse.Namespace, Any], int]
+
+
+@dataclass(frozen=True)
+class CommandContext:
+    """What an extension command's ``run(args, context)`` receives from core.
+
+    ``config`` is the extension's validated config (``None`` when it has none).
+    ``load_ledger()`` reads the instance's workbook read-only on first call.
+    """
+
+    home: Path
+    household: Household
+    declarations: Declarations
+    config: object
+    today: date
+    load_ledger: Callable[[], Ledger]
 
 
 @dataclass(frozen=True)
@@ -256,6 +293,8 @@ def _commands(obj: Any, fail: Callable[[str, str, str], None]) -> tuple[Extensio
             continue
         if not COMMAND_NAME.match(item.name):
             fail("commands", f"command name {item.name!r} is not a lowercase word", "use a name such as settle")
+        if item.name in CORE_COMMANDS:
+            fail("commands", f"command {item.name!r} is a core command", "choose another name")
         if item.name in seen:
             fail("commands", f"command {item.name!r} is listed twice", "list each command once")
         if not callable(item.configure) or not callable(item.run):
@@ -286,6 +325,8 @@ def _report_sections(
 
 __all__ = [
     "CONTRACT_MAJOR",
+    "CORE_COMMANDS",
+    "CommandContext",
     "ContractError",
     "Extension",
     "ExtensionCommand",

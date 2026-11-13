@@ -23,6 +23,7 @@ from hfk.ext.config import (
 )
 from hfk.ext.contract import (
     CONTRACT_MAJOR,
+    CommandContext,
     ContractError,
     Extension,
     ExtensionCommand,
@@ -161,6 +162,7 @@ def _instantiate(target: Any) -> Any:
 __all__ = [
     "CONTRACT_MAJOR",
     "ENTRY_POINT_GROUP",
+    "CommandContext",
     "ContractError",
     "DiscoveredExtension",
     "Discovery",

@@ -14,6 +14,6 @@ accounts:
   "Sam Checking": {owner: sam}
   "Joint Card": {shared: {alex: 0.5, sam: 0.5}}
   "Savings": {owner: alex, kind: savings}
-# extensions: opt-in add-ons, enabled by name once installed, such as settle_up
-# (M7) and retirement (M8). An enabled extension that is not installed is an error.
-extensions: []
+# extensions: opt-in add-ons, enabled by name. settle_up ships with hfk;
+# retirement is planned (M8). An enabled extension that is not installed is an error.
+extensions: [settle_up]

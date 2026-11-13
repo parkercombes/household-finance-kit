@@ -21,7 +21,7 @@ That boundary matters because `hfk` is public software used with private househo
 
 ## Discovery
 
-Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Wiring `commands()` into the `hfk` command line is planned for `M7-01`, where `settle_up` first needs it, and wiring `report_sections()` into the renderers and `hfk serve` is planned with the first extension report (`M7-04`).
+Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Implemented (M7-01): every installed extension's `commands()` become `hfk` subcommands. Each gets `--home` and `--today` from core plus its own arguments. Before `run(args, context)` is called, core checks that the household enabled the extension and loads its config; the `hfk.ext.CommandContext` carries `home`, `household`, `declarations`, `config`, `today`, and `load_ledger()`. An extension may not take a core command's name. Wiring `report_sections()` into the renderers and `hfk serve` is planned with the first extension report.
 
 Illustrative `pyproject.toml` snippet:
 
@@ -144,7 +144,7 @@ The extension boundary is part of the privacy and correctness model.
 
 ### `settle_up`
 
-Planned for M7, `settle_up` computes a monthly statement for exactly two people. It is intended for a household that would otherwise maintain a manual settle-up spreadsheet, but wants the calculation to come from the read-only Tiller ledger plus a small private YAML file for off-ledger items.
+Implemented (M7-01): the `settle_up` extension is registered through the `hfk.extensions` entry point in this distribution's `pyproject.toml`, and `hfk doctor` reports an error when it is enabled for a household that does not list exactly two people. Planned for the rest of M7, `settle_up` computes a monthly statement for exactly two people. It is intended for a household that would otherwise maintain a manual settle-up spreadsheet, but wants the calculation to come from the read-only Tiller ledger plus a small private YAML file for off-ledger items.
 
 Scope and limits:
 
@@ -232,7 +232,7 @@ Extensions should test against the synthetic fixture (`hfk dev fixture`, or `hfk
 - Renderer output using fictional data only.
 - Privacy scan before publishing.
 
-Command tests wait on the CLI wiring of `commands()`, planned for `M7-01`.
+Command tests run the `hfk` CLI in a subprocess with the throwaway package's directory on `PYTHONPATH`; see `test_extension_commands_run_through_the_cli` in `tests/test_extensions.py`.
 
 ## Stability and versioning
 

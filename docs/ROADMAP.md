@@ -5,7 +5,7 @@ Last verified: 2026-11-13
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M7-01`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+The next item is `M7-02`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
 `tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -133,7 +133,7 @@ Goal: provide a two-person monthly settle-up report for shared household costs w
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M7-01` | Implement the `settle_up` extension registration and enforce exactly two people for settle-up, even though core ownership can support more. | `todo` | `M6-04`, `M3-01` | Run `python -m pytest -q tests/test_settle_up.py::test_exactly_two_people_required`; expected: one-person and three-person settle-up configs fail clearly. |
+| `M7-01` | Implement the `settle_up` extension registration and enforce exactly two people for settle-up, even though core ownership can support more. | `done` | `M6-04`, `M3-01` | Run `python -m pytest -q tests/test_settle_up.py::test_exactly_two_people_required`; expected: one-person and three-person settle-up configs fail clearly. Result 2026-11-13: passed. `settle_up` is registered as `hfk.ext.settle_up:SettleUp` under `hfk.extensions` in `pyproject.toml`, discovered and contract-checked like any other extension. With it enabled, a one-person and a three-person household each get one `settle-up-people` error from `hfk doctor` at `household.yaml key=people`, the CLI exits 1, and `two_people()` raises `SettleUpError` naming the count and the fix; the two-person example instance passes doctor. The same commit wires extension `commands()` into the CLI (enabled check, config load, `CommandContext`, reserved core names), which `M7-04` needs for `hfk settle`. |
 | `M7-02` | Use the core share engine for on-ledger shares; `settle_up` declares no sharing rules of its own. | `todo` | `M7-01`, `M3-01` | Run `python -m pytest -q tests/test_settle_up.py::test_on_ledger_shares_match_scorecard`; expected: per-person shared totals equal the scorecard's totals for the same synthetic month. |
 | `M7-03` | Implement `shared-items/YYYY-MM.yaml` for off-ledger shared costs with label, amount, paid_by, weights, and bucket validation. | `todo` | `M7-01` | Run `python -m pytest -q tests/test_settle_shared_items.py`; expected: valid shared items load and invalid weights, people, or months fail. |
 | `M7-04` | Implement `hfk settle YYYY-MM` statement output with category totals, paid-vs-owed per person, and net transfer in text, CSV, and HTML renderers. | `todo` | `M7-02`, `M7-03`, `M5-05` | Run `hfk settle --home examples/instance 2025-03`; expected: exits 0 and prints a statement using only Alex, Sam, and synthetic numbers. |

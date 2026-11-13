@@ -49,7 +49,15 @@ from hfk.engine import (
     build_scorecard,
     run_doctor,
 )
-from hfk.ext import load_extensions
+from hfk.ext import (
+    CommandContext,
+    Extension,
+    ExtensionCommand,
+    LoadedExtensions,
+    enabled_extension,
+    load_extension_config,
+    load_extensions,
+)
 from hfk.ext.doctor import extension_doctor_hooks
 from hfk.instance import InstanceError, InstanceReport, write_instance
 from hfk.interview import (
@@ -468,6 +476,68 @@ def _plan_to_sheet(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_extension_command(
+    args: argparse.Namespace,
+    *,
+    extension: Extension,
+    command: ExtensionCommand,
+    loaded: LoadedExtensions,
+) -> int:
+    """Load the instance and the extension's config, then hand over to the extension."""
+
+    home = Path(args.home)
+    try:
+        household = load_household(home)
+        enabled_extension(extension.name, household=household, installed=loaded.extensions)
+        declarations = load_declarations(home, people=household.slugs)
+        config = load_extension_config(home, extension)
+    except ConfigError as error:
+        print(f"{command.name}: {error}", file=sys.stderr)
+        return 1
+
+    def load_ledger():
+        return read_tiller(find_workbook(home / "data", household.tiller_glob))
+
+    context = CommandContext(
+        home=home,
+        household=household,
+        declarations=declarations,
+        config=config,
+        today=args.today if args.today is not None else date.today(),  # noqa: DTZ011
+        load_ledger=load_ledger,
+    )
+    return int(command.run(args, context))
+
+
+def _add_extension_commands(
+    subparsers: argparse._SubParsersAction, loaded: LoadedExtensions
+) -> set[str]:
+    """Add every installed extension's commands; returns the names added."""
+
+    added: set[str] = set()
+    for extension in loaded.extensions:
+        for command in extension.commands:
+            if command.name in added:
+                continue
+            parser = subparsers.add_parser(
+                command.name, help=f"{command.help} (extension {extension.name})"
+            )
+            parser.add_argument(
+                "--home",
+                default=argparse.SUPPRESS,
+                help="Instance directory (default: HFK_HOME or current directory).",
+            )
+            parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
+            command.configure(parser)
+            parser.set_defaults(
+                func=lambda args, extension=extension, command=command: _run_extension_command(
+                    args, extension=extension, command=command, loaded=loaded
+                )
+            )
+            added.add(command.name)
+    return added
+
+
 def _month_before(value: date) -> Month:
     year, month = value.year, value.month - 1
     if month == 0:
@@ -839,7 +909,10 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     init_parser.set_defaults(func=_init)
 
+    extension_commands = _add_extension_commands(subparsers, load_extensions())
     for name in _STUB_MILESTONES:
+        if name in extension_commands:
+            continue
         subparser = subparsers.add_parser(name)
         subparser.set_defaults(func=lambda _args, command=name: _stub(command))
 
