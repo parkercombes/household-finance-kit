@@ -226,6 +226,34 @@ Boundaries for every extension package, public or private:
 | Privacy | A public package carries only Alex, Sam, `Example Bank`, and round numbers, and runs a privacy scan before publishing. A private package stays in a private repository. |
 | Advice | Show arithmetic and scenarios only. Never recommend products, tax strategy, claiming strategy, or investments. |
 
+## Community extension candidates
+
+These features are useful to some households but are deliberately **not core** and not built-in. Each is a candidate for a separate extension package, public or private, built on the contract above. Core will not grow them; a pull request adding one to core should be redirected to a package.
+
+### FSA and reimbursement tracking
+
+Flexible spending accounts, health savings reimbursements, and employer or insurer reimbursements are out of core.
+
+- **Why not core:** these balances follow plan-specific rules: deadlines, carry-over limits, eligible expenses, and employer matching. The rules differ by employer and plan year, and getting one wrong produces a believable but wrong balance.
+- **Shape of an extension:** its own config file (for example `reimbursements.yaml`) listing each claim with a date, amount, category, status, and reason; read-only use of the ledger to find the matching transactions; a `doctor()` that flags claims past their deadline; and a report of open and settled claims. It must not change how core shares or buckets a transaction.
+- **Boundary:** a reimbursement does not rewrite the scorecard. If a household wants reimbursed spending excluded from a bucket, that judgement call belongs in `declarations.yaml` (an override or a non-spend group), not in the extension.
+
+### Home purchase modelling
+
+Modelling a home purchase (down payment, mortgage amortisation, closing costs, property tax, and how buying changes the budget) is out of core and out of the built-in `retirement` extension.
+
+- **Why not core:** core budgeting reports what happened against a plan; it does not project. The `retirement` extension projects income against need over decades and deliberately models no asset balances (an `account_drawdown` is a declared withdrawal, not an account). A home purchase needs both projections and balances, plus local rules (property tax, insurance, transfer taxes) that vary by place.
+- **Shape of an extension:** its own config file (for example `home.yaml`) with the price, down payment, loan terms, and recurring costs as declared inputs; arithmetic only (an amortisation table and a monthly cost); and a report the household compares with its own plan. It may read the plan and the ledger, but never writes either.
+- **Boundary:** mechanics, not advice. It never recommends whether, when, or what to buy, or which loan to take. A household that buys feeds the result back into core by adding plan lines in its `HFK Plan` sheet; the extension does not change the plan.
+
+### Settle-up for more than two people
+
+The built-in `settle_up` extension stays exactly two people (ADR-0004), and `hfk doctor` reports an error when it is enabled for any other household. Settling up among three or more people (housemates, group trips, multi-party reimbursements) is left to other implementers.
+
+- **What core already provides:** the ownership model is N-person (ADR-0003). Account weights, `sharing` rules, and the one core share function (ADR-0009) already assign every transaction to any number of people, and every core report reads them. A larger settle-up needs no core change.
+- **Why not built in:** with more than two people there is no single net transfer. Someone has to choose how debts are netted and who pays whom: pairwise, through one person, or by fewest transfers. Each is a policy choice that changes who sends money, so it belongs to a separate package that states its rule.
+- **Shape of an extension:** a package with its own name (not `settle_up`) that reads owed amounts from `hfk.engine.share_transaction` exactly as `settle_up` does (`hfk.ext.settle_up.shares` is the pattern), declares its netting rule in its documentation and config, and never settles an unfinished month.
+
 ## Testing extensions
 
 Extensions should test against the synthetic fixture (`hfk dev fixture`, or `hfk.source.fixture.build_fixture` from Python) and avoid real workbooks. `tests/ext_fixture.py` in this repository shows how to install a throwaway extension package for a test without pip: write the module and a `*.dist-info` directory with an `entry_points.txt`, then put the directory on `sys.path`. A good extension test suite should cover:

@@ -13,6 +13,7 @@ from pathlib import Path
 ROADMAP = Path(__file__).resolve().parents[1] / "docs" / "ROADMAP.md"
 ROW = re.compile(r"^\| `(M\d+-\d+)` \| .* \| `(todo|doing|done|blocked)` \| (.*?) \| ", re.MULTILINE)
 NEXT = re.compile(r"The next item is `(M\d+-\d+)`")
+NONE_READY = "No item is ready: every remaining item is blocked or waits on a blocked item."
 
 
 def _items() -> dict[str, tuple[str, tuple[str, ...]]]:
@@ -39,10 +40,19 @@ def test_start_here_names_first_ready_todo_item() -> None:
         for item_id, (status, deps) in items.items()
         if status == "todo" and all(items[dep][0] == "done" for dep in deps)
     ]
-    assert ready, "no todo item has all dependencies done"
+    text = ROADMAP.read_text(encoding="utf-8")
+    if not ready:
+        # Every remaining item waits on the maintainer: the block must say so, not
+        # name a next item.
+        open_items = [item for item, (status, _deps) in items.items() if status == "todo"]
+        assert NONE_READY in text, (
+            f"no todo item is ready (open: {open_items}); ROADMAP.md must say: {NONE_READY}"
+        )
+        assert not NEXT.search(text), "ROADMAP.md names a next item, but none is ready"
+        return
     expected = ready[0]
 
-    match = NEXT.search(ROADMAP.read_text(encoding="utf-8"))
+    match = NEXT.search(text)
     assert match, "ROADMAP.md must say 'The next item is `Mn-NN`'"
     assert match.group(1) == expected, (
         f"ROADMAP.md says next item is {match.group(1)} but the first ready todo item is {expected}"
