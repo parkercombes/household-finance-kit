@@ -328,6 +328,9 @@ lines. The sheet is ADR-0013, implemented in M5-08; the single source is ADR-001
   data, history_start clamps, and a closing readiness section for new users (required
   sheets, finished months since `history_start`, unmapped expense categories, plan loads),
   each with a plain-language fix; readiness never changes the exit code.
+- `hfk serve` — the reports as a local read-only web page bound to `127.0.0.1` only, with a
+  month picker and a Regenerate action that re-reads the workbook; GET only, and its one
+  write path is `out/`.
 - `hfk init`, `hfk plan check`, `hfk dev fixture` (generate synthetic Tiller workbook).
 - Hard invariant: any analysis window is clamped to `history_start`.
 

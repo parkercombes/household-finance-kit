@@ -46,6 +46,7 @@ from hfk.engine import (
 from hfk.instance import InstanceError, InstanceReport, write_instance
 from hfk.interview import InterviewError, Question, load_answers, run_interview
 from hfk.render import money, render_csv, render_html, render_text
+from hfk.serve import DEFAULT_HOST, DEFAULT_PORT, ServeError, make_server, server_url
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
@@ -370,6 +371,28 @@ def _plan_check(args: argparse.Namespace) -> int:
     return 1
 
 
+def _serve(args: argparse.Namespace) -> int:
+    today = args.today
+    try:
+        server = make_server(
+            Path(args.home),
+            host=args.host,
+            port=args.port,
+            today=(lambda: today) if today is not None else None,
+        )
+    except (ServeError, OSError) as error:
+        print(f"serve: {error}", file=sys.stderr)
+        return 1
+    print(f"serving {server_url(server)} (read-only; press Ctrl+C to stop)", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 def _month_before(value: date) -> Month:
     year, month = value.year, value.month - 1
     if month == 0:
@@ -616,6 +639,26 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     rebaseline_parser.set_defaults(func=_rebaseline)
+
+    serve_parser = subparsers.add_parser("serve")
+    serve_parser.add_argument(
+        "--host",
+        default=DEFAULT_HOST,
+        help=f"Loopback address to bind (default: {DEFAULT_HOST}); anything else is refused.",
+    )
+    serve_parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_PORT,
+        help=f"Port to listen on (default: {DEFAULT_PORT}; 0 picks a free port).",
+    )
+    serve_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pages.")
+    serve_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    serve_parser.set_defaults(func=_serve)
 
     plan_parser = subparsers.add_parser("plan")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", metavar="command")

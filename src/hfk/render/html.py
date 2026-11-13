@@ -29,6 +29,7 @@ from hfk.engine import (
 )
 from hfk.engine.balances import AccountBalance
 from hfk.engine.categories import CategoryLine
+from hfk.engine.doctor import DoctorReport
 from hfk.engine.networth import NetWorthLine
 from hfk.engine.renewals import Renewal
 from hfk.engine.scorecard import BucketScore
@@ -308,12 +309,52 @@ def render_renewals_html(report: RenewalsReport) -> str:
     return _document(header, body)
 
 
+def render_doctor_html(report: DoctorReport) -> str:
+    """Render ``hfk doctor`` output as a static HTML page with the CLI's wording."""
+    errors = len(report.errors())
+    warnings = len(report.warnings())
+    header = f"doctor: {errors} errors, {warnings} warnings"
+    body = ""
+    if report.diagnostics:
+        rows = "".join(
+            "<tr>"
+            + _tag("td", diagnostic.level)
+            + _tag("td", diagnostic.where)
+            + _tag("td", diagnostic.message)
+            + _tag("td", diagnostic.fix)
+            + "</tr>\n"
+            for diagnostic in report.diagnostics
+        )
+        body += (
+            "<table>\n<thead><tr><th>level</th><th>where</th><th>message</th>"
+            f"<th>fix</th></tr></thead>\n<tbody>\n{rows}</tbody>\n</table>\n"
+        )
+    else:
+        body += _note("no problems found")
+    body += f"<h2>{_escape('readiness: ' + ('ready' if report.ready else 'not ready'))}</h2>\n"
+    rows = "".join(
+        "<tr>"
+        + _tag("td", "ready" if check.ready else "not ready")
+        + _tag("td", check.name)
+        + _tag("td", check.detail)
+        + _tag("td", check.fix)
+        + "</tr>\n"
+        for check in report.readiness
+    )
+    body += (
+        "<table>\n<thead><tr><th>status</th><th>check</th><th>detail</th>"
+        f"<th>fix</th></tr></thead>\n<tbody>\n{rows}</tbody>\n</table>\n"
+    )
+    return _document(header, body)
+
+
 HTML_RENDERERS: dict[type, Callable[..., str]] = {
     Scorecard: render_scorecard_html,
     CategoriesReport: render_categories_html,
     BalancesReport: render_balances_html,
     NetWorthReport: render_networth_html,
     RenewalsReport: render_renewals_html,
+    DoctorReport: render_doctor_html,
 }
 
 
@@ -346,6 +387,7 @@ __all__ = [
     "register_html_renderer",
     "render_balances_html",
     "render_categories_html",
+    "render_doctor_html",
     "render_html",
     "render_networth_html",
     "render_renewals_html",

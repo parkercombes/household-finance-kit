@@ -1,6 +1,6 @@
 # Architecture
 
-Last verified: 2026-11-12
+Last verified: 2026-11-13
 
 This document explains the architecture of `hfk`, the household-finance-kit toolkit, for both human maintainers and LLM agents resuming the project cold. The source of truth for product scope is [DESIGN-BRIEF.md](DESIGN-BRIEF.md). Planned work is tracked in [ROADMAP.md](ROADMAP.md), and architectural decisions are recorded in [DECISIONS.md](DECISIONS.md).
 
@@ -186,6 +186,7 @@ The package names below are the approved architecture from the design brief. Sta
 | `src/hfk/engine` | Engine | Planned M2 doctor basics; M3 ownership, buckets, scorecard; M4 targets, balances, renewals |
 | `src/hfk/ext` | Extensions | Planned M6 extension discovery and API support |
 | `src/hfk/render` | Presentation | Planned M5 text, CSV, and HTML renderers |
+| `src/hfk/serve.py` | Presentation | Done (M5-10): `hfk serve`, the loopback-only, GET-only web front door over the HTML renderers |
 | `src/hfk/cli.py` | Presentation | `--version` and `dev fixture` work; analysis subcommands are stubs that become functional across M2-M8 |
 
 ## Implemented vs planned
