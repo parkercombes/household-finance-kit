@@ -25,7 +25,8 @@ the Tiller workbook or any statement.
 - `declarations.yaml`: buckets, the group or category map, overrides,
   splits, and sharing rules. Every override, split, and sharing rule needs a
   `reason` written in the person's words.
-- `plan.yaml`, while this instance still has one.
+- Not the budget plan: it lives in the workbook's `HFK Plan` sheet, which you
+  must not read or write. Suggest plan changes in words for the person to make.
 
 Do not change `.claude/`, `.gitignore`, or the launcher files
 `Open HFK.command` and `Open HFK.bat`.

@@ -10,6 +10,7 @@ from typing import Any
 
 import yaml
 from openpyxl import load_workbook
+from plan_fixture import example_plan, write_plan
 
 from hfk.engine import run_doctor
 from hfk.source import read_tiller
@@ -22,7 +23,7 @@ PYTHONPATH = str(ROOT / "src")
 
 
 def make_instance(tmp_path: Path, **fixture_kwargs: Any) -> Path:
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
     build_fixture(tmp_path / "data" / "Tiller-Example.xlsx", **fixture_kwargs)
     return tmp_path
@@ -98,7 +99,6 @@ def test_example_instance_files_match_examples() -> None:
     pairs = {
         "household.yaml": "household.example.yaml",
         "declarations.yaml": "declarations.example.yaml",
-        "plan.yaml": "plan.example.yaml",
     }
     for instance_name, example_name in pairs.items():
         assert (INSTANCE_EXAMPLE / instance_name).read_text(encoding="utf-8") == (
@@ -107,7 +107,7 @@ def test_example_instance_files_match_examples() -> None:
 
 
 def test_missing_workbook_is_an_error(tmp_path: Path) -> None:
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
 
     report = run_doctor(tmp_path, today=date(2026, 10, 1))
@@ -346,10 +346,10 @@ def test_plan_and_sharing_conflicts(tmp_path: Path) -> None:
     assert not any(diagnostic.code in new_codes for diagnostic in clean_report.errors())
 
     mismatch_home = child_instance("mismatch")
-    plan_path = mismatch_home / "plan.yaml"
-    plan = load_yaml(plan_path)
+    plan_home = mismatch_home
+    plan = example_plan()
     plan["plan"]["lines"][0]["categories"].append("Utilities")
-    dump_yaml(plan_path, plan)
+    write_plan(plan_home, plan)
     mismatch_report = run_doctor(mismatch_home, today=date(2026, 10, 1))
     mismatches = [
         diagnostic
@@ -362,8 +362,8 @@ def test_plan_and_sharing_conflicts(tmp_path: Path) -> None:
     )
 
     duplicate_home = child_instance("duplicate")
-    plan_path = duplicate_home / "plan.yaml"
-    plan = load_yaml(plan_path)
+    plan_home = duplicate_home
+    plan = example_plan()
     plan["plan"]["lines"].append(
         {
             "desc": "Example Grocer Extra",
@@ -374,7 +374,7 @@ def test_plan_and_sharing_conflicts(tmp_path: Path) -> None:
             "effective_from": "2025-01",
         }
     )
-    dump_yaml(plan_path, plan)
+    write_plan(plan_home, plan)
     duplicate_report = run_doctor(duplicate_home, today=date(2026, 10, 1))
     duplicates = [
         diagnostic
@@ -435,21 +435,11 @@ def test_readiness_section(tmp_path: Path) -> None:
     checks = readiness_by_name(report)
     assert checks["category mapping"].detail == "every expense category has a bucket"
     assert "Transactions, Categories, Balance History" in checks["workbook sheets"].detail
-    assert "load from plan.yaml" in checks["budget plan"].detail
+    assert "9 lines load from the HFK Plan sheet" in checks["budget plan"].detail
     assert result.returncode == 0
     assert "readiness: ready" in result.stdout
     assert "  ready: category mapping: every expense category has a bucket" in result.stdout
     assert result.stdout.rstrip().endswith("doctor: 0 errors, 0 warnings")
-
-    # The plan read from the HFK Plan sheet is named as such.
-    sheet_home = child_instance("sheet", plan_tab=True)
-    household = load_yaml(sheet_home / "household.yaml")
-    household["plan"] = {"source": "workbook"}
-    dump_yaml(sheet_home / "household.yaml", household)
-    (sheet_home / "plan.yaml").unlink()
-    report = run_doctor(sheet_home, today=today)
-    assert report.ready
-    assert "load from the HFK Plan sheet" in readiness_by_name(report)["budget plan"].detail
 
     # A missing required sheet: not ready with a fix, and the existing error exit.
     sheet_missing = child_instance("missing-sheet")
@@ -471,9 +461,7 @@ def test_readiness_section(tmp_path: Path) -> None:
 
     # An empty plan: not ready with a fix, and the existing config-error exit.
     empty_plan = child_instance("empty-plan")
-    plan_data = load_yaml(empty_plan / "plan.yaml")
-    plan_data["lines"] = []
-    dump_yaml(empty_plan / "plan.yaml", plan_data)
+    build_fixture(fixture_workbook(empty_plan), plan_rows=[])
     report = run_doctor(empty_plan, today=today)
     result = run_hfk("doctor", "--home", str(empty_plan), "--today", "2026-10-01")
     plan_check = readiness_by_name(report)["budget plan"]

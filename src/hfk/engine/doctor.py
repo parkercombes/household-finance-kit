@@ -17,8 +17,6 @@ from hfk.config import (
     load_declarations,
     load_household,
     load_instance_plan,
-    load_plan,
-    unused_plan_file,
 )
 from hfk.engine.buckets import BucketError, resolve_category
 from hfk.engine.shares import ShareConflictError, ShareError, share_weights
@@ -103,22 +101,21 @@ def run_doctor(
     declarations = _load_declarations(home, people=people, diagnostics=diagnostics)
     plan: Plan | None = None
     plan_duplicates_checked = False
-    if declarations is None:
+    if declarations is None or household is None:
+        failed = "household.yaml" if household is None else "declarations.yaml"
         diagnostics.append(
             Diagnostic(
                 "error",
                 "config-error",
-                "plan.yaml",
-                "plan.yaml was not checked because declarations.yaml failed key=plan",
-                "fix declarations.yaml first, then rerun doctor",
+                "HFK Plan",
+                f"the HFK Plan sheet was not checked because {failed} failed",
+                f"fix {failed} first, then rerun doctor",
             )
         )
     else:
         plan = _load_plan(
             home, household=household, declarations=declarations, diagnostics=diagnostics
         )
-    if household is not None:
-        _check_unused_plan_file(home, household, diagnostics)
 
     workbook_path: Path | None = None
     ledger: Ledger | None = None
@@ -248,8 +245,9 @@ def _plan_readiness(plan: Plan | None) -> ReadinessCheck:
             "the plan did not load",
             "fix the plan error above, then run hfk plan check",
         )
-    source = "the HFK Plan sheet" if plan.source == "workbook" else "plan.yaml"
-    return ReadinessCheck(name, True, f"{_count(len(plan.lines), 'line')} load from {source}")
+    return ReadinessCheck(
+        name, True, f"{_count(len(plan.lines), 'line')} load from the HFK Plan sheet"
+    )
 
 
 def _load_household(home: Path, diagnostics: list[Diagnostic]) -> Household | None:
@@ -273,45 +271,23 @@ def _load_declarations(
 def _load_plan(
     home: Path,
     *,
-    household: Household | None,
+    household: Household,
     declarations: Declarations,
     diagnostics: list[Diagnostic],
 ) -> Plan | None:
     try:
-        if household is None:
-            return load_plan(home, declarations=declarations, people=None)
         return load_instance_plan(home, household=household, declarations=declarations)
     except ConfigError as error:
         diagnostics.append(_config_diagnostic(error))
         return None
 
 
-def _check_unused_plan_file(
-    home: Path, household: Household, diagnostics: list[Diagnostic]
-) -> None:
-    unused = unused_plan_file(home, household)
-    if unused is None:
-        return
-    diagnostics.append(
-        Diagnostic(
-            "warning",
-            "plan-file-unused",
-            unused.name,
-            "plan.yaml is ignored because household.yaml sets plan: {source: workbook} "
-            "and the plan is read from the HFK Plan sheet",
-            "delete or rename plan.yaml, or set plan: {source: file} to use it",
-        )
-    )
-
-
-def _plan_where(plan: Plan) -> str:
-    return "HFK Plan" if plan.source == "workbook" else "plan.yaml"
+def _plan_where(_plan: Plan) -> str:
+    return "HFK Plan"
 
 
 def _plan_categories_ref(plan: Plan, index: int) -> str:
-    if plan.source == "workbook":
-        return f"{plan.describe_line(index)} Categories"
-    return f"{plan.describe_line(index)}.categories"
+    return f"{plan.describe_line(index)} Categories"
 
 
 def _config_diagnostic(error: ConfigError) -> Diagnostic:

@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13`, `M5-16` and `M5-17` are done, and `M5-18` (the `HFK Plan` sheet as the only plan source) is next. `M5-14` and `M5-15` are blocked on the maintainer. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -21,9 +21,10 @@ Working today:
 - `hfk scorecard`, `hfk categories`, `hfk balances`, `hfk networth`, `hfk renewals` and `hfk rebaseline` report from closed months, each with `--format text|csv|html`.
 - `hfk plan check` validates the budget plan.
 - `hfk serve` shows the reports as a local read-only web page on `127.0.0.1`, with a month picker and a Regenerate button. `hfk open` starts it on a free port and opens your browser, and `hfk init` writes double-click launchers (`Open HFK.command`, `Open HFK.bat`) that run `hfk open` for you.
-- `hfk dev fixture --out PATH [--plan-tab]` writes a synthetic workbook for tests and demos.
+- `hfk dev fixture --out PATH [--no-plan-tab]` writes a synthetic workbook, with the example `HFK Plan` sheet, for tests and demos.
+- `hfk plan to-sheet` converts a `plan.yaml` from before ADR-0015 to CSV rows for the `HFK Plan` sheet.
 
-The budget plan can be read from an `HFK Plan` sheet in your workbook (`plan: {source: workbook}` in `household.yaml`) or from `plan.yaml`. Per [ADR-0015](docs/DECISIONS.md#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed), the sheet becomes the only source and `plan.yaml` is removed: planned (M5-18).
+The budget plan lives only in an `HFK Plan` sheet that you add to your own workbook ([ADR-0015](docs/DECISIONS.md#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed)). hfk never writes the workbook, so `hfk init` writes starter rows to `out/hfk-plan-starter.csv` for you to paste in. A leftover `plan.yaml` is an error whose fix is `hfk plan to-sheet`.
 
 ## Who It Is For
 
@@ -40,7 +41,7 @@ The public toolkit is designed to be understandable by a non-programmer househol
 - A Tiller spreadsheet exported as `.xlsx` or `.xlsm`.
 - Python >= 3.10.
 - Local YAML instance files: `household.yaml` and `declarations.yaml`.
-- A budget plan: an `HFK Plan` sheet in the workbook, or `plan.yaml` until M5-18 removes it.
+- A budget plan: an `HFK Plan` sheet that you add to the workbook.
 
 `hfk` **never writes to the Tiller workbook**. The source adapter must open workbooks read-only, and the guard hook at `hooks/tiller_guard.py` exists to block agent edits that would call `save` on a workbook.
 
@@ -50,7 +51,7 @@ There are two separate places:
 - **Public toolkit repo:** this repository. It contains code, docs, tests, examples, synthetic fixtures, presets, hooks, and no real household data.
 - **Private instance repo or directory:** one per person or household. This is where real workbooks, generated reports, and private decisions live.
 
-Instance layout (the plan lives in the workbook's `HFK Plan` sheet; `plan.yaml` is accepted until M5-18):
+Instance layout (the plan lives in the workbook's `HFK Plan` sheet, not in a file):
 
 ```text
 my-finances/
@@ -109,7 +110,8 @@ What has landed by milestone, and what is still planned:
 - Available now (M5): `hfk init <dir>` as an interview that writes the config from your workbook, the `HFK Plan` sheet as a plan source, `--format text|csv|html` on the reports, a readiness section in `hfk doctor`, `hfk serve` for a local read-only page, and `hfk open` with double-click launchers.
 - Available now (M5): a one-line install from a built wheel (`uv tool install`); the PyPI name works once the package is published (`M0-07`).
 - Available now (M5): [WORKING-WITH-AI](docs/WORKING-WITH-AI.md) and an `AGENTS.md` in every new instance.
-- Planned (M5): the non-programmer README rewrite, and the sheet as the only plan source (M5-18).
+- Available now (M5): the `HFK Plan` sheet as the only plan source (M5-18).
+- Planned (M5): the non-programmer README rewrite, after the usability session.
 - Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
 
 ## Milestones

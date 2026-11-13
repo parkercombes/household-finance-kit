@@ -39,12 +39,12 @@ An AI assistant may read your configuration and the `hfk` code. It must never re
 
 | The assistant may read | The assistant must never read |
 |---|---|
-| `household.yaml`, `declarations.yaml`, and `plan.yaml` until it is removed | Anything in `data/`: your Tiller workbook and any downloads |
+| `household.yaml` and `declarations.yaml` | Anything in `data/`: your Tiller workbook and any downloads |
 | `README.md`, `AGENTS.md`, and the `shared-items/README.md` note | Bank, card, pay, or tax statements, in any folder |
 | Output of `hfk doctor` and `hfk plan check` that you choose to share | Reports in `out/`, which contain your amounts |
 | The `hfk` source code | Any file that holds account numbers, balances, or transactions |
 
-Your configuration files hold names, account names, and judgement calls, but no balances or transactions. Your workbook and reports hold every transaction you have. That is why the line is drawn here.
+Your configuration files hold names, account names, and judgement calls, but no balances or transactions. Your budget plan lives in the workbook's `HFK Plan` sheet, so an assistant cannot read it either: describe a plan change in words and make it in the sheet yourself. Your workbook and reports hold every transaction you have. That is why the line is drawn here.
 
 The `.claude/` folder in your instance holds a guard that stops Claude Code from saving, moving, or deleting your Tiller workbook. The guard blocks writes only. It does not stop an assistant from reading the workbook. The read rule depends on the assistant following `AGENTS.md`, and on you not asking it to break the rule.
 

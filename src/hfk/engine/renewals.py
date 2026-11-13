@@ -3,8 +3,9 @@
 `hfk renewals --month YYYY-MM` reports the plan's annual obligations, the
 month each is due next, and whether the monthly set-aside (the sinking fund)
 will have accumulated each bill by the time it comes due. The report is
-plan-only: it reads `plan.yaml` and `household.yaml` and never opens the
-Tiller workbook.
+plan-only: it works from the plan lines and `household.yaml` alone, and reads no
+transactions. (Since ADR-0015 the CLI loads those lines from the workbook's
+`HFK Plan` sheet.)
 
 Cycle rule: a line's fund cycles yearly at its due month. A contribution of
 `monthly` is set aside every month including the due month, the bill is paid

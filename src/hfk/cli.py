@@ -17,6 +17,9 @@ from pathlib import Path
 
 from hfk import __version__
 from hfk.config import (
+    PLAN_FILE,
+    PLAN_SHEET,
+    STARTER_CSV,
     ConfigError,
     Declarations,
     Household,
@@ -26,8 +29,9 @@ from hfk.config import (
     load_declarations,
     load_household,
     load_instance_plan,
-    unused_plan_file,
+    plan_csv,
 )
+from hfk.config.plan_convert import load_plan_file
 from hfk.engine import (
     BalancesError,
     BucketError,
@@ -92,18 +96,7 @@ def _parse_month(value: str) -> Month:
         raise argparse.ArgumentTypeError("write months as YYYY-MM") from exc
 
 
-def _warn_unused_plan_file(home: Path, household: Household) -> None:
-    unused = unused_plan_file(home, household)
-    if unused is not None:
-        print(
-            f"warning: {unused} is ignored because household.yaml sets plan: "
-            "{source: workbook}; fix=delete or rename it, or set plan: {source: file}",
-            file=sys.stderr,
-        )
-
-
 def _load_plan(home: Path, household: Household, declarations: Declarations) -> Plan:
-    _warn_unused_plan_file(home, household)
     return load_instance_plan(home, household=household, declarations=declarations)
 
 
@@ -267,7 +260,7 @@ def _renewals(args: argparse.Namespace) -> int:
             month=args.month,
             who=args.who,
         )
-    except (ConfigError, RenewalsError) as error:
+    except (ConfigError, TillerFormatError, RenewalsError) as error:
         print(f"renewals: {error}", file=sys.stderr)
         return 1
 
@@ -353,10 +346,9 @@ def _plan_check(args: argparse.Namespace) -> int:
         print(f"plan check: {error}", file=sys.stderr)
         return 1
 
-    _warn_unused_plan_file(home, household)
     report = check_instance_plan(home, household=household, declarations=declarations)
-    if report.source == "workbook":
-        print(f"plan check {report.path} (sheet HFK Plan)")
+    if report.path.suffix.lower().startswith(".xls"):
+        print(f"plan check {report.path} (sheet {PLAN_SHEET})")
     else:
         print(f"plan check {report.path}")
     for problem in report.problems:
@@ -436,6 +428,43 @@ def _stop_on_signal(_signum: int, _frame: object) -> None:
     raise KeyboardInterrupt
 
 
+def _plan_to_sheet(args: argparse.Namespace) -> int:
+    """``hfk plan to-sheet``: convert a retired ``plan.yaml`` to the sheet's CSV shape."""
+
+    home = Path(args.home)
+    source = home / PLAN_FILE
+    output = Path(args.out) if args.out is not None else home / STARTER_CSV
+    try:
+        household = load_household(home)
+        declarations = load_declarations(home, people=household.slugs)
+        if not source.exists():
+            print(
+                f"plan to-sheet: {source} does not exist: fix=nothing to convert; "
+                f"the plan already lives in the {PLAN_SHEET} sheet",
+                file=sys.stderr,
+            )
+            return 1
+        plan = load_plan_file(source, declarations=declarations, people=household.slugs)
+    except ConfigError as error:
+        print(f"plan to-sheet: {error}", file=sys.stderr)
+        return 1
+    if output.exists():
+        print(
+            f"plan to-sheet: {output} already exists: fix=move or delete it, or pass --out",
+            file=sys.stderr,
+        )
+        return 1
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(plan_csv(plan.lines), encoding="utf-8")
+    print(f"wrote {len(plan.lines)} plan lines to {output}")
+    print(
+        f"next: add a sheet named {PLAN_SHEET} to your workbook, paste or import {output.name} "
+        "into it starting at cell A1, download the workbook into data/, run "
+        f"hfk plan check --home {home}, then delete {source.name}"
+    )
+    return 0
+
+
 def _month_before(value: date) -> Month:
     year, month = value.year, value.month - 1
     if month == 0:
@@ -506,7 +535,10 @@ def _init_plain(args: argparse.Namespace) -> int:
 
     _print_instance(report, args)
     print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
-    print("next: put the Tiller workbook export in data/")
+    print(
+        f"next: put the Tiller workbook download in data/; it needs an {PLAN_SHEET} sheet "
+        "for your budget plan (see the README in the new folder)"
+    )
     print(f"then run: hfk plan check --home {args.dir} and hfk doctor --home {args.dir}")
     return 0
 
@@ -531,7 +563,9 @@ def _init_interview(
         return 1
 
     try:
-        report = write_instance(home, git=args.git, documents=result.documents)
+        report = write_instance(
+            home, git=args.git, documents=result.documents, starter_plan=result.starter_plan
+        )
     except InstanceError as error:
         print(f"init: {error}", file=sys.stderr)
         return 1
@@ -549,7 +583,11 @@ def _init_interview(
         )
     print(f"next: run hfk doctor --home {args.dir}")
     print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
-    print(f"then: set your targets in plan.yaml and run hfk plan check --home {args.dir}")
+    print(
+        f"then: add a sheet named {PLAN_SHEET} to your workbook, paste or import "
+        f"{STARTER_CSV} into it starting at cell A1, set your targets, download the "
+        f"workbook into data/ again, and run hfk plan check --home {args.dir}"
+    )
     return 0
 
 
@@ -766,6 +804,17 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     plan_check_parser.set_defaults(func=_plan_check)
+    to_sheet_parser = plan_subparsers.add_parser("to-sheet")
+    to_sheet_parser.add_argument(
+        "--out",
+        help=f"CSV file to write (default: {STARTER_CSV} in the instance).",
+    )
+    to_sheet_parser.add_argument(
+        "--home",
+        default=argparse.SUPPRESS,
+        help="Instance directory (default: HFK_HOME or current directory).",
+    )
+    to_sheet_parser.set_defaults(func=_plan_to_sheet)
     plan_parser.set_defaults(
         func=lambda _args, plan_parser=plan_parser: _subcommand_help(plan_parser)
     )
@@ -800,7 +849,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--plan-tab",
         action="store_true",
         dest="plan_tab",
-        help="Also write an HFK Plan sheet matching examples/instance/plan.yaml.",
+        default=True,
+        help="Write the example HFK Plan sheet (the default).",
+    )
+    fixture_parser.add_argument(
+        "--no-plan-tab",
+        action="store_false",
+        dest="plan_tab",
+        help="Leave out the HFK Plan sheet.",
     )
     fixture_parser.set_defaults(func=_dev_fixture)
     dev_parser.set_defaults(func=lambda _args, dev_parser=dev_parser: _subcommand_help(dev_parser))

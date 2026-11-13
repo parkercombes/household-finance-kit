@@ -1,33 +1,34 @@
-"""Load and validate ``plan.yaml`` (design brief section 6; ADR-0010)."""
+"""Plan lines and their validation (design brief section 6; ADR-0010, ADR-0015).
+
+The plan lives only in the ``HFK Plan`` workbook sheet (ADR-0015). This module
+holds the ``Month``, ``PlanLine`` and ``Plan`` types and the one line validator,
+``_line``, that the sheet loader and the one-time ``hfk plan to-sheet``
+converter both use. It reads no file.
+"""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
 from hfk.config._yaml import (
-    load_mapping,
     reject_unknown_keys,
     require,
     require_bool,
     require_list,
     require_mapping,
-    require_schema_version,
     require_text,
 )
-from hfk.config.declarations import Declarations
 from hfk.config.errors import ConfigError, key_path
 from hfk.ledger import money
 
+# The retired plan file (ADR-0015): only its presence is checked outside the converter.
 PLAN_FILE = "plan.yaml"
 CENT = Decimal("0.01")
 MONTH_TEXT = re.compile(r"^(\d{4})-(\d{2})$")
-TOP_LEVEL_KEYS = ("schema_version", "plan")
-PLAN_KEYS = ("effective_from", "lines")
 LINE_KEYS = (
     "desc",
     "who",
@@ -93,11 +94,11 @@ class Plan:
     schema_version: int
     effective_from: Month
     lines: tuple[PlanLine, ...]
-    source: str = "file"
+    source: str = "workbook"
     line_rows: tuple[int, ...] = ()
 
     def describe_line(self, index: int) -> str:
-        """Where line ``index`` lives: ``plan.lines[3]`` or ``HFK Plan row 5``."""
+        """Where line ``index`` lives: ``HFK Plan row 5`` (or ``plan.lines[3]`` when converting)."""
 
         if self.source == "workbook" and index < len(self.line_rows):
             return f"HFK Plan row {self.line_rows[index]}"
@@ -109,114 +110,6 @@ class Plan:
             for line in self.lines
             if line.is_effective(month) and (who is None or line.who == who)
         )
-
-
-def plan_path(home: Path) -> Path:
-    return Path(home) / PLAN_FILE
-
-
-def load_plan(
-    home_or_file: Path, *, declarations: Declarations, people: Iterable[str] | None = None
-) -> Plan:
-    """Load ``plan.yaml`` from an instance home directory or explicit file path."""
-
-    path = Path(home_or_file)
-    if path.is_dir():
-        path = plan_path(path)
-    data = load_mapping(path)
-    reject_unknown_keys(data, TOP_LEVEL_KEYS, path)
-
-    schema_version = require_schema_version(data, path)
-    plan = require_mapping(require(data, "plan", path), path, "plan")
-    reject_unknown_keys(plan, PLAN_KEYS, path, "plan")
-    effective_from = _require_month(require(plan, "effective_from", path, "plan"), path, "plan", "effective_from")
-    bucket_names = declarations.bucket_names()
-    lines = _lines(
-        require(plan, "lines", path, "plan"),
-        plan_effective_from=effective_from,
-        bucket_names=bucket_names,
-        people=None if people is None else tuple(people),
-        path=path,
-    )
-    return Plan(
-        path=path,
-        schema_version=schema_version,
-        effective_from=effective_from,
-        lines=lines,
-    )
-
-
-def _lines(
-    value: Any,
-    *,
-    plan_effective_from: Month,
-    bucket_names: tuple[str, ...],
-    people: tuple[str, ...] | None,
-    path: Path,
-) -> tuple[PlanLine, ...]:
-    rows = _plan_rows(value, path)
-    declared_buckets = set(bucket_names)
-    known_people = None if people is None else set(people)
-    lines: list[PlanLine] = []
-    for index, row in enumerate(rows):
-        parents = ("plan", "lines", f"[{index}]")
-        lines.append(
-            _line_entry(
-                row,
-                parents=parents,
-                plan_effective_from=plan_effective_from,
-                bucket_names=bucket_names,
-                declared_buckets=declared_buckets,
-                people=people,
-                known_people=known_people,
-                path=path,
-            )
-        )
-    return tuple(lines)
-
-
-def _plan_rows(value: Any, path: Path) -> list[Any]:
-    rows = require_list(value, path, "plan", "lines")
-    if not rows:
-        raise ConfigError(
-            "plan.lines must list at least one line",
-            file=path,
-            key="plan.lines",
-            fix="add at least one budget line",
-        )
-    return rows
-
-
-def _line_entry(
-    row: Any,
-    *,
-    parents: tuple[str, ...],
-    plan_effective_from: Month,
-    bucket_names: tuple[str, ...],
-    declared_buckets: set[str],
-    people: tuple[str, ...] | None,
-    known_people: set[str] | None,
-    path: Path,
-) -> PlanLine:
-    entry = require_mapping(row, path, *parents)
-    if "type" in entry:
-        raise ConfigError(
-            "Plan lines use bucket, not type",
-            file=path,
-            key=key_path(*parents, "type"),
-            fix="rename type to bucket; Type already means Expense/Income/Transfer in Tiller",
-        )
-    reject_unknown_keys(entry, LINE_KEYS, path, *parents)
-    return _line(
-        entry,
-        plan_effective_from=plan_effective_from,
-        bucket_names=bucket_names,
-        declared_buckets=declared_buckets,
-        people=people,
-        known_people=known_people,
-        path=path,
-        parents=parents,
-    )
 
 
 def _line(

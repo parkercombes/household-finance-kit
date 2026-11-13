@@ -36,9 +36,7 @@ TOP_LEVEL_KEYS = (
     "history_start",
     "accounts",
     "extensions",
-    "plan",
 )
-PLAN_SOURCES = ("file", "workbook")
 ACCOUNT_KEYS = ("owner", "shared", "kind", "unsynced", "closed", "note")
 
 
@@ -87,7 +85,6 @@ class Household:
     history_start: date | None
     accounts: tuple[AccountOwnership, ...]
     extensions: tuple[str, ...]
-    plan_source: str = "file"
 
     def person(self, slug: str) -> Person | None:
         for person in self.people:
@@ -117,6 +114,13 @@ def load_household(home_or_file: Path) -> Household:
     if path.is_dir():
         path = household_path(path)
     data = load_mapping(path)
+    if "plan" in data:
+        raise ConfigError(
+            "Unknown key 'plan': the plan always comes from the HFK Plan sheet (ADR-0015)",
+            file=path,
+            key="plan",
+            fix="delete the plan key from household.yaml",
+        )
     reject_unknown_keys(data, TOP_LEVEL_KEYS, path)
 
     schema_version = require_schema_version(data, path)
@@ -126,7 +130,6 @@ def load_household(home_or_file: Path) -> Household:
     history_start = _history_start(data.get("history_start"), path)
     accounts = _accounts(require(data, "accounts", path), slugs, path)
     extensions = _extensions(data.get("extensions", []), path)
-    plan_source = _plan_source(data.get("plan"), path)
     return Household(
         path=path,
         schema_version=schema_version,
@@ -135,7 +138,6 @@ def load_household(home_or_file: Path) -> Household:
         history_start=history_start,
         accounts=accounts,
         extensions=extensions,
-        plan_source=plan_source,
     )
 
 
@@ -362,22 +364,3 @@ def _extensions(value: Any, path: Path) -> tuple[str, ...]:
             )
         result.append(name)
     return tuple(result)
-
-
-def _plan_source(value: Any, path: Path) -> str:
-    """``plan: {source: file | workbook}``; an absent ``plan`` key means ``file`` (ADR-0013)."""
-
-    if value is None:
-        return "file"
-    plan = require_mapping(value, path, "plan")
-    reject_unknown_keys(plan, ("source",), path, "plan")
-    source = require_text(require(plan, "source", path, "plan"), path, "plan", "source")
-    if source not in PLAN_SOURCES:
-        raise ConfigError(
-            f"Unknown plan source {source!r}",
-            file=path,
-            key="plan.source",
-            fix="write plan: {source: file} to read plan.yaml or plan: {source: workbook} "
-            "to read the HFK Plan sheet",
-        )
-    return source

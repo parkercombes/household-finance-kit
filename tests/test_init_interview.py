@@ -2,8 +2,9 @@
 
 The interview opens the newest workbook in `data/` read-only, proposes
 accounts from `Balance History` and group-to-bucket mappings from the
-`Categories` sheet, and writes `household.yaml`, `declarations.yaml`, and a
-starter `plan.yaml` with a comment per judgement call. Answers here come from
+`Categories` sheet, and writes `household.yaml` and `declarations.yaml` with a
+comment per judgement call, plus starter plan rows in `out/hfk-plan-starter.csv`
+for the household to paste into the workbook's `HFK Plan` sheet (ADR-0015). Answers here come from
 `--answers <file>`; the prompt path is exercised in-process through a
 scripted `ask` callback. Plain `hfk init` without a workbook in `data/` must
 stay byte-identical to the M5-01 behaviour.
@@ -11,7 +12,9 @@ stay byte-identical to the M5-01 behaviour.
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import os
 import subprocess
 import sys
@@ -24,7 +27,13 @@ from typing import Any
 import pytest
 import yaml
 
-from hfk.config import Month, load_declarations, load_household, load_plan
+from hfk.config import (
+    Month,
+    load_declarations,
+    load_household,
+    load_instance_plan,
+    load_plan_sheet,
+)
 from hfk.instance import write_instance
 from hfk.interview import Question, propose_from_ledger, run_interview
 from hfk.ledger import BalanceRow, Category, Ledger, Transaction
@@ -71,10 +80,23 @@ def load_yaml(path: Path) -> dict[str, Any]:
 
 
 def make_home(tmp_path: Path, name: str = "finances") -> Path:
+    """A new household's folder: a fixture workbook with no HFK Plan sheet yet."""
+
     home = tmp_path / name
     (home / "data").mkdir(parents=True)
-    build_fixture(home / "data" / "Tiller-Example.xlsx")
+    build_fixture(home / "data" / "Tiller-Example.xlsx", plan_tab=False)
     return home
+
+
+def paste_starter(
+    home: Path, workbook: str = "Tiller-Example.xlsx", **fixture_kwargs: Any
+) -> list[dict[str, str]]:
+    """Do what the household does: paste out/hfk-plan-starter.csv into an HFK Plan sheet."""
+
+    text = (home / "out" / "hfk-plan-starter.csv").read_text(encoding="utf-8")
+    rows = [dict(row) for row in csv.DictReader(io.StringIO(text))]
+    build_fixture(home / "data" / workbook, plan_rows=rows, **fixture_kwargs)
+    return rows
 
 
 def four_bucket_answers() -> dict[str, Any]:
@@ -193,6 +215,21 @@ def test_interview_instance_passes_doctor_and_plan_check(tmp_path: Path) -> None
     home = tmp_path / "finances"
 
     assert result.returncode == 0, result.stderr
+    assert not (home / "plan.yaml").exists()
+    starter = (home / "out" / "hfk-plan-starter.csv").read_text(encoding="utf-8")
+    assert starter.splitlines()[0] == (
+        "Description,Who,Bucket,Monthly,Categories,Paced,Effective From,Effective Until,"
+        "Annual Bill,Annual Full,Account,Due Month,Due Day"
+    )
+    assert "out/hfk-plan-starter.csv" in result.stdout
+    assert "HFK Plan" in result.stdout
+
+    # Before the rows are pasted, the plan is not ready and says why.
+    before = run_hfk("plan", "check", "--home", str(home))
+    assert before.returncode == 1
+    assert "Missing plan sheet" in before.stdout
+
+    paste_starter(home)
 
     doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
     assert doctor.returncode == 0, doctor.stdout
@@ -203,7 +240,7 @@ def test_interview_instance_passes_doctor_and_plan_check(tmp_path: Path) -> None
 
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     assert plan.effective_from == Month(2026, 4)
     assert len(plan.lines) == 4
     categories = [name for line in plan.lines for name in line.categories]
@@ -229,7 +266,7 @@ def test_missing_required_answer_fails_naming_the_question(tmp_path: Path) -> No
 
         assert result.returncode == 1, result.stderr
         assert expected in result.stderr
-        for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+        for filename in ("household.yaml", "declarations.yaml"):
             assert not (home / filename).exists(), filename
 
 
@@ -274,11 +311,13 @@ def test_plain_init_without_workbook_is_unchanged(tmp_path: Path) -> None:
     result = run_hfk("init", str(home))
 
     assert result.returncode == 0, result.stderr
-    for name in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for name in ("household.yaml", "declarations.yaml"):
         assert load_yaml(home / name) == load_yaml(INSTANCE_EXAMPLE / name), name
     lines = result.stdout.splitlines()
-    assert lines[-2] == "next: put the Tiller workbook export in data/"
+    assert lines[-2].startswith("next: put the Tiller workbook download in data/")
+    assert "HFK Plan" in lines[-2]
     assert lines[-1] == f"then run: hfk plan check --home {home} and hfk doctor --home {home}"
+    assert not (home / "out" / "hfk-plan-starter.csv").exists()
 
 
 def test_answers_without_workbook_fails(tmp_path: Path) -> None:
@@ -299,7 +338,7 @@ def test_no_terminal_and_no_answers_fails_pointing_at_answers(tmp_path: Path) ->
 
     assert result.returncode == 1
     assert "--answers" in result.stderr
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         assert not (home / filename).exists(), filename
 
 
@@ -328,10 +367,12 @@ def test_prompt_mode_accepts_scripted_answers_and_defaults(tmp_path: Path) -> No
     assert by_key["account:Savings"].default is None
 
     instance = tmp_path / "interviewed"
-    write_instance(instance, documents=result.documents)
+    write_instance(instance, documents=result.documents, starter_plan=result.starter_plan)
     household = load_household(instance)
     declarations = load_declarations(instance, people=household.slugs)
-    load_plan(instance, declarations=declarations, people=household.slugs)
+    rows = list(csv.DictReader(io.StringIO(result.starter_plan)))
+    sheet = build_fixture(tmp_path / "pasted.xlsx", plan_rows=rows)
+    load_plan_sheet(sheet, declarations=declarations, people=household.slugs)
     assert household.history_start == date(2026, 4, 2)
 
 
@@ -507,6 +548,7 @@ def test_simple_profile_writes_a_plan_that_loads(tmp_path: Path) -> None:
     home = tmp_path / "simple-home"
 
     assert result.returncode == 0, result.stderr
+    paste_starter(home)
 
     doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
     assert doctor.returncode == 0, doctor.stdout
@@ -514,7 +556,7 @@ def test_simple_profile_writes_a_plan_that_loads(tmp_path: Path) -> None:
 
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     assert plan.lines
     assert all(line.bucket in {"Essential", "Discretionary"} for line in plan.lines)
 
@@ -530,14 +572,12 @@ def test_yaml_carries_a_comment_per_judgement_call(tmp_path: Path) -> None:
 
     household_text = (home / "household.yaml").read_text(encoding="utf-8")
     declarations_text = (home / "declarations.yaml").read_text(encoding="utf-8")
-    plan_text = (home / "plan.yaml").read_text(encoding="utf-8")
 
-    for text in (household_text, declarations_text, plan_text):
+    for text in (household_text, declarations_text):
         assert len(comments(text)) >= 3
         assert "hfk init" in text
     assert any("Balance History" in line for line in comments(household_text))
     assert any("Categories" in line for line in comments(declarations_text))
-    assert any("plan check" in line for line in comments(plan_text))
 
 
 def test_sheets_active_status_counts_as_open(tmp_path: Path) -> None:
@@ -582,9 +622,10 @@ def test_group_answered_non_spend_is_excluded_from_spend(tmp_path: Path) -> None
     assert declarations.non_spend_groups == ("Income", "Transfers", "Subscriptions")
     text = (home / "declarations.yaml").read_text(encoding="utf-8")
     assert "Subscriptions, answered non-spend in the interview" in text
-    plan = (home / "plan.yaml").read_text(encoding="utf-8")
-    assert "Subscriptions starter" not in plan
-    assert "Housing starter" in plan
+    rows = paste_starter(home)
+    descriptions = [row["Description"] for row in rows]
+    assert "Subscriptions starter" not in descriptions
+    assert "Housing starter" in descriptions
 
     doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
     assert doctor.returncode == 0, doctor.stdout
@@ -602,12 +643,12 @@ def test_non_spend_answer_is_offered_in_the_prompt(tmp_path: Path) -> None:
     question = next(q for q in scripted.asked if q.key == "group:Subscriptions")
     assert "or non-spend" in question.text
     assert '"Subscriptions"' in result.documents["declarations.yaml"]
-    assert "Subscriptions starter" not in result.documents["plan.yaml"]
+    assert "Subscriptions starter" not in result.starter_plan
 
 
 def test_sheets_download_name_is_found(tmp_path: Path) -> None:
     home = tmp_path / "finances"
-    build_fixture(home / "data" / SHEETS_NAME)
+    build_fixture(home / "data" / SHEETS_NAME, plan_tab=False)
     answers_path = write_answers(tmp_path, four_bucket_answers())
 
     result = run_hfk("init", str(home), "--answers", str(answers_path))
@@ -616,6 +657,7 @@ def test_sheets_download_name_is_found(tmp_path: Path) -> None:
     assert f"workbook: {SHEETS_NAME}" in result.stdout
     household = load_household(home)
     assert household.tiller_glob == "*Tiller Spreadsheet*.xls*"
+    paste_starter(home, SHEETS_NAME)
     doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
     assert doctor.returncode == 0, doctor.stdout
     assert "doctor: 0 errors" in doctor.stdout
@@ -624,8 +666,8 @@ def test_sheets_download_name_is_found(tmp_path: Path) -> None:
 def test_several_workbooks_name_the_one_read_and_workbook_overrides(tmp_path: Path) -> None:
     def setup(name: str) -> Path:
         home = tmp_path / name
-        build_fixture(home / "data" / "Tiller-Example.xlsx")
-        build_fixture(home / "data" / SHEETS_NAME, months=4)
+        build_fixture(home / "data" / "Tiller-Example.xlsx", plan_tab=False)
+        build_fixture(home / "data" / SHEETS_NAME, months=4, plan_tab=False)
         os.utime(home / "data" / "Tiller-Example.xlsx", (1_700_000_000, 1_700_000_000))
         os.utime(home / "data" / SHEETS_NAME, (1_800_000_000, 1_800_000_000))
         return home
@@ -652,6 +694,7 @@ def test_several_workbooks_name_the_one_read_and_workbook_overrides(tmp_path: Pa
     assert "read Tiller-Example.xlsx (chosen with --workbook)" in result.stdout
     # Tiller*.xls* still picks this file, so the generic pattern is kept.
     assert load_household(home).tiller_glob == "Tiller*.xls*"
+    paste_starter(home)
     doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
     assert doctor.returncode == 0, doctor.stdout
 

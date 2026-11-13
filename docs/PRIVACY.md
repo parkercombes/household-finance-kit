@@ -1,6 +1,6 @@
 # Privacy
 
-Last verified: 2026-10-17
+Last verified: 2026-11-13
 
 household-finance-kit ("hfk") is a public toolkit for building and checking household finance workflows without exposing any real household data. This document describes the privacy rules for the toolkit repository, private instance repositories, contributors, and LLM agents that help with the project.
 
@@ -22,7 +22,7 @@ Privacy is not a single control. hfk relies on simple repo rules, automated scan
 - Account numbers.
 - Real names, employers, or balances.
 - API keys and tokens.
-- The user's `household.yaml`, `declarations.yaml`, or `plan.yaml` in the toolkit repo.
+- The user's `household.yaml`, `declarations.yaml`, or a retired `plan.yaml` in the toolkit repo.
 
 ## Layers of defence
 

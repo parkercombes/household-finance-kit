@@ -24,6 +24,8 @@ from pathlib import Path
 from hfk.config._yaml import load_mapping
 from hfk.config.declarations import available_profiles
 from hfk.config.household import SLUG
+from hfk.config.plan import Month, PlanLine
+from hfk.config.plan_sheet import plan_csv
 from hfk.ledger import BalanceRow, Category, Ledger
 from hfk.source import find_workbooks, read_tiller, workbook_sort_key
 
@@ -96,6 +98,7 @@ class InterviewResult:
     proposal: Proposal
     documents: dict[str, str]
     summary: tuple[str, ...]
+    starter_plan: str = ""
 
 
 # Tiller's Sheets feed writes "ACTIVE" in Balance History's Account Status column; the
@@ -178,8 +181,8 @@ def run_interview(
     documents = {
         "household.yaml": _render_household(proposal, people, ownership, history_start, answered),
         "declarations.yaml": _render_declarations(proposal, profile, buckets, groups),
-        "plan.yaml": _render_plan(proposal, people, groups, history_start),
     }
+    starter_plan = _render_plan(proposal, people, groups, history_start)
     accounts_line = (
         f"accounts: {len(proposal.accounts)} open from Balance History, "
         f"{len(proposal.closed_accounts)} closed"
@@ -198,7 +201,9 @@ def run_interview(
         groups_line,
         history_line,
     )
-    return InterviewResult(proposal=proposal, documents=documents, summary=summary)
+    return InterviewResult(
+        proposal=proposal, documents=documents, summary=summary, starter_plan=starter_plan
+    )
 
 
 def _account_facts(ledger: Ledger) -> dict[str, AccountFacts]:
@@ -836,36 +841,31 @@ def _render_plan(
     groups: dict[str, str],
     history_start: date,
 ) -> str:
+    """Starter plan rows as CSV for the ``HFK Plan`` sheet (ADR-0015).
+
+    One placeholder row per expense group with a bucket, ``Monthly`` 0.00,
+    starting the month of ``history_start``. hfk never writes the workbook, so
+    the household pastes or imports this file into the sheet.
+    """
+
     who = people[0][0]
-    effective = f"{history_start.year:04d}-{history_start.month:02d}"
-    lines = _header(proposal.workbook)
-    lines.append("schema_version: 1")
-    lines.append("plan:")
-    lines.append(
-        f"  # effective_from: the month the plan starts, from history_start "
-        f"{history_start.isoformat()}."
-    )
-    lines.append(f"  effective_from: {effective}")
-    lines.append(
-        "  # lines: one starter line per expense group from the Categories sheet, "
-        "placeholders with monthly: 0.00 targets."
-    )
-    lines.append(
-        "  # Set each target yourself; you may split lines per person, add paced: true, "
-        "and model annual renewals with annual_bill."
-    )
-    lines.append("  # hfk plan check validates this file.")
-    lines.append("  lines:")
-    for facts in proposal.expense_groups:
-        if groups[facts.name] == NON_SPEND:
-            continue
-        categories = ", ".join(facts.categories)
-        quoted = ", ".join(_quote(name) for name in facts.categories)
-        lines.append(f"    # {facts.name} starter: placeholder target for {categories}.")
-        rendered = (
-            f"desc: {_quote(f'{facts.name} starter')}, who: {_quote(who)}, "
-            f"bucket: {_quote(groups[facts.name])}, monthly: 0.00, "
-            f"categories: [{quoted}]"
+    start = Month(history_start.year, history_start.month)
+    lines = [
+        PlanLine(
+            desc=f"{facts.name} starter",
+            who=who,
+            bucket=groups[facts.name],
+            monthly=Decimal("0.00"),
+            categories=facts.categories,
+            paced=False,
+            effective_from=start,
+            effective_until=None,
+            annual_bill=None,
+            annual_full=None,
+            account=None,
+            due=None,
         )
-        lines.append(f"    - {{{rendered}}}")
-    return "\n".join(lines) + "\n"
+        for facts in proposal.expense_groups
+        if groups[facts.name] != NON_SPEND
+    ]
+    return plan_csv(lines)

@@ -10,7 +10,6 @@ workbook.
   whom.
 - `declarations.yaml` — your judgement calls: which Tiller groups go into
   which buckets, and any exceptions you decide.
-- `plan.yaml` — your monthly budget plan.
 - `README.md` — this note.
 - `Open HFK.command` (Mac, Linux) and `Open HFK.bat` (Windows) — double-click
   one to see your reports in your web browser. Close the window it opens to
@@ -18,7 +17,8 @@ workbook.
 - `shared-items/` — for shared costs that are not in the workbook. Leave it
   empty until the settle-up report is released.
 - `data/` — where your Tiller workbook export goes. hfk only reads it.
-- `out/` — where generated reports land.
+- `out/` — where generated reports land. After the `hfk init` interview it
+  also holds `hfk-plan-starter.csv`, starter rows for your budget plan.
 - `.gitignore` — keeps workbooks and reports out of git.
 - `AGENTS.md` and `CLAUDE.md` — instructions for an AI assistant you open in
   this folder. The main rule: it may read your settings, but never your
@@ -31,11 +31,21 @@ workbook.
 workbook, CSV, TSV, PDF, and Numbers files anywhere in this folder, and keeps
 `.claude/settings.local.json` (Claude Code's per-machine settings) local.
 
-## The YAML files start as example data
+## Your budget plan lives in the workbook
 
-The three YAML files describe two fictional people, Alex and Sam. Replace
-their people, accounts, buckets, and amounts with your own before trusting
-any report.
+hfk reads your budget plan from a sheet named `HFK Plan` that you add to your
+own Tiller workbook. Row 1 holds these headers: Description, Who, Bucket,
+Monthly, Categories, Paced, Effective From, Effective Until, Annual Bill,
+Annual Full, Account, Due Month, Due Day. Each later row is one person's
+share of one budget item. hfk never writes the workbook, so after the
+interview, paste or import `out/hfk-plan-starter.csv` into that sheet and
+set your targets there.
+
+## The YAML files may start as example data
+
+If `hfk init` did not interview you from a workbook, the two YAML files
+describe two fictional people, Alex and Sam. Replace their people, accounts,
+and buckets with your own before trusting any report.
 
 Then check your setup from a terminal:
 
