@@ -28,6 +28,7 @@ hfk = "hfk.cli:main"
 # through entry points so core never imports them (ADR-0006).
 [project.entry-points."hfk.extensions"]
 settle_up = "hfk.ext.settle_up:SettleUp"
+retirement = "hfk.ext.retirement:Retirement"
 
 [tool.setuptools.packages.find]
 where = ["src"]

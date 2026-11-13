@@ -5,7 +5,7 @@ Last verified: 2026-11-13
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-The next item is `M8-01`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+The next item is `M8-02`. Repository publication (`M0-07`) is blocked on the maintainer's decision.
 `tests/test_roadmap.py` checks that this line names the first `todo` item whose dependencies are all `done`; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -147,7 +147,7 @@ Goal: add a mechanics-only retirement income-vs-need model, with explicit discla
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M8-01` | R1: implement the `retirement.yaml` schema for people, birth year-month, retire year, household assumptions, and schema version. | `todo` | `M6-04` | Run `python -m pytest -q tests/test_retirement_schema.py`; expected: valid fixture config loads and invalid dates or missing people fail clearly. |
+| `M8-01` | R1: implement the `retirement.yaml` schema for people, birth year-month, retire year, household assumptions, and schema version. | `done` | `M6-04` | Run `python -m pytest -q tests/test_retirement_schema.py`; expected: valid fixture config loads and invalid dates or missing people fail clearly. Result 2026-11-13: passed, 18 tests. `retirement` is registered as `hfk.ext.retirement:Retirement`, and its `schema` validates `retirement.yaml`. `examples/retirement.example.yaml` (Alex and Sam, round numbers) loads with retire ages, track years and an exact-decimal `inflation`. A bad `birth` (month 13, words, a bare year), a non-integer or out-of-range `retire_year`, a missing or empty `people`, a bad slug, a missing or out-of-range `until_age`, an `inflation` of `2.5`, and an unknown key each fail with the key path and fix. A household person missing from `retirement.yaml`, or an extra one, is an error from `hfk doctor` once the extension is enabled. The track starts at the earliest `retire_year` and ends when the youngest person reaches `until_age`, which has no default. |
 | `M8-02` | R2: implement typed income streams: `social_security` by claim age, `pension`, `account_drawdown`, and `other`, each with start, end, amount, and COLA handling. | `todo` | `M8-01` | Run `python -m pytest -q tests/test_retirement_income.py`; expected: mutually exclusive Social Security claim-age scenarios and COLA streams calculate as documented. |
 | `M8-03` | R3: implement itemized expenses in today's dollars with inflation and optional seeding from the user's own `plan.yaml` spend. | `todo` | `M8-01`, `M2-03` | Run `python -m pytest -q tests/test_retirement_expenses.py`; expected: expense inflation and plan-seeded baselines match synthetic fixture expectations. |
 | `M8-04` | R4: ship versioned federal tax data files tagged with tax year, add a configurable staleness gate, and support a pluggable state-tax module. | `todo` | `M8-02` | Run `python -m pytest -q tests/test_retirement_tax.py`; expected: stale tax data fails loudly and none, flat, and bracket state-tax modules plug in cleanly. |

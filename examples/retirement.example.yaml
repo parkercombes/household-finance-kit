@@ -1,0 +1,11 @@
+# Last verified: 2026-11-13
+# Synthetic retirement input for Alex and Sam (round, fictional numbers only).
+# Every money figure is in today's dollars (ADR-0008). The retirement extension
+# shows arithmetic, not advice.
+schema_version: 1
+people:
+  alex: {birth: "1970-06", retire_year: 2035}
+  sam: {birth: "1972-09", retire_year: 2037}
+assumptions:
+  until_age: 95        # the track runs through the year the youngest person turns 95
+  inflation: 0.025     # annual; converts streams that do not track inflation fully
