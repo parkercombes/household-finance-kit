@@ -157,7 +157,7 @@ Scope and limits:
 
 Implemented (M7-02, `hfk.ext.settle_up.shares`): on-ledger shares come from the core share function: account ownership weights from `household.yaml`, overridden per transaction by the `sharing` rules in `declarations.yaml`. The extension declares no sharing rules of its own, so a joint bill paid from one person's account is split the same way in settle-up and in the scorecard. The result is a shared expense allocation, not a mutation of the ledger.
 
-Off-ledger shared items live in `shared-items/YYYY-MM.yaml` in the private instance. These are costs not present in the user's Tiller workbook, such as a bill paid from another person's untracked account. Example using only fictional data:
+Implemented (M7-03, `hfk.ext.settle_up.items`): off-ledger shared items live in `shared-items/YYYY-MM.yaml` in the private instance. Each item needs `label`, a positive `amount`, `paid_by` and `weights` naming people from `household.yaml` (weights sum to exactly 1), and a declared `bucket`. A month without a file has no shared items, and `hfk doctor` reports every bad file, including one not named after a month. These are costs not present in the user's Tiller workbook, such as a bill paid from another person's untracked account. Example using only fictional data:
 
 ```yaml
 schema_version: 1

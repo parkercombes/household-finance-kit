@@ -21,6 +21,7 @@ from hfk.config import Household
 from hfk.engine import Diagnostic, DoctorContext
 
 NAME = "settle_up"
+SHARED_ITEMS_DIR = "shared-items"
 PEOPLE_FIX = (
     "settle-up needs exactly two people under people in household.yaml; "
     f"remove {NAME} from extensions for any other household"
@@ -79,6 +80,20 @@ class SettleUp:
         except SettleUpError as error:
             yield Diagnostic(
                 "error", "settle-up-people", "household.yaml key=people", error.problem, error.fix
+            )
+        if context.declarations is None:
+            return
+        from hfk.ext.settle_up.items import check_shared_items_dir
+
+        for problem in check_shared_items_dir(
+            context.home, household=context.household, declarations=context.declarations
+        ):
+            yield Diagnostic(
+                "error",
+                "settle-up-shared-items",
+                f"{SHARED_ITEMS_DIR}/{problem.file.name} key={problem.key}",
+                problem.problem,
+                problem.fix,
             )
 
 

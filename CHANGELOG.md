@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M7-03: off-ledger shared items in `shared-items/YYYY-MM.yaml` for settle-up, validated for amount, `paid_by`, `weights` (people from `household.yaml`, summing to exactly 1), and bucket. `hfk doctor` reports every bad file, including one not named after a month. The instance's `shared-items/README.md` now explains the format.
 - M7-02: `hfk.ext.settle_up.shares.on_ledger_lines` lists each spend transaction in a month with what each person owes, read from the core share function, so settle-up declares no sharing rules of its own. For every fixture month, each person's total equals their scorecard total to the cent.
 - M7-01: the built-in `settle_up` extension is registered through this distribution's `hfk.extensions` entry point, and `hfk doctor` errors when it is enabled for a household without exactly two people. Installed extensions' `commands()` now become `hfk` subcommands, run with an `hfk.ext.CommandContext` once core has checked that the extension is enabled and loaded its config; core command names are reserved. The example and template `household.yaml` enable `settle_up` again.
 - M6-05: [EXTENSIONS](docs/EXTENSIONS.md) documents the implemented extension API: discovery, the contract with a checked minimal example, config files, doctor hooks, a boundaries table for public and private extension packages, testing without pip, and that built-in-first extensions ship inside `hfk.ext` but are still discovered through entry points.
