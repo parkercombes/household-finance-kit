@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and in M7 `M7-01` (`settle_up` registration) is done. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and in M7 `M7-01` and `M7-02` (`settle_up` registration and on-ledger shares) are done. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 

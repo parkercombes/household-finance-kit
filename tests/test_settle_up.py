@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -128,3 +129,71 @@ def test_two_people_pass(tmp_path):
 
     household = load_household(make_instance(tmp_path))
     assert two_people(household) == ("alex", "sam")
+
+
+def load(home: Path):
+    from hfk.config import load_declarations, load_instance_plan
+    from hfk.source import find_workbook, read_tiller
+
+    household = load_household(home)
+    declarations = load_declarations(home, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
+    ledger = read_tiller(find_workbook(home / "data", household.tiller_glob))
+    return household, declarations, plan, ledger
+
+
+@pytest.mark.parametrize("month", ["2026-04", "2026-07", "2026-08", "2026-09"])
+def test_on_ledger_shares_match_scorecard(tmp_path, month):
+    from hfk.config import Month
+    from hfk.engine import build_scorecard
+    from hfk.ext.settle_up.shares import on_ledger_lines, owed_totals
+
+    home = make_instance(tmp_path)
+    household, declarations, plan, ledger = load(home)
+    people = ("alex", "sam")
+
+    lines = on_ledger_lines(
+        ledger=ledger,
+        household=household,
+        declarations=declarations,
+        month=Month.parse(month),
+        people=people,
+    )
+    totals = owed_totals(lines, people)
+
+    for who in people:
+        scorecard = build_scorecard(
+            ledger=ledger,
+            household=household,
+            declarations=declarations,
+            plan=plan,
+            month=Month.parse(month),
+            who=who,
+            today=TODAY,
+        )
+        assert totals[who] == scorecard.actual_total, (month, who)
+
+    # The core sharing rule makes the utility bill paid from Alex's own account a
+    # shared line in settle-up too: half each, exactly as the scorecard counts it.
+    utilities = [line for line in lines if line.account == "Alex Checking"
+                 and line.category == "Utilities"]
+    assert utilities
+    for line in utilities:
+        assert line.shared
+        assert line.owed_by("alex") + line.owed_by("sam") == line.amount
+        assert abs(line.owed_by("alex") - line.owed_by("sam")) <= Decimal("0.01")
+
+
+def test_settle_up_declares_no_sharing_rules_of_its_own():
+    import ast
+
+    source = (ROOT / "src" / "hfk" / "ext" / "settle_up").rglob("*.py")
+    for path in source:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names = {
+            node.attr if isinstance(node, ast.Attribute) else getattr(node, "id", None)
+            for node in ast.walk(tree)
+        }
+        assert "share_weights" not in names, path
+        assert "SharingRule" not in names, path
+        assert "sharing" not in names, path
