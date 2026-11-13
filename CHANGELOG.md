@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- CI lint: pin `ruff==0.16.10` in the dev extras. CI installed the newest ruff (0.17.5), whose changed default rules flagged the `noqa` directives 0.16.10 requires, so CI had failed at the lint step since 2026-10-28.
 - M3-07 parity run (2026-10-28, July 2026 against the household's Google Sheets download): every bucket total reconciled with the household's scripted statement, each difference a declared judgement call or per-transaction cent reconciliation; the run exposed that Tiller's Sheets feed writes `ACTIVE` in Balance History's Account Status, which the `hfk init` interview filed as closed. Only an explicit closed-style status (`closed`, `inactive`) files an account under `closed_accounts` now; a missing or unknown status counts as open, as ADR-0014 says closure is declared, never inferred. Remaining interview gaps are roadmap row `M5-17`.
 
 ### Added
