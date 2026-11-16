@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- ADR-0017 accepted (2026-11-16): `settle_up.yaml` declares who pays each shared account's charges; a charge from a single-owner account was paid by its owner. `M7-04` to `M7-07` are unblocked.
 - ADR-0016 accepted (2026-11-16): an extension's config is a YAML file of its own in the instance, never a section inside `household.yaml` or `declarations.yaml`. The code already did this; the docs drop the in-file option.
 - Proposed ADR-0017 asks the maintainer who paid a shared account's charges in a settle-up statement, which decides the net transfer. Roadmap items `M7-04` to `M7-07` are blocked until it is decided.
 - M7-03: off-ledger shared items in `shared-items/YYYY-MM.yaml` for settle-up, validated for amount, `paid_by`, `weights` (people from `household.yaml`, summing to exactly 1), and bucket. `hfk doctor` reports every bad file, including one not named after a month. The instance's `shared-items/README.md` now explains the format.
