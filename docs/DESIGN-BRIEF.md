@@ -95,7 +95,8 @@ household-finance-kit/
 
 1. **Source adapter** (`hfk.source`). The only code that knows Tiller. Reads by **header
    name, never column position**. v1: an exported/downloaded `.xlsx`/`.xlsm` file, always
-   read-only. Later: Google Sheets adapter (same output). Output is a normalized `Ledger`.
+   read-only. A Google Sheets household downloads its workbook too: there is no Sheets
+   adapter and hfk never signs in to Google (ADR-0019). Output is a normalized `Ledger`.
 2. **Ledger** (`hfk.ledger`). Frozen dataclasses: `Transaction`, `Category`, `Account`,
    `BalanceRow`, and `Ledger` (collections + helpers). Amounts are `Decimal`. No Tiller
    specifics leak above this layer.
@@ -420,6 +421,7 @@ A generic income-vs-need model, input `retirement.yaml` (no Excel dependency):
 - **M7 settle_up extension** (two people).
 - **M8 retirement extension** — R1 schema; R2 income streams; R3 expenses; R4 tax data +
   staleness gate; R5 report; R6 disclaimers and fixtures.
-- **M9 Google Sheets adapter.**
+- **M9 Google Sheets.** Decided: no adapter and no Google sign-in; households download
+  the workbook (ADR-0019).
 - **M10+ Community**: FSA/reimbursements, employer pension add-ons, home purchase. (The web
   front door shipped in M5; `hfk plan edit` was superseded by the `HFK Plan` tab.)
