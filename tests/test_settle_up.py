@@ -320,3 +320,41 @@ def test_settle_command_prints_the_statement(tmp_path):
     assert len(csv_out.stdout.splitlines()) == 1 + 6
     html_out = run_hfk(*args, "--format", "html")
     assert "<strong>transfer: sam pays alex 340.00</strong>" in html_out.stdout
+
+
+@pytest.mark.parametrize(
+    ("month", "today"),
+    [
+        ("2026-09", date(2026, 9, 15)),   # the current month
+        ("2026-09", date(2026, 9, 30)),   # its last day has not ended yet
+        ("2026-12", date(2026, 9, 15)),   # a future month
+    ],
+)
+def test_unfinished_month_never_settles(tmp_path, monkeypatch, month, today):
+    from hfk.ext.settle_up import SettleUpError
+
+    home = make_instance(tmp_path)
+    with pytest.raises(SettleUpError) as caught:
+        statement_for(home, month, today)
+    assert f"month {month} has not ended (today is {today.isoformat()})" in caught.value.problem
+    assert "never settles an unfinished month" in caught.value.fix
+
+    result = run_hfk("settle", "--home", str(home), "--today", today.isoformat(), month)
+    assert result.returncode == 1
+    assert result.stdout == ""  # no statement and no transfer is printed
+    assert "has not ended" in result.stderr
+
+    # The refusal comes before the workbook is read: no ledger is ever loaded.
+    from hfk.ext.settle_up import statement as module
+
+    def no_lines(**_kwargs):
+        raise AssertionError("an unfinished month reached the ledger")
+
+    monkeypatch.setattr(module, "on_ledger_lines", no_lines)
+    with pytest.raises(SettleUpError):
+        statement_for(home, month, today)
+
+
+def test_a_month_settles_the_day_after_it_ends(tmp_path):
+    statement = statement_for(make_instance(tmp_path), "2026-09", date(2026, 10, 1))
+    assert statement.month.month == 9

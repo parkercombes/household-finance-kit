@@ -152,7 +152,7 @@ Scope and limits:
 - The default split is weighted 50/50.
 - Other two-person weights are allowed when declared, such as 60/40.
 - Larger groups are explicitly out of scope for the built-in extension and open to the community.
-- The extension never settles an unfinished month.
+- The extension never settles an unfinished month (M7-05): the current month, including its last day, and any future month are refused before the workbook is read.
 - The extension never writes to Tiller.
 
 Implemented (M7-02, `hfk.ext.settle_up.shares`): on-ledger shares come from the core share function: account ownership weights from `household.yaml`, overridden per transaction by the `sharing` rules in `declarations.yaml`. The extension declares no sharing rules of its own, so a joint bill paid from one person's account is split the same way in settle-up and in the scorecard. The result is a shared expense allocation, not a mutation of the ledger.
