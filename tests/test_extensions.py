@@ -179,6 +179,12 @@ class Complete:
         return []
 
 
+def _command(configure):
+    return ExtensionCommand(
+        name="example-report", help="Example.", configure=configure, run=lambda args, context: 0
+    )
+
+
 def test_extension_contract_validation():
     extension = validate_extension(Complete(), entry_point="example")
     assert extension.name == "example"
@@ -228,6 +234,12 @@ def test_extension_contract_validation():
         ({"commands": lambda self: [object()]}, "commands", "is not an ExtensionCommand"),
         ({"commands": lambda self: 1 / 0}, "commands", "raised ZeroDivisionError"),
         ({"doctor": None}, "doctor", "missing or not callable"),
+        ({"commands": lambda self: [_command(lambda parser: 1 / 0)]}, "commands",
+         "configure(parser) raised ZeroDivisionError"),
+        ({"commands": lambda self: [_command(lambda parser: parser.add_argument("--home"))]},
+         "commands", "configure(parser) raised ArgumentError"),
+        ({"commands": lambda self: [_command(lambda parser: parser.exit(2))]}, "commands",
+         "configure(parser) raised SystemExit"),
         ({"report_sections": lambda self: ["page"]}, "report_sections", "is not a ReportSection"),
     ],
 )
@@ -585,3 +597,56 @@ def test_extension_may_not_take_a_core_command_name():
     )
     with pytest.raises(ContractError, match="'doctor' is a core command"):
         validate_extension(core(), entry_point="example")
+
+
+FLAKY_CONFIGURE_SOURCE = COMMAND_SOURCE.replace(
+    '''def _configure(parser):
+    parser.add_argument("month")
+''',
+    '''CALLS = []
+
+
+def _configure(parser):
+    # Passes the contract check's scratch run, then breaks when the CLI builds its parser.
+    CALLS.append(parser)
+    if len(CALLS) > 1:
+        raise RuntimeError("cannot configure twice")
+    parser.add_argument("month")
+''',
+)
+
+
+def test_a_configure_that_breaks_in_the_cli_never_stops_core_commands(tmp_path):
+    import os
+    import subprocess
+
+    assert FLAKY_CONFIGURE_SOURCE != COMMAND_SOURCE
+    root = install_extension(
+        tmp_path / "site",
+        module="hfk_flaky_ext",
+        source=FLAKY_CONFIGURE_SOURCE,
+        entry_points={"example": "hfk_flaky_ext:Example"},
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join([str(ROOT / "src"), str(root)])
+
+    def hfk(*args: str):
+        return subprocess.run(
+            [sys.executable, "-m", "hfk", *args], env=env, text=True,
+            capture_output=True, check=False,
+        )
+
+    home = make_doctor_instance(tmp_path, ["settle_up"])
+    assert hfk("--help").returncode == 0
+    assert hfk("--version").returncode == 0
+    doctor = hfk("doctor", "--home", str(home), "--today", "2026-10-01")
+    assert "Traceback" not in doctor.stderr
+    assert "readiness:" in doctor.stdout
+
+    result = hfk("example-report", "--home", str(home))
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert (
+        "error: hfk example-report (extension example) could not set up its arguments: "
+        "RuntimeError: cannot configure twice"
+    ) in result.stderr
