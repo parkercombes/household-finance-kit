@@ -31,6 +31,7 @@ _INSTANCE_FILES = (
     ("CLAUDE.md", "CLAUDE.md"),
     (".gitignore", "gitignore"),
     ("shared-items/README.md", "shared-items-README.md"),
+    ("settle_up.yaml", "settle_up.yaml"),
     (".claude/settings.json", "claude-settings.json"),
     (".claude/hooks/tiller_guard.py", "tiller_guard"),
 )

@@ -122,7 +122,7 @@ def test_doctor_checks_retirement_when_enabled(tmp_path):
 
     home = tmp_path / "instance"
     home.mkdir()
-    for filename in ("household.yaml", "declarations.yaml"):
+    for filename in ("household.yaml", "declarations.yaml", "settle_up.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, home / filename)
     data = yaml.safe_load((home / "household.yaml").read_text(encoding="utf-8"))
     data["extensions"] = ["settle_up", "retirement"]

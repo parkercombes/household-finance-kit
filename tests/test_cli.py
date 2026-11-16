@@ -7,9 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHONPATH = str(ROOT / "src")
-# `retirement` is a real command from the retirement extension since M8-05.
-STUBS = {
-    "settle": "M7",
+# `settle` (M7-04) and `retirement` (M8-05) are real commands from their extensions.
+STUBS: dict[str, str] = {
 }
 
 

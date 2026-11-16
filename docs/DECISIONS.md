@@ -701,8 +701,8 @@ installed packages, and option 3 can still be added later without breaking optio
 
 ## ADR-0017: Who Paid a Shared Account's Charges in a Settle-Up Statement
 
-Status: proposed
-Date: 2026-11-13
+Status: accepted
+Date: 2026-11-13 (proposed); accepted 2026-11-16
 
 ### Context
 
@@ -743,15 +743,21 @@ Options:
 
 ### Decision
 
-Proposed: option 2. It covers both examples above (option 1 is option 2 with the
-account's own weights written out), keeps every number traceable to a declared line, and
-fails loudly when a payer is missing.
+Option 2. `settle_up.yaml` (the extension's own file, ADR-0016) maps each shared
+account that carries shared charges to payer weights. A charge paid from an account with
+a single `owner` was paid by that owner and needs no entry. A shared charge on a shared
+account without an entry is a loud error naming the account.
+
+It covers both examples above (option 1 is option 2 with the account's own weights
+written out), keeps every number traceable to a declared line, and fails loudly when a
+payer is missing. A fourth option, a `paid_by` key on the account entry in
+`household.yaml`, was considered at acceptance and not chosen: it would put a value only
+settle-up reads into a core file, against ADR-0016.
 
 ### Consequences
 
-- Roadmap items `M7-04` (statement output) and `M7-05` to `M7-07`, which depend on it,
-  are blocked until this ADR is decided.
-- If option 2 is accepted, `settle_up` gains `config_section = "settle_up.yaml"` with a
+- Roadmap items `M7-04` (statement output) and `M7-05` to `M7-07` are unblocked.
+- `settle_up` gains `config_section = "settle_up.yaml"` with a
   schema for `payers`, the example instance gains a `settle_up.yaml`, and the statement's
   paid column is: on-ledger shared charges by payer weights, plus shared items by
   `paid_by`.
