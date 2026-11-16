@@ -188,7 +188,7 @@ Implemented (M8-01, `hfk.ext.retirement.schema`): `people` maps every person slu
 
 Implemented (M8-02, `hfk.ext.retirement.income`): `income` lists typed streams, each a monthly amount in today's dollars with a required `cola`:
 
-- `social_security` lists `claim_ages`, the monthly benefit for each claim age from 62 to 70 that the household wants to compare. A scenario picks one listed age per person; hfk never picks one. The stream starts in the year the person reaches that age, pays for the months from the birth month on in that year, and pays twelve months a year after that.
+- `social_security` lists `claim_ages`, the monthly benefit for each claim age from 62 to 70 that the household wants to compare. Per ssa.gov, a benefit can be claimed from 62 (early), at 67 (full retirement age) or as late as 70 (delayed); any whole age in that range may be listed. A scenario picks one listed age per person; hfk never picks one. The stream starts in the year the person reaches that age, pays for the months from the birth month on in that year, and pays twelve months a year after that.
 - `pension`, `account_drawdown` and `other` take `monthly`, `start_year` and an optional inclusive `end_year`. An `account_drawdown` is the withdrawal the household declares; no account balance is modelled.
 - `cola: full` keeps a stream flat in today's dollars. `cola: none` keeps it flat in nominal dollars, so its real value falls by `inflation` each year after it starts. A number is a nominal growth rate, converted to real with `inflation`. `inflation` is required as soon as any stream is not `full` (ADR-0008).
 

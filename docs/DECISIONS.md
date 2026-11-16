@@ -760,8 +760,8 @@ fails loudly when a payer is missing.
 
 ## ADR-0018: How Tax Enters the Retirement Income-vs-Need Gap
 
-Status: proposed
-Date: 2026-11-13
+Status: accepted
+Date: 2026-11-13 (proposed); accepted 2026-11-16
 
 ### Context
 
@@ -803,15 +803,25 @@ Options:
 
 ### Decision
 
-Proposed: option 2. It keeps every number traceable to a declared input, follows how
-each threshold is actually indexed, and avoids splitting a joint tax bill by a rule
-nobody declared.
+Option 2. It keeps every number traceable to a declared input, follows how each
+threshold is actually indexed, and avoids splitting a joint tax bill by a rule nobody
+declared.
+
+- Every income stream except `social_security` declares `taxable: full | none`, with no
+  default. Social Security always follows the base-amount rule.
+- Federal brackets and the standard deduction stay flat in today's dollars. The Social
+  Security base amounts shrink by `inflation` each year after the federal table's tax
+  year, so `inflation` is required whenever Social Security is taxed.
+- The household view's gap is income minus federal tax, state tax, and need. The
+  per-person view shows income and need with no tax, and says that tax is counted only
+  in the household view.
 
 ### Consequences
 
-- Roadmap item `M8-05` (the report) is blocked until this ADR is decided, and so are
-  `M8-06` (which depends on it) and `M10-02` (which depends on `M8-06`).
-- Under option 2, the income schema (M8-02) gains `taxable` on every stream except
-  `social_security`, and the report needs a federal tax table (M8-04). No table ships
-  until its figures are cited to IRS publications, so the report fails loudly until the
-  maintainer adds one.
+- Roadmap items `M8-05`, `M8-06` and `M10-02` are unblocked.
+- The income schema (M8-02) gains `taxable` on every stream except `social_security`.
+- States differ on whether they tax Social Security, so the `flat` and `bracket` state
+  modules (M8-04) gain a required `social_security: taxed | exempt`: a declared input, not
+  a default.
+- The report needs a federal tax table (M8-04). No table ships until its figures are
+  cited to IRS publications, so the report fails loudly until the maintainer adds one.

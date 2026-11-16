@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- ADR-0018 accepted (2026-11-16): income streams declare `taxable`, Social Security tax thresholds shrink in today's dollars, and tax is counted in the household view only. `M8-05`, `M8-06` and `M10-02` are unblocked. The claim-age range 62 to 70 is confirmed against ssa.gov.
 - ADR-0016 accepted (2026-11-16): an extension's config is a YAML file of its own in the instance, never a section inside `household.yaml` or `declarations.yaml`. The code already did this; the docs drop the in-file option.
 - Proposed ADR-0018 asks the maintainer how tax enters the retirement income-vs-need gap: which streams are taxable, how fixed-dollar thresholds behave in today's dollars, and tax in the per-person view. Roadmap items `M8-05`, `M8-06` and `M10-02` are blocked until it is decided.
 - M8-04 (R4): versioned federal tax tables (YAML tagged with `tax_year` and the publication `source`), a staleness gate on `max_data_age_years` (ADR-0005), and pluggable `none`, `flat` and `bracket` state-tax modules, with bracket and Social Security taxability arithmetic. No federal table ships: irs.gov could not be reached to verify the figures, so the extension fails loudly until the maintainer adds a cited table.

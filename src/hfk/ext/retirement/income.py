@@ -305,7 +305,8 @@ def _claim_ages(value: Any, path: Path, *parents: str) -> tuple[tuple[int, Decim
                 f"Invalid claim age {raw_age!r}",
                 file=path,
                 key=key_path(*parents, "claim_ages", str(raw_age)),
-                fix="use whole ages from 62 to 70, the range in which a benefit can be claimed",
+                fix="use whole ages from 62 to 70: Social Security can be claimed from 62 "
+                "(early) to 70 (delayed), with 67 the full retirement age (ssa.gov)",
             )
         ages.append((raw_age, _money(raw_monthly, path, *parents, "claim_ages", str(raw_age))))
     return tuple(sorted(ages))
