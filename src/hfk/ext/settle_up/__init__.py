@@ -76,6 +76,11 @@ def _configure(parser: argparse.ArgumentParser) -> None:
         "--format", choices=("text", "csv", "html"), default="text",
         help="Output format (default: text).",
     )
+    parser.add_argument(
+        "--compare",
+        metavar="FILE",
+        help="A hand-built statement (YAML) to check this one against, to the cent.",
+    )
 
 
 def _month(value: str) -> Month:
@@ -117,6 +122,20 @@ def _run(args: argparse.Namespace, context: CommandContext) -> int:
         "html": render.render_html,
     }
     sys.stdout.write(renderers[args.format](statement))
+    if args.compare is not None:
+        from hfk.ext.settle_up.regression import compare, load_expected
+
+        try:
+            differences = compare(statement, load_expected(Path(args.compare)))
+        except ConfigError as error:
+            print(f"settle: {error}", file=sys.stderr)
+            return 1
+        for difference in differences:
+            print(f"compare: {difference.render()}", file=sys.stderr)
+        if differences:
+            print(f"compare: {len(differences)} differences from {args.compare}", file=sys.stderr)
+            return 1
+        print(f"compare: matches {args.compare} to the cent", file=sys.stderr)
     return 0
 
 
