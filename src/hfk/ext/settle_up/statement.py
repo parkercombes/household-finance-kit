@@ -2,10 +2,12 @@
 
 For one finished month and exactly two people:
 
-- **Shared charges** are the month's spend transactions that both people owe
-  part of (``on_ledger_lines``, M7-02). Who *owes* comes from the core share
-  function. Who *paid* is the account's single owner, or the payer weights that
-  ``settle_up.yaml`` declares for a shared account (ADR-0017).
+- **Shared charges** are the month's spend transactions (``on_ledger_lines``,
+  M7-02) that both people owe part of, or that one person owes and the other
+  paid part of, such as a ``{sam: 1.0}`` sharing rule on a card Alex pays. Who
+  *owes* comes from the core share function. Who *paid* is the account's single
+  owner, or the payer weights that ``settle_up.yaml`` declares for a shared
+  account (ADR-0017). A charge the same one person paid and owes is left out.
 - **Shared items** from ``shared-items/YYYY-MM.yaml`` (M7-03) were paid by
   ``paid_by`` and are owed by their ``weights``.
 - Each person's **net** is what they paid minus what they owe. The two nets are
@@ -112,7 +114,8 @@ def build_statement(
         ledger=ledger, household=household, declarations=declarations, month=month,
         people=people,
     ):
-        if not line.shared:
+        owed = (line.owed_by(people[0]), line.owed_by(people[1]))
+        if not line.shared and owed == (ZERO, ZERO):
             continue
         account = household.account(line.account)
         if account is None:
@@ -131,6 +134,9 @@ def build_statement(
                     f'add "{line.account}": {{<slug>: <weight>, ...}} under payers in '
                     f"{CONFIG_FILE} (ADR-0017)",
                 )
+        paid = split(line.amount, payer, people)
+        if not line.shared and paid == owed:
+            continue  # one person paid it and owes all of it: nothing crosses
         lines.append(
             StatementLine(
                 source="workbook",
@@ -139,8 +145,8 @@ def build_statement(
                 account=line.account,
                 category=line.category,
                 amount=line.amount,
-                paid=split(line.amount, payer, people),
-                owed=(line.owed_by(people[0]), line.owed_by(people[1])),
+                paid=paid,
+                owed=owed,
             )
         )
     for item in items.items:

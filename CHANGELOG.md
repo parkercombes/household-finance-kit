@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- `hfk settle` (M7-04): a charge one person owes wholly and the other paid, such as the brief's `{sam: 1.0}` sharing rule on a Joint Card Alex pays, is now on the statement. Before, only charges both people owed part of were counted, so such a charge was silently left out and the transfer was too small. A charge the same person paid and owes is still left out. Found by the independent review of 2026-11-16.
 - Extension commands (M7-01): if an extension command's `configure(parser)` still fails when the CLI builds its parser, that one command reports the error and exits 1; every other command, `hfk --help` and `hfk doctor` included, still runs. Found by the independent review of 2026-11-16.
 - Extension contract (M6-02): the check now runs each command's `configure(parser)` on a scratch parser, so a `configure` that raises or re-adds `--home` or `--today` is a contract break that `load_extensions` refuses and `hfk doctor` reports. Before, it passed the check and then stopped every `hfk` command, `hfk --help` and `hfk doctor` included. Found by the independent review of 2026-11-16.
 - `hfk serve` (M5-10): a `who` that is not a person's slug is now a 400, and Regenerate refuses one. Before, `who` went into the file name under `out/` unchecked, so `who=/../x` crashed the request with a traceback and, if a matching folder existed under `out/`, wrote outside `out/`. Found by the independent review of 2026-11-16.
