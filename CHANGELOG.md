@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M7-07: `hfk settle YYYY-MM --format paste` prints a tab-separated block to paste into a household's own settle-up tab. Tests show settle-up opens the workbook read-only, never saves it, and leaves it byte-identical.
 - M7-06: `hfk settle YYYY-MM --compare FILE` checks the statement against a hand-built one to the cent and names every difference, for households moving from a hand-built settle-up tab.
 - M7-05: `hfk settle` refuses a month that has not ended (the current month, including its last day, and any future month) before it reads the workbook or prints a transfer.
 - M7-04: `hfk settle YYYY-MM` prints the settle-up statement (text, CSV or HTML): category totals, paid and owed per person, net, and the transfer. `settle_up.yaml` declares payer weights for shared accounts (ADR-0017); the example instance and `hfk init` template carry one.

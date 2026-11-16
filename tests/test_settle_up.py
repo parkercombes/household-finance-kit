@@ -358,3 +358,53 @@ def test_unfinished_month_never_settles(tmp_path, monkeypatch, month, today):
 def test_a_month_settles_the_day_after_it_ends(tmp_path):
     statement = statement_for(make_instance(tmp_path), "2026-09", date(2026, 10, 1))
     assert statement.month.month == 9
+
+
+def test_settle_outputs_without_tiller_writes(tmp_path, monkeypatch):
+    import hashlib
+
+    import openpyxl
+
+    from hfk.ext.settle_up.render import render_csv, render_html, render_paste, render_text
+
+    home = make_instance(tmp_path)
+    workbook = home / "data" / "Tiller-Example.xlsx"
+    before = hashlib.sha256(workbook.read_bytes()).hexdigest()
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("settle-up saved a workbook")
+
+    opened: list[dict] = []
+    real_load = openpyxl.load_workbook
+
+    def spy(*args, **kwargs):
+        opened.append(kwargs)
+        return real_load(*args, **kwargs)
+
+    monkeypatch.setattr(openpyxl.Workbook, "save", refuse)
+    monkeypatch.setattr(openpyxl, "load_workbook", spy)
+
+    statement = statement_for(home)
+    for render in (render_text, render_csv, render_html, render_paste):
+        render(statement)
+    assert opened and all(k.get("read_only") is True and k.get("data_only") is True
+                          for k in opened)
+
+    paste = render_paste(statement)
+    rows = [line.split("\t") for line in paste.splitlines()]
+    assert rows[0] == ["settle-up", "2026-08"]
+    assert rows[1] == ["category", "total"]
+    assert rows[2:5] == [[name, f"{total:.2f}"] for name, total in statement.categories]
+    assert ["total", f"{statement.total:.2f}"] in rows
+    assert ["alex", "680.00", "340.00", "340.00"] in rows
+    assert ["sam", "0.00", "340.00", "-340.00"] in rows
+    assert rows[-1] == ["transfer", "sam", "alex", "340.00"]
+
+    for fmt in ("text", "csv", "html", "paste"):
+        result = run_hfk("settle", "--home", str(home), "--today", "2026-10-01", "2026-08",
+                         "--format", fmt)
+        assert result.returncode == 0, result.stderr
+    assert run_hfk("settle", "--home", str(home), "--today", "2026-10-01", "2026-08",
+                   "--format", "paste").stdout == paste
+    assert hashlib.sha256(workbook.read_bytes()).hexdigest() == before
+    assert sorted(path.name for path in (home / "data").iterdir()) == ["Tiller-Example.xlsx"]

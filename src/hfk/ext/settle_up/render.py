@@ -114,4 +114,28 @@ def render_html(statement: Statement) -> str:
     )
 
 
-__all__ = ["header", "render_csv", "render_html", "render_text", "transfer_line"]
+def render_paste(statement: Statement) -> str:
+    """A tab-separated block to paste into a household's own settle-up tab (M7-07).
+
+    hfk never writes the workbook; the household pastes this block where it
+    wants it. Every value comes from the statement.
+    """
+
+    rows = [["settle-up", str(statement.month)], ["category", "total"]]
+    rows += [[name, _money(total)] for name, total in statement.categories]
+    rows.append(["total", _money(statement.total)])
+    rows.append([])
+    rows.append(["person", "paid", "owes", "net"])
+    for index, person in enumerate(statement.people):
+        rows.append([person, _money(statement.paid[index]), _money(statement.owed[index]),
+                     _money(statement.net[index])])
+    rows.append([])
+    if statement.transfer is None:
+        rows.append(["transfer", "none"])
+    else:
+        t = statement.transfer
+        rows.append(["transfer", t.payer, t.payee, _money(t.amount)])
+    return "\n".join("\t".join(row) for row in rows) + "\n"
+
+
+__all__ = ["header", "render_csv", "render_html", "render_paste", "render_text", "transfer_line"]

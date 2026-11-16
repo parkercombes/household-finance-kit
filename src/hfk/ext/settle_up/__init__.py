@@ -73,8 +73,9 @@ def _load_settle_up(data: dict, path: Path) -> object:
 def _configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("month", type=_month, help="The finished month to settle, YYYY-MM.")
     parser.add_argument(
-        "--format", choices=("text", "csv", "html"), default="text",
-        help="Output format (default: text).",
+        "--format", choices=("text", "csv", "html", "paste"), default="text",
+        help="Output format (default: text); paste is a tab-separated block to paste into "
+        "your own spreadsheet tab. hfk never writes the workbook.",
     )
     parser.add_argument(
         "--compare",
@@ -120,6 +121,7 @@ def _run(args: argparse.Namespace, context: CommandContext) -> int:
         "text": render.render_text,
         "csv": render.render_csv,
         "html": render.render_html,
+        "paste": render.render_paste,
     }
     sys.stdout.write(renderers[args.format](statement))
     if args.compare is not None:
