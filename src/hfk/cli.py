@@ -509,6 +509,15 @@ def _run_extension_command(
     return int(command.run(args, context))
 
 
+def _extension_command_broken(name: str, extension: str, problem: str) -> int:
+    print(
+        f"error: hfk {name} (extension {extension}) could not set up its arguments: {problem}\n"
+        "fix: update or uninstall the extension; core commands and hfk doctor still run",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def _add_extension_commands(
     subparsers: argparse._SubParsersAction, loaded: LoadedExtensions
 ) -> set[str]:
@@ -528,7 +537,17 @@ def _add_extension_commands(
                 help="Instance directory (default: HFK_HOME or current directory).",
             )
             parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
-            command.configure(parser)
+            try:
+                command.configure(parser)
+            except (Exception, SystemExit) as error:  # noqa: BLE001 - must not stop core commands
+                problem = f"{type(error).__name__}: {error}"
+                parser.set_defaults(
+                    func=lambda _args, name=command.name, ext=extension.name, problem=problem: (
+                        _extension_command_broken(name, ext, problem)
+                    )
+                )
+                added.add(command.name)
+                continue
             parser.set_defaults(
                 func=lambda args, extension=extension, command=command: _run_extension_command(
                     args, extension=extension, command=command, loaded=loaded

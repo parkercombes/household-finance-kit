@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- Extension commands (M7-01): if an extension command's `configure(parser)` still fails when the CLI builds its parser, that one command reports the error and exits 1; every other command, `hfk --help` and `hfk doctor` included, still runs. Found by the independent review of 2026-11-16.
 - Extension contract (M6-02): the check now runs each command's `configure(parser)` on a scratch parser, so a `configure` that raises or re-adds `--home` or `--today` is a contract break that `load_extensions` refuses and `hfk doctor` reports. Before, it passed the check and then stopped every `hfk` command, `hfk --help` and `hfk doctor` included. Found by the independent review of 2026-11-16.
 - `hfk serve` (M5-10): a `who` that is not a person's slug is now a 400, and Regenerate refuses one. Before, `who` went into the file name under `out/` unchecked, so `who=/../x` crashed the request with a traceback and, if a matching folder existed under `out/`, wrote outside `out/`. Found by the independent review of 2026-11-16.
 - CI lint: pin `ruff==0.16.10` in the dev extras. CI installed the newest ruff (0.17.5), whose changed default rules flagged the `noqa` directives 0.16.10 requires, so CI had failed at the lint step since 2026-10-28.
