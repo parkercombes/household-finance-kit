@@ -5,6 +5,10 @@ distribution and registers through its ``hfk.extensions`` entry point, so core
 discovers it like any other extension and never imports it. A household turns
 it on with ``extensions: [settle_up]`` in ``household.yaml``.
 
+Who paid a shared account's charges is declared in the extension's own
+``settle_up.yaml`` (ADR-0016, ADR-0017); ``hfk settle YYYY-MM`` prints the
+statement for a finished month.
+
 Settle-up is for exactly two people (ADR-0004), even though the core
 ownership model is N-person: one or three people is a loud error, from
 ``hfk doctor`` and from every settle-up command.
@@ -12,13 +16,17 @@ ownership model is N-person: one or three people is a loud error, from
 
 from __future__ import annotations
 
+import argparse
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import ClassVar
 
 from hfk import __version__
-from hfk.config import Household
+from hfk.config import ConfigError, Household, Month
 from hfk.engine import Diagnostic, DoctorContext
+from hfk.ext import CommandContext, ExtensionCommand
 
 NAME = "settle_up"
 SHARED_ITEMS_DIR = "shared-items"
@@ -56,25 +64,97 @@ def two_people(household: Household) -> tuple[str, str]:
     return slugs[0], slugs[1]
 
 
+def _load_settle_up(data: dict, path: Path) -> object:
+    from hfk.ext.settle_up.config import load_settle_up
+
+    return load_settle_up(data, path)
+
+
+def _configure(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("month", type=_month, help="The finished month to settle, YYYY-MM.")
+    parser.add_argument(
+        "--format", choices=("text", "csv", "html"), default="text",
+        help="Output format (default: text).",
+    )
+
+
+def _month(value: str) -> Month:
+    try:
+        return Month.parse(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("write the month as YYYY-MM") from error
+
+
+def _run(args: argparse.Namespace, context: CommandContext) -> int:
+    from hfk.ext.settle_up import render
+    from hfk.ext.settle_up.config import check_payers
+    from hfk.ext.settle_up.items import load_shared_items
+    from hfk.ext.settle_up.statement import build_statement, check_month_finished
+    from hfk.source import TillerFormatError
+
+    try:
+        check_month_finished(args.month, context.today)
+        check_payers(context.config, context.household)
+        items = load_shared_items(
+            context.home, args.month, household=context.household,
+            declarations=context.declarations,
+        )
+        statement = build_statement(
+            ledger=context.load_ledger(),
+            household=context.household,
+            declarations=context.declarations,
+            config=context.config,
+            items=items,
+            month=args.month,
+            today=context.today,
+        )
+    except (ConfigError, SettleUpError, TillerFormatError, ValueError) as error:
+        print(f"settle: {error}", file=sys.stderr)
+        return 1
+    renderers = {
+        "text": render.render_text,
+        "csv": render.render_csv,
+        "html": render.render_html,
+    }
+    sys.stdout.write(renderers[args.format](statement))
+    return 0
+
+
 class SettleUp:
     """The ``settle_up`` extension object (the M6 contract)."""
 
     name = NAME
     version = __version__
     contract_version = "1.0.0"
-    config_section = None
-    schema = None
+    config_section = "settle_up.yaml"
+    schema = staticmethod(_load_settle_up)
     requires: ClassVar[dict[str, list[str]]] = {
         "ledger_fields": ["transactions", "categories"],
         "extensions": [],
     }
 
     def commands(self) -> list:
-        return []
+        return [
+            ExtensionCommand(
+                name="settle",
+                help="Print the settle-up statement for a finished month.",
+                configure=_configure,
+                run=_run,
+            )
+        ]
 
     def doctor(self, context: DoctorContext, config: object) -> Iterator[Diagnostic]:
         if context.household is None:
             return
+        from hfk.ext.settle_up.config import check_payers
+
+        try:
+            check_payers(config, context.household)
+        except ConfigError as error:
+            yield Diagnostic(
+                "error", "settle-up-config", f"{error.file.name} key={error.key}",
+                error.problem, error.fix,
+            )
         try:
             two_people(context.household)
         except SettleUpError as error:

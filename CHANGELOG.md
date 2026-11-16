@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M7-04: `hfk settle YYYY-MM` prints the settle-up statement (text, CSV or HTML): category totals, paid and owed per person, net, and the transfer. `settle_up.yaml` declares payer weights for shared accounts (ADR-0017); the example instance and `hfk init` template carry one.
 - ADR-0017 accepted (2026-11-16): `settle_up.yaml` declares who pays each shared account's charges; a charge from a single-owner account was paid by its owner. `M7-04` to `M7-07` are unblocked.
 - ADR-0016 accepted (2026-11-16): an extension's config is a YAML file of its own in the instance, never a section inside `household.yaml` or `declarations.yaml`. The code already did this; the docs drop the in-file option.
 - Proposed ADR-0017 asks the maintainer who paid a shared account's charges in a settle-up statement, which decides the net transfer. Roadmap items `M7-04` to `M7-07` are blocked until it is decided.

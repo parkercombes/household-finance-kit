@@ -23,7 +23,7 @@ PYTHONPATH = str(ROOT / "src")
 
 
 def make_instance(tmp_path: Path, **fixture_kwargs: Any) -> Path:
-    for filename in ("household.yaml", "declarations.yaml"):
+    for filename in ("household.yaml", "declarations.yaml", "settle_up.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
     build_fixture(tmp_path / "data" / "Tiller-Example.xlsx", **fixture_kwargs)
     return tmp_path
@@ -107,7 +107,7 @@ def test_example_instance_files_match_examples() -> None:
 
 
 def test_missing_workbook_is_an_error(tmp_path: Path) -> None:
-    for filename in ("household.yaml", "declarations.yaml"):
+    for filename in ("household.yaml", "declarations.yaml", "settle_up.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
 
     report = run_doctor(tmp_path, today=date(2026, 10, 1))

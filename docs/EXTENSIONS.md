@@ -174,7 +174,7 @@ items:
     bucket: "Variable Essential"
 ```
 
-Planned command behavior: `hfk settle YYYY-MM` outputs category totals for shared accounts and shared items, per-person paid versus owed, and the net transfer. Renderers are planned to support text, CSV, and HTML. A paste-ready block may be emitted for users who keep their own manual tab, but the workbook remains read-only.
+Implemented (M7-04): `hfk settle YYYY-MM [--format text|csv|html]` prints the statement for a finished month: category totals of the shared charges and shared items, what each person paid and owes, their net, and the one transfer that settles it. Who owes comes from the core share function. Who paid is the account's single owner, or the payer weights in the extension's own `settle_up.yaml` for a shared account (ADR-0017); a shared charge on a shared account with no payer entry is an error naming the account. `hfk doctor` checks `settle_up.yaml` against `household.yaml`. A paste-ready block may be emitted for users who keep their own manual tab, but the workbook remains read-only.
 
 Regression testing should compare the planned computation against a hand-built historical statement to the cent. The private instance owner can create a small expected statement from a finished month, run the synthetic or private fixture locally, and confirm that category totals, paid amounts, owed amounts, and net transfer match. Public tests must use synthetic data only.
 

@@ -43,7 +43,7 @@ VALID = {
 
 
 def make_home(tmp_path: Path) -> Path:
-    for filename in ("household.yaml", "declarations.yaml"):
+    for filename in ("household.yaml", "declarations.yaml", "settle_up.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
     (tmp_path / "shared-items").mkdir()
     return tmp_path
