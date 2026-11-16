@@ -1,4 +1,8 @@
-"""Text, CSV and HTML output for the retirement track (M8-05).
+"""Text, CSV and HTML output for the retirement track (M8-05, M8-06).
+
+Text and HTML open with the mechanics-not-advice disclaimer and end with the
+out-of-scope note (M8-06). CSV is a plain table for spreadsheets and carries
+neither; the disclaimer is on every page a person reads.
 
 Formatting only: every number comes from ``RetirementReport`` and is printed
 with two decimal places. Every page labels its money as today's dollars and
@@ -14,6 +18,15 @@ from decimal import Decimal
 
 from hfk.ext.retirement.report import RetirementReport
 
+DISCLAIMER = (
+    "Mechanics, not advice: this report is arithmetic on the figures in retirement.yaml. "
+    "It does not recommend financial products, tax strategy, when to claim Social Security, "
+    "or investment decisions."
+)
+OUT_OF_SCOPE = (
+    "Not modelled: Monte Carlo simulation, optimisation, Roth conversion strategy, product "
+    "recommendations, account balances or investment returns, and personal advice."
+)
 HOUSEHOLD_COLUMNS = (
     ("year", "year"),
     ("income", "income"),
@@ -72,7 +85,7 @@ def _rows(report: RetirementReport, which: str) -> tuple[tuple[tuple[str, str], 
 
 
 def render_text(report: RetirementReport) -> str:
-    lines = header_lines(report)
+    lines = [DISCLAIMER, *header_lines(report)]
     for which, title in (("household", "household"), ("people", "per person, before tax")):
         columns, rows = _rows(report, which)
         table = [[label for _key, label in columns]] + [
@@ -90,6 +103,7 @@ def render_text(report: RetirementReport) -> str:
             )
     lines.append("")
     lines.extend(notes(report))
+    lines.append(OUT_OF_SCOPE)
     return "\n".join(lines) + "\n"
 
 
@@ -128,6 +142,7 @@ def render_html(report: RetirementReport) -> str:
         "</head>",
         "<body>",
         f"<h1>{esc(header_lines(report)[0])}</h1>",
+        f'<p class="disclaimer"><strong>{esc(DISCLAIMER)}</strong></p>',
     ]
     parts.extend(f"<p>{esc(line)}</p>" for line in header_lines(report)[1:])
     for which, title in (("household", "Household"), ("people", "Per person, before tax")):
@@ -144,8 +159,9 @@ def render_html(report: RetirementReport) -> str:
             parts.append("<tr>" + "".join(cells) + "</tr>")
         parts.append("</table>")
     parts.extend(f"<p>{esc(line)}</p>" for line in notes(report))
+    parts.append(f"<p>{esc(OUT_OF_SCOPE)}</p>")
     parts.extend(["</body>", "</html>"])
     return "\n".join(parts) + "\n"
 
 
-__all__ = ["header_lines", "notes", "render_csv", "render_html", "render_text"]
+__all__ = ["DISCLAIMER", "OUT_OF_SCOPE", "header_lines", "notes", "render_csv", "render_html", "render_text"]

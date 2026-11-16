@@ -202,6 +202,8 @@ Claim-age scenarios are mutually exclusive alternatives, not a timeline. For exa
 
 Planned outputs include a calendar-year track and an income-vs-need gap, shown per person and for the household. Tax data must have a staleness gate: if the versioned tax data is older than the configured allowed tax-year age, the extension fails loudly before producing a projection.
 
+Implemented (M8-06): the text and HTML reports open with a mechanics-not-advice disclaimer and end with the out-of-scope note below; the CSV stays a plain table. `examples/retirement.example.yaml` and `tests/fixtures/us-federal-synthetic.yaml` are the synthetic fixtures (Alex and Sam, round, made-up figures).
+
 Out of scope for the built-in extension:
 
 - Monte Carlo simulations.

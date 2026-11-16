@@ -159,7 +159,13 @@ def test_social_security_thresholds_shrink_in_todays_dollars(tmp_path):
 
 
 def test_report_text_has_no_advice_language(tmp_path):
-    from hfk.ext.retirement.render import render_csv, render_html, render_text
+    from hfk.ext.retirement.render import (
+        DISCLAIMER,
+        OUT_OF_SCOPE,
+        render_csv,
+        render_html,
+        render_text,
+    )
 
     report = build(tmp_path)
     text = render_text(report)
@@ -168,7 +174,8 @@ def test_report_text_has_no_advice_language(tmp_path):
     assert "gap = income - federal tax - state tax - need" in text
     assert "\n2037  32000.00          12000.00" in text
     for output in (text, render_csv(report), render_html(report)):
-        lowered = output.lower()
+        # The fixed disclaimer and out-of-scope note name what the report does not do.
+        lowered = output.replace(DISCLAIMER, "").replace(OUT_OF_SCOPE, "").lower()
         for word in ADVICE_WORDS:
             assert f" {word}" not in lowered, word
     assert render_csv(report).splitlines()[0].startswith("view,year,who,age,income")
@@ -220,7 +227,8 @@ def test_retirement_command(tmp_path):
 
     shown = hfk("--claim-age", "alex=67", "--tax-table", str(table))
     assert shown.returncode == 0, shown.stderr
-    assert shown.stdout.startswith("retirement track 2035-2038, in today's dollars")
+    assert shown.stdout.startswith("Mechanics, not advice:")
+    assert "\nretirement track 2035-2038, in today's dollars" in shown.stdout
     assert hfk("--claim-age", "alex=67", "--tax-table", str(table), "--format", "csv").stdout
 
     no_table = hfk("--claim-age", "alex=67")

@@ -1,0 +1,26 @@
+# SYNTHETIC test table for the retirement extension's tests and demos.
+# Every figure is made up and round. It is NOT a real tax table and must never be
+# copied into src/hfk/ext/retirement/tax_data/.
+schema_version: 1
+jurisdiction: us-federal
+tax_year: 2025
+source: "SYNTHETIC TEST TABLE - not real figures"
+filing_status:
+  married_joint:
+    standard_deduction: 1000
+    brackets:
+      - {over: 0, rate: 0.10}
+      - {over: 2000, rate: 0.20}
+      - {over: 5000, rate: 0.30}
+  single:
+    standard_deduction: 500
+    brackets:
+      - {over: 0, rate: 0.10}
+      - {over: 1000, rate: 0.20}
+      - {over: 2500, rate: 0.30}
+social_security:
+  source: "SYNTHETIC TEST RULE - not real figures"
+  first_fraction: 0.5
+  second_fraction: 0.85
+  married_joint: {base: 100, adjusted_base: 200}
+  single: {base: 50, adjusted_base: 100}
