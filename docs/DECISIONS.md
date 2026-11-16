@@ -648,8 +648,8 @@ following changes apply:
 
 ## ADR-0016: An Extension's Config Is a File of Its Own in the Instance
 
-Status: proposed
-Date: 2026-11-13
+Status: accepted
+Date: 2026-11-13 (proposed); accepted 2026-11-16
 
 ### Context
 
@@ -681,20 +681,18 @@ Options:
 
 ### Decision
 
-Proposed: option 1. Both planned extensions already use their own inputs
-(`retirement.yaml`, `shared-items/`), a separate file keeps the core loaders strict and
-independent of installed packages, and option 3 can be added later without breaking
-option 1.
+Option 1. An extension's config is a YAML file of its own in the instance, named by
+its `config_section`, or the extension has no config (`config_section = None`). Core
+loaders keep rejecting every unknown key in `household.yaml` and `declarations.yaml`,
+and a `config_section` that is not a plain `.yaml` file name is a contract error.
 
-The M6-02 contract and the M6-03 loader implement option 1 as the narrowest safe
-behaviour: a `config_section` that is not a plain `.yaml` file name is a contract error.
-If the maintainer chooses option 2 or 3, the contract check widens and
-[EXTENSIONS](EXTENSIONS.md) keeps its in-file wording; if option 1 is accepted, that
-wording is removed.
+Both planned extensions already use their own inputs (`retirement.yaml`,
+`shared-items/`), a separate file keeps the core loaders strict and independent of
+installed packages, and option 3 can still be added later without breaking option 1.
 
 ### Consequences
 
-- Until this ADR is decided, an extension cannot keep its settings inside
-  `household.yaml` or `declarations.yaml`.
-- [EXTENSIONS](EXTENSIONS.md) describes the implemented file form and points here for
-  the in-file form.
+- An extension cannot keep its settings inside `household.yaml` or `declarations.yaml`.
+- The M6-02 contract and the M6-03 loader already implement this decision.
+- [EXTENSIONS](EXTENSIONS.md) states the file form only; its earlier wording that small
+  extensions "may own a section in `household.yaml` or `declarations.yaml`" is removed.

@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- ADR-0016 accepted (2026-11-16): an extension's config is a YAML file of its own in the instance, never a section inside `household.yaml` or `declarations.yaml`. The code already did this; the docs drop the in-file option.
 - M6-05: [EXTENSIONS](docs/EXTENSIONS.md) documents the implemented extension API: discovery, the contract with a checked minimal example, config files, doctor hooks, a boundaries table for public and private extension packages, testing without pip, and that built-in-first extensions ship inside `hfk.ext` but are still discovered through entry points.
 - M6-04: `hfk doctor` runs extension doctor hooks after its core checks. `run_doctor` takes `hooks` (`hfk.engine.DoctorHook`, given a `DoctorContext`), so the engine never imports an extension; `hfk.ext.doctor.extension_doctor_hooks` builds them. A failing hook is an `extension-hook-failed` error naming the extension, and every other check still reports. The example and template `household.yaml` now enable no extensions, because an enabled extension that is not installed is an error.
 - M6-03: extension config sections. `hfk.ext.load_enabled_extensions` reads and validates the own config file of each extension enabled in `household.yaml`, and never opens the file of one that is not enabled. An enabled extension that is not installed, lacks a required extension, or has a missing or invalid file is a `ConfigError` naming the file, key path, and fix.

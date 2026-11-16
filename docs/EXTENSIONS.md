@@ -46,7 +46,7 @@ Implemented (M6-02): `hfk.ext.validate_extension` checks every member below and 
 | `name` | Yes | A lowercase identifier, such as `settle_up`, equal to the entry-point name. Households enable it by listing it under `extensions` in `household.yaml`. |
 | `version` | Yes | The extension package's own version, as a non-empty string. |
 | `contract_version` | Yes | `MAJOR.MINOR.PATCH`. This hfk supports contract major version 1; any other major version is refused loudly. |
-| `config_section` | Yes | `None` when the extension needs no config, or the file name of its own input file in the instance, such as `retirement.yaml`. Core file names are refused. Sections inside `household.yaml` or `declarations.yaml` are not supported; see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance). |
+| `config_section` | Yes | `None` when the extension needs no config, or the file name of its own input file in the instance, such as `retirement.yaml`. Core file names are refused. Sections inside `household.yaml` or `declarations.yaml` are not allowed ([ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance)). |
 | `schema` | When `config_section` is set | A callable `schema(data, path)` that validates the loaded mapping and returns the extension's config object, raising `hfk.config.ConfigError` naming the file, key path, and fix. `None` when `config_section` is `None`. |
 | `requires` | Yes | A mapping with optional `ledger_fields` (names of `Ledger` fields: `transactions`, `categories`, `balances`, `accounts`) and `extensions` (other extension names). |
 | `commands()` | Yes | Returns `hfk.ext.ExtensionCommand` objects: `name`, `help`, `configure(parser)`, and `run(args, context)` returning an exit code. |
@@ -107,7 +107,7 @@ The imports show the rule: extensions may import the engine, ledger, and config 
 
 ## Config sections and validation
 
-Each extension owns its configuration. Implemented (M6-03): an extension's config is a separate YAML file in the private instance directory, named by its `config_section`, such as `retirement.yaml`. Whether a small extension may instead own a section inside `household.yaml` or `declarations.yaml` is open: see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance).
+Each extension owns its configuration. Implemented (M6-03): an extension's config is a separate YAML file in the private instance directory, named by its `config_section`, such as `retirement.yaml`. An extension never owns a section inside `household.yaml` or `declarations.yaml` ([ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance)).
 
 `hfk.ext.load_enabled_extensions(home, household=..., installed=...)` reads config only for the extensions listed under `extensions` in `household.yaml`. The file of an extension that is not enabled is never opened, so a stale or half-written file cannot break anything. For an enabled extension, every problem is a `ConfigError` naming the file, key path, and fix:
 
@@ -217,7 +217,7 @@ Boundaries for every extension package, public or private:
 | Dependency | Depend on `household-finance-kit`; declare `contract_version` for the contract you built against. |
 | Imports | `hfk.config`, `hfk.ledger`, `hfk.engine`, and the `hfk.ext` contract types only. Never `hfk.cli`, `hfk.render` internals, or `hfk.source` file handling. |
 | Data | Read the ledger and config core hands over. Never open or write the Tiller workbook. Write only generated output under the instance's `out/`. |
-| Config | Your own YAML file in the instance, validated by your `schema` (proposed ADR-0016). |
+| Config | Your own YAML file in the instance, validated by your `schema` (ADR-0016). |
 | Privacy | A public package carries only Alex, Sam, `Example Bank`, and round numbers, and runs a privacy scan before publishing. A private package stays in a private repository. |
 | Advice | Show arithmetic and scenarios only. Never recommend products, tax strategy, claiming strategy, or investments. |
 
