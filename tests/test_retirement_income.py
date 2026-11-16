@@ -150,6 +150,10 @@ def test_a_scenario_must_pick_a_listed_claim_age_for_everyone(tmp_path):
          "Missing required key"),
         (lambda d: d["income"][4].update(label="pension (sam)"), "income[4].label",
          "both called"),
+        (lambda d: d["income"][2].pop("taxable"), "income[2].taxable", "Missing required key"),
+        (lambda d: d["income"][2].update(taxable="partly"), "income[2].taxable",
+         "Invalid taxable"),
+        (lambda d: d["income"][0].update(taxable="full"), "income[0].taxable", "Unknown key"),
     ],
 )
 def test_invalid_streams_fail_clearly(tmp_path, mutate, key, problem):

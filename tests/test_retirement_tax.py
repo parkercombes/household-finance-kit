@@ -117,11 +117,11 @@ def test_missing_tax_data_fails_loudly_and_none_ships_unverified(tmp_path):
     ("state", "income", "expected"),
     [
         ({"module": "none"}, 50_000, "0.00"),
-        ({"module": "flat", "rate": 0.04}, 5000, "200.00"),
-        ({"module": "flat", "rate": 0.04, "deduction": 1000}, 5000, "160.00"),
-        ({"module": "bracket", "brackets": [{"over": 0, "rate": 0.02},
+        ({"module": "flat", "social_security": "exempt", "rate": 0.04}, 5000, "200.00"),
+        ({"module": "flat", "social_security": "exempt", "rate": 0.04, "deduction": 1000}, 5000, "160.00"),
+        ({"module": "bracket", "social_security": "taxed", "brackets": [{"over": 0, "rate": 0.02},
                                             {"over": 1000, "rate": 0.05}]}, 3000, "120.00"),
-        ({"module": "bracket", "deduction": 500,
+        ({"module": "bracket", "social_security": "taxed", "deduction": 500,
           "brackets": [{"over": 0, "rate": 0.02}, {"over": 1000, "rate": 0.05}]}, 3000, "95.00"),
     ],
 )
@@ -134,6 +134,7 @@ def test_state_tax_modules_plug_in_cleanly(tmp_path, state, income, expected):
         tmp_path / "retirement.yaml",
     )
     assert config.state.module == state["module"]
+    assert config.state.taxes_social_security == (state.get("social_security") == "taxed")
     assert str(config.state.compute(Decimal(income))) == expected
 
 
@@ -150,6 +151,12 @@ def test_state_tax_modules_plug_in_cleanly(tmp_path, state, income, expected):
          "tax.state.rate", "Missing required key"),
         ({"filing_status": "single", "max_data_age_years": 1,
           "state": {"module": "flat", "rate": 4}}, "tax.state.rate", "Invalid rate"),
+        ({"filing_status": "single", "max_data_age_years": 1,
+          "state": {"module": "flat", "rate": 0.04}}, "tax.state.social_security",
+         "Missing required key"),
+        ({"filing_status": "single", "max_data_age_years": 1,
+          "state": {"module": "flat", "rate": 0.04, "social_security": "yes"}},
+         "tax.state.social_security", "Invalid social_security"),
         ({"filing_status": "single", "max_data_age_years": 1,
           "state": {"module": "none", "rate": 0.04}}, "tax.state.rate", "Unknown key"),
         ({"filing_status": "single", "max_data_age_years": 1,

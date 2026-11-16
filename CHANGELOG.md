@@ -18,6 +18,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M8-05 (R5): `hfk retirement` prints the calendar-year income-vs-need track in today's dollars (text, CSV or HTML) for the claim ages given with `--claim-age`. The household view counts federal and state tax per ADR-0018; the per-person view is before tax. Income streams now declare `taxable`, and state modules declare whether they tax Social Security. Without a federal tax table the command fails loudly; `--tax-table` names one.
 - ADR-0018 accepted (2026-11-16): income streams declare `taxable`, Social Security tax thresholds shrink in today's dollars, and tax is counted in the household view only. `M8-05`, `M8-06` and `M10-02` are unblocked. The claim-age range 62 to 70 is confirmed against ssa.gov.
 - ADR-0016 accepted (2026-11-16): an extension's config is a YAML file of its own in the instance, never a section inside `household.yaml` or `declarations.yaml`. The code already did this; the docs drop the in-file option.
 - Proposed ADR-0018 asks the maintainer how tax enters the retirement income-vs-need gap: which streams are taxable, how fixed-dollar thresholds behave in today's dollars, and tax in the per-person view. Roadmap items `M8-05`, `M8-06` and `M10-02` are blocked until it is decided.

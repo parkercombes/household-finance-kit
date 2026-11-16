@@ -7,11 +7,12 @@ inflation through ``cola``; there is no default::
     income:
       - {type: social_security, who: alex, cola: full,
          claim_ages: {62: 1400, 67: 2000, 70: 2480}}
-      - {type: pension, who: sam, monthly: 1500, start_year: 2037, cola: none}
+      - {type: pension, who: sam, monthly: 1500, start_year: 2037, cola: none,
+         taxable: full}
       - {type: account_drawdown, who: alex, monthly: 1000, start_year: 2035,
-         end_year: 2060, cola: full}
+         end_year: 2060, cola: full, taxable: full}
       - {type: other, label: "Example rent", who: sam, monthly: 300,
-         start_year: 2037, end_year: 2041, cola: 0.02}
+         start_year: 2037, end_year: 2041, cola: 0.02, taxable: none}
 
 Stream types:
 
@@ -23,7 +24,9 @@ Stream types:
   month`` months); after that, twelve months a year, to the end of the track.
 - ``pension``, ``account_drawdown`` and ``other`` take ``monthly``, a
   ``start_year`` and an optional inclusive ``end_year``; they pay twelve months
-  of every year in that range. An ``account_drawdown`` is the withdrawal the
+  of every year in that range. Each also declares ``taxable``: ``full`` (ordinary
+  taxable income) or ``none``, with no default (ADR-0018). Social Security always
+  follows the base-amount rule. An ``account_drawdown`` is the withdrawal the
   household declares; the extension does not model an account balance.
 
 ``cola`` (ADR-0008), with ``n`` the number of years since the stream started:
@@ -59,7 +62,8 @@ from hfk.ledger import money
 
 STREAM_TYPES = ("social_security", "pension", "account_drawdown", "other")
 SOCIAL_SECURITY_KEYS = ("type", "who", "label", "claim_ages", "cola")
-DATED_KEYS = ("type", "who", "label", "monthly", "start_year", "end_year", "cola")
+DATED_KEYS = ("type", "who", "label", "monthly", "start_year", "end_year", "cola", "taxable")
+TAXABLE = ("full", "none")
 MAX_COLA = Decimal("0.20")
 ZERO = Decimal("0.00")
 
@@ -74,6 +78,7 @@ class IncomeStream:
     start_year: int | None = None
     end_year: int | None = None
     claim_ages: tuple[tuple[int, Decimal], ...] = ()
+    taxable: str | None = None
 
     @property
     def tracks_inflation(self) -> bool:
@@ -149,6 +154,15 @@ def load_income(
             claim_ages = _claim_ages(require(entry, "claim_ages", path, *parents), path, *parents)
             streams.append(IncomeStream(kind, who, label, cola, claim_ages=claim_ages))
             continue
+        taxable = require(entry, "taxable", path, *parents)
+        if taxable not in TAXABLE:
+            raise ConfigError(
+                f"Invalid taxable {taxable!r}",
+                file=path,
+                key=key_path(*parents, "taxable"),
+                fix="write full (all of it is ordinary taxable income, such as a pension or a "
+                "pre-tax account) or none (such as an after-tax account); ADR-0018",
+            )
         monthly = _money(require(entry, "monthly", path, *parents), path, *parents, "monthly")
         start_year = _year(require(entry, "start_year", path, *parents), path, *parents, "start_year")
         end_year = None
@@ -163,7 +177,7 @@ def load_income(
                 )
         streams.append(
             IncomeStream(kind, who, label, cola, monthly=monthly, start_year=start_year,
-                         end_year=end_year)
+                         end_year=end_year, taxable=taxable)
         )
     return tuple(streams)
 
