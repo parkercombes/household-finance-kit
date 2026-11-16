@@ -15,13 +15,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlencode
 
 import pytest
 
 from hfk.config import Month, load_declarations, load_household, load_instance_plan
 from hfk.engine import build_scorecard
 from hfk.render import render_text
-from hfk.serve import ServeError, check_loopback_host, last_finished_month, make_server
+from hfk.serve import FrontDoor, ServeError, check_loopback_host, last_finished_month, make_server
 from hfk.source import find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
 
@@ -249,3 +250,28 @@ def test_regenerate_rereads_the_workbook(tmp_path):
     assert headers["Location"] == "/scorecard?month=2026-08&who=alex"
     assert "not available" in after
     assert "workbook" in after.lower()
+
+
+@pytest.mark.parametrize(
+    "who", ["/../../escaped", "..", "a/b", "a\\b", "Alex", "alex.html", "%2e%2e"]
+)
+def test_who_that_is_not_a_slug_is_refused_and_nothing_is_written(tmp_path, who):
+    home = make_instance(tmp_path)
+    (home / "out" / "scorecard-2026-08-").mkdir(parents=True)
+    before = snapshot_tree(home)
+    with running(home) as port:
+        query = urlencode({"month": "2026-08", "who": who, "report": "scorecard"})
+        regenerate, _headers, _body = request(port, "GET", f"/regenerate?{query}")
+        page, _headers, _body = request(port, "GET", f"/scorecard?{query}")
+    assert regenerate == 400
+    assert page == 400
+    assert snapshot_tree(home) == before
+    assert not (home / "escaped.html").exists()
+
+
+def test_regenerate_refuses_a_who_that_is_not_a_slug(tmp_path):
+    home = make_instance(tmp_path)
+    front = FrontDoor(home, today=lambda: TODAY)
+    with pytest.raises(ServeError, match="slug"):
+        front.regenerate(month=Month(2026, 8), who="../x")
+    assert not (home / "x.html").exists()
