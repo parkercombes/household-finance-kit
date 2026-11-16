@@ -179,6 +179,12 @@ class Complete:
         return []
 
 
+def _command(configure):
+    return ExtensionCommand(
+        name="example-report", help="Example.", configure=configure, run=lambda args, context: 0
+    )
+
+
 def test_extension_contract_validation():
     extension = validate_extension(Complete(), entry_point="example")
     assert extension.name == "example"
@@ -228,6 +234,12 @@ def test_extension_contract_validation():
         ({"commands": lambda self: [object()]}, "commands", "is not an ExtensionCommand"),
         ({"commands": lambda self: 1 / 0}, "commands", "raised ZeroDivisionError"),
         ({"doctor": None}, "doctor", "missing or not callable"),
+        ({"commands": lambda self: [_command(lambda parser: 1 / 0)]}, "commands",
+         "configure(parser) raised ZeroDivisionError"),
+        ({"commands": lambda self: [_command(lambda parser: parser.add_argument("--home"))]},
+         "commands", "configure(parser) raised ArgumentError"),
+        ({"commands": lambda self: [_command(lambda parser: parser.exit(2))]}, "commands",
+         "configure(parser) raised SystemExit"),
         ({"report_sections": lambda self: ["page"]}, "report_sections", "is not a ReportSection"),
     ],
 )

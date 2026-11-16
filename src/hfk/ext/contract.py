@@ -260,8 +260,29 @@ def _commands(obj: Any, fail: Callable[[str, str, str], None]) -> tuple[Extensio
             fail("commands", f"command {item.name!r} is listed twice", "list each command once")
         if not callable(item.configure) or not callable(item.run):
             fail("commands", f"command {item.name!r} has a non-callable configure or run", "pass functions")
+        else:
+            problem = _try_configure(item)
+            if problem is not None:
+                fail(
+                    "commands",
+                    f"command {item.name!r} configure(parser) raised {problem}",
+                    "make configure add only the command's own arguments; core adds --home and --today",
+                )
         seen.add(item.name)
     return items
+
+
+def _try_configure(command: ExtensionCommand) -> str | None:
+    """Run ``configure`` on a scratch parser; a failure here would stop every hfk command."""
+
+    scratch = argparse.ArgumentParser(prog=f"hfk {command.name}", exit_on_error=False)
+    scratch.add_argument("--home")
+    scratch.add_argument("--today")
+    try:
+        command.configure(scratch)
+    except (Exception, SystemExit) as error:  # noqa: BLE001 - reported as a contract break
+        return f"{type(error).__name__}: {error}"
+    return None
 
 
 def _report_sections(
