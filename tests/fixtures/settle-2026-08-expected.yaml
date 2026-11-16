@@ -1,0 +1,11 @@
+# A hand-built settle-up statement for the synthetic fixture's 2026-08, worked by hand
+# from the fixture transactions with Alex paying the Joint Card (settle_up.yaml):
+#   Joint Card: Groceries 120 + 135 + 110 = 365.00; Dining 45 + 60 = 105.00 (Alex pays)
+#   Alex Checking: Utilities 210.00, shared half each by the sharing rule (Alex pays)
+#   Paid: Alex 680.00, Sam 0.00. Owed: half of 680.00 each. Sam pays Alex 340.00.
+schema_version: 1
+month: 2026-08
+categories: {Groceries: 365.00, Dining: 105.00, Utilities: 210.00}
+paid: {alex: 680.00, sam: 0.00}
+owes: {alex: 340.00, sam: 340.00}
+transfer: {from: sam, to: alex, amount: 340.00}
