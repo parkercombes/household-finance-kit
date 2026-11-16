@@ -242,6 +242,14 @@ Flexible spending accounts, health savings reimbursements, and employer or insur
 - **Shape of an extension:** its own config file (for example `reimbursements.yaml`) listing each claim with a date, amount, category, status, and reason; read-only use of the ledger to find the matching transactions; a `doctor()` that flags claims past their deadline; and a report of open and settled claims. It must not change how core shares or buckets a transaction.
 - **Boundary:** a reimbursement does not rewrite the scorecard. If a household wants reimbursed spending excluded from a bucket, that judgement call belongs in `declarations.yaml` (an override or a non-spend group), not in the extension.
 
+### Employer pension add-ons
+
+Employer-specific pension schedules (a national civil-service pension, a company's own formula, survivor options) are out of core and out of the built-in `retirement` extension.
+
+- **Why not core or `retirement`:** each schedule is one employer's rules: accrual rates, service credit, final-salary averaging, early-retirement reductions, and survivor elections. Building them into the generic extension would encode one employer's rules for every household, and the rules change with each plan amendment.
+- **Shape of an extension:** a separate package (public when the schedule is public law or a published plan, private when it encodes an employer's internal rules or a household's own record) that reads its own config file and works out a monthly benefit by its formula. The household then enters that amount as a `pension` stream in `retirement.yaml`, with `cola` and `taxable` declared as usual. The `retirement` extension needs no change: it models a pension as a declared monthly amount.
+- **Boundary:** mechanics, not advice. It may show the benefit at each retirement date the household asks about; it never recommends when to retire, which survivor option to take, or whether to take a lump sum.
+
 ### Home purchase modelling
 
 Modelling a home purchase (down payment, mortgage amortisation, closing costs, property tax, and how buying changes the budget) is out of core and out of the built-in `retirement` extension.

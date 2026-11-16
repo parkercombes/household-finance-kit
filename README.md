@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and in M7 `M7-01` to `M7-03` (`settle_up` registration, on-ledger shares, and off-ledger shared items) are done. `M7-04` to `M7-07` (the statement) wait on proposed ADR-0017, so M8 work has started: `M8-01` to `M8-04` (the `retirement.yaml` schema, income streams, expenses, and tax data mechanics) are done. ADR-0018 is accepted, and `M8-05` and `M8-06` (`hfk retirement`, the report, with its disclaimer) are done; real federal tax figures are still to be added. In M10, `M10-01`, `M10-03` and `M10-05` (community-candidate boundaries) are done, and `M10-02` (employer pension add-ons) is next. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and in M7 `M7-01` to `M7-03` (`settle_up` registration, on-ledger shares, and off-ledger shared items) are done. `M7-04` to `M7-07` (the statement) wait on proposed ADR-0017, so M8 work has started: `M8-01` to `M8-04` (the `retirement.yaml` schema, income streams, expenses, and tax data mechanics) are done. ADR-0018 is accepted, and `M8-05` and `M8-06` (`hfk retirement`, the report, with its disclaimer) are done; real federal tax figures are still to be added. M10's documented boundaries (`M10-01` to `M10-05`) are done. Every remaining item now waits on the maintainer; see [ROADMAP](docs/ROADMAP.md). The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -130,7 +130,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M7 | In progress | `settle_up` extension for exactly two people |
 | M8 | Done | `retirement` extension, R1 through R6 (federal tax figures still to be added) |
 | M9 | Planned | Google Sheets source adapter |
-| M10 | In progress | Community extensions: FSA tracking, pension add-ons, home purchase modelling |
+| M10 | Done | Community extensions: FSA tracking, pension add-ons, home purchase modelling |
 
 ## What It Will Do
 
