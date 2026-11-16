@@ -181,6 +181,8 @@ def test_invalid_tax_config_fails_clearly(tmp_path, tax, key, problem):
         (lambda d: d.update(jurisdiction="us-ca"), "jurisdiction"),
         (lambda d: d["filing_status"]["married_joint"]["brackets"][2].update(over=1000),
          "filing_status.married_joint.brackets[2].over"),
+        (lambda d: d["filing_status"].update(single=d["filing_status"]["married_joint"]),
+         "social_security.single"),
     ],
 )
 def test_tables_must_name_their_source_and_rise(tmp_path, mutate, key):

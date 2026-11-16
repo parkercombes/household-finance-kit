@@ -192,6 +192,8 @@ def test_report_text_has_no_advice_language(tmp_path):
         (lambda d: None, {}, "no claim age chosen for alex"),
         (lambda d: d["tax"].update(max_data_age_years=0), {"alex": 67},
          "is for 2025, 1 years before 2026"),
+        (lambda d: d["tax"].update(filing_status="single"), {"alex": 67},
+         "the 2025 federal table has no single figures"),
     ],
 )
 def test_missing_inputs_fail_loudly(tmp_path, change, scenario, problem):

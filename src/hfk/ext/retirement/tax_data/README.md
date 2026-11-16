@@ -9,6 +9,8 @@ Rules for adding a table:
 - Every figure must come from an official IRS or SSA publication. Name the
   publication and section in `source` (and in `social_security.source`).
 - Never copy figures from memory, a news story, or another tool.
+- Give `social_security` a `base` and `adjusted_base` for every filing status the
+  table lists under `filing_status`; a missing one is an error naming the key.
 - A figure you cannot verify is left out. hfk then fails loudly; it never guesses.
 - The maintainer checks each new table against its publication before release.
 

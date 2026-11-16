@@ -178,6 +178,15 @@ def load_federal_table(path: Path) -> FederalTable:
             )
         statuses.append((name, _status_table(entry, path, "filing_status", name)))
     social = _social_security(require(data, "social_security", path), path)
+    covered = {name for name, _base, _adjusted in social.thresholds}
+    for name, _table in statuses:
+        if name not in covered:
+            raise ConfigError(
+                f"social_security has no {name} thresholds, but filing_status lists {name}",
+                file=path, key=key_path("social_security", name),
+                fix="add its base and adjusted_base, cited to the IRS publication, "
+                "or remove the filing status",
+            )
     return FederalTable(path, tax_year, source, tuple(statuses), social)
 
 

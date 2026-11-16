@@ -129,6 +129,7 @@ def build_retirement_report(
         )
     expenses = all_expenses(config.expenses, plan, path=path)
     status = config.tax.filing_status
+    table.status(status)  # a status the table lacks is a ConfigError before any year is worked
     state = config.tax.state
     base_year = today.year
 
