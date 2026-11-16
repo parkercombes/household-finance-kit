@@ -1,4 +1,4 @@
-"""Extension config sections (M6-03; ADR-0002, proposed ADR-0016).
+"""Extension config sections (M6-03; ADR-0002, ADR-0016).
 
 A household enables an extension by listing its name under ``extensions`` in
 ``household.yaml``. Only then is its config section read: the extension's own

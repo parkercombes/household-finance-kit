@@ -648,8 +648,8 @@ following changes apply:
 
 ## ADR-0016: An Extension's Config Is a File of Its Own in the Instance
 
-Status: proposed
-Date: 2026-11-13
+Status: accepted
+Date: 2026-11-13 (proposed); accepted 2026-11-16
 
 ### Context
 
@@ -681,23 +681,21 @@ Options:
 
 ### Decision
 
-Proposed: option 1. Both planned extensions already use their own inputs
-(`retirement.yaml`, `shared-items/`), a separate file keeps the core loaders strict and
-independent of installed packages, and option 3 can be added later without breaking
-option 1.
+Option 1. An extension's config is a YAML file of its own in the instance, named by
+its `config_section`, or the extension has no config (`config_section = None`). Core
+loaders keep rejecting every unknown key in `household.yaml` and `declarations.yaml`,
+and a `config_section` that is not a plain `.yaml` file name is a contract error.
 
-The M6-02 contract and the M6-03 loader implement option 1 as the narrowest safe
-behaviour: a `config_section` that is not a plain `.yaml` file name is a contract error.
-If the maintainer chooses option 2 or 3, the contract check widens and
-[EXTENSIONS](EXTENSIONS.md) keeps its in-file wording; if option 1 is accepted, that
-wording is removed.
+Both planned extensions already use their own inputs (`retirement.yaml`,
+`shared-items/`), a separate file keeps the core loaders strict and independent of
+installed packages, and option 3 can still be added later without breaking option 1.
 
 ### Consequences
 
-- Until this ADR is decided, an extension cannot keep its settings inside
-  `household.yaml` or `declarations.yaml`.
-- [EXTENSIONS](EXTENSIONS.md) describes the implemented file form and points here for
-  the in-file form.
+- An extension cannot keep its settings inside `household.yaml` or `declarations.yaml`.
+- The M6-02 contract and the M6-03 loader already implement this decision.
+- [EXTENSIONS](EXTENSIONS.md) states the file form only; its earlier wording that small
+  extensions "may own a section in `household.yaml` or `declarations.yaml`" is removed.
 
 ---
 
@@ -733,7 +731,7 @@ Options:
    items. A jointly owned card always nets to zero, so this cannot express "Alex pays
    the joint card".
 2. **Declare who pays each shared account, in the extension's own config file.**
-   `settle_up.yaml` (per proposed ADR-0016's option 1) maps each account that carries
+   `settle_up.yaml` (an extension's own file, per ADR-0016) maps each account that carries
    shared charges to payer weights, for example
    `payers: {"Joint Card": {alex: 1.0}}` or `{alex: 0.5, sam: 0.5}`. A shared charge on an
    account without an entry is a loud error naming the account. Paying from a person's
@@ -752,7 +750,7 @@ fails loudly when a payer is missing.
 ### Consequences
 
 - Roadmap items `M7-04` (statement output) and `M7-05` to `M7-07`, which depend on it,
-  are blocked until this ADR and proposed ADR-0016 are decided.
+  are blocked until this ADR is decided.
 - If option 2 is accepted, `settle_up` gains `config_section = "settle_up.yaml"` with a
   schema for `payers`, the example instance gains a `settle_up.yaml`, and the statement's
   paid column is: on-ledger shared charges by payer weights, plus shared items by

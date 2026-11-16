@@ -5,7 +5,7 @@ expenses (``expenses``, R3) by ``hfk.ext.retirement.expenses``, and the tax choi
 (``tax``, R4) by ``hfk.ext.retirement.tax``.
 
 The retirement extension models arithmetic, not advice. Its input is the
-instance's own ``retirement.yaml`` (proposed ADR-0016, option 1)::
+instance's own ``retirement.yaml`` (ADR-0016)::
 
     schema_version: 1
     people:
