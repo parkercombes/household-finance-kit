@@ -46,7 +46,7 @@ Implemented (M6-02): `hfk.ext.validate_extension` checks every member below and 
 | `name` | Yes | A lowercase identifier, such as `settle_up`, equal to the entry-point name. Households enable it by listing it under `extensions` in `household.yaml`. |
 | `version` | Yes | The extension package's own version, as a non-empty string. |
 | `contract_version` | Yes | `MAJOR.MINOR.PATCH`. This hfk supports contract major version 1; any other major version is refused loudly. |
-| `config_section` | Yes | `None` when the extension needs no config, or the file name of its own input file in the instance, such as `retirement.yaml`. Core file names are refused. Sections inside `household.yaml` or `declarations.yaml` are not supported; see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance). |
+| `config_section` | Yes | `None` when the extension needs no config, or the file name of its own input file in the instance, such as `retirement.yaml`. Core file names are refused. Sections inside `household.yaml` or `declarations.yaml` are not allowed ([ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance)). |
 | `schema` | When `config_section` is set | A callable `schema(data, path)` that validates the loaded mapping and returns the extension's config object, raising `hfk.config.ConfigError` naming the file, key path, and fix. `None` when `config_section` is `None`. |
 | `requires` | Yes | A mapping with optional `ledger_fields` (names of `Ledger` fields: `transactions`, `categories`, `balances`, `accounts`) and `extensions` (other extension names). |
 | `commands()` | Yes | Returns `hfk.ext.ExtensionCommand` objects: `name`, `help`, `configure(parser)`, and `run(args, context)` returning an exit code. |
@@ -107,7 +107,7 @@ The imports show the rule: extensions may import the engine, ledger, and config 
 
 ## Config sections and validation
 
-Each extension owns its configuration. Implemented (M6-03): an extension's config is a separate YAML file in the private instance directory, named by its `config_section`, such as `retirement.yaml`. Whether a small extension may instead own a section inside `household.yaml` or `declarations.yaml` is open: see proposed [ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance).
+Each extension owns its configuration. Implemented (M6-03): an extension's config is a separate YAML file in the private instance directory, named by its `config_section`, such as `retirement.yaml`. An extension never owns a section inside `household.yaml` or `declarations.yaml` ([ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance)).
 
 `hfk.ext.load_enabled_extensions(home, household=..., installed=...)` reads config only for the extensions listed under `extensions` in `household.yaml`. The file of an extension that is not enabled is never opened, so a stale or half-written file cannot break anything. For an enabled extension, every problem is a `ConfigError` naming the file, key path, and fix:
 
@@ -188,7 +188,7 @@ Implemented (M8-01, `hfk.ext.retirement.schema`): `people` maps every person slu
 
 Implemented (M8-02, `hfk.ext.retirement.income`): `income` lists typed streams, each a monthly amount in today's dollars with a required `cola`:
 
-- `social_security` lists `claim_ages`, the monthly benefit for each claim age from 62 to 70 that the household wants to compare. A scenario picks one listed age per person; hfk never picks one. The stream starts in the year the person reaches that age, pays for the months from the birth month on in that year, and pays twelve months a year after that.
+- `social_security` lists `claim_ages`, the monthly benefit for each claim age from 62 to 70 that the household wants to compare. Per ssa.gov, a benefit can be claimed from 62 (early), at 67 (full retirement age) or as late as 70 (delayed); any whole age in that range may be listed. A scenario picks one listed age per person; hfk never picks one. The stream starts in the year the person reaches that age, pays for the months from the birth month on in that year, and pays twelve months a year after that.
 - `pension`, `account_drawdown` and `other` take `monthly`, `start_year` and an optional inclusive `end_year`. An `account_drawdown` is the withdrawal the household declares; no account balance is modelled.
 - `cola: full` keeps a stream flat in today's dollars. `cola: none` keeps it flat in nominal dollars, so its real value falls by `inflation` each year after it starts. A number is a nominal growth rate, converted to real with `inflation`. `inflation` is required as soon as any stream is not `full` (ADR-0008).
 
@@ -196,9 +196,13 @@ Implemented (M8-03, `hfk.ext.retirement.expenses`): `expenses.items` lists month
 
 Implemented (M8-04, `hfk.ext.retirement.tax`): federal tax tables are versioned YAML data files tagged with `tax_year` and a `source` naming the official IRS or SSA publication behind every figure. They ship in `hfk/ext/retirement/tax_data/`. `retirement.yaml`'s `tax` section declares `filing_status` (`married_joint` or `single`), `max_data_age_years` (the staleness limit), and `state`: the `none`, `flat` or `bracket` module, with the household's own state figures. The newest table is refused when it is more than `max_data_age_years` older than the current year (ADR-0005). **No federal table ships yet**: the 2026 figures could not be read from irs.gov while M8-04 was built, so the extension stops with "no federal tax table is installed" until the maintainer adds a cited one.
 
+Implemented (M8-05, `hfk.ext.retirement.report`): `hfk retirement --claim-age alex=67 --claim-age sam=67 [--format text|csv|html] [--tax-table PATH]` prints the calendar-year track in today's dollars, priced in the current year. The household view shows income, ordinary taxable income, Social Security and its taxable part, federal tax, state tax, need, and the gap (income minus both taxes and need). The per-person view shows each person's own income and own expenses before tax. Following ADR-0018, every non-Social-Security stream declares `taxable: full | none`, and the `flat` and `bracket` state modules declare `social_security: taxed | exempt`. Federal brackets and the standard deduction stay flat in today's dollars, and the Social Security base amounts shrink by `inflation` each year after the table's tax year. The command needs a federal tax table, so it fails loudly until one is installed; `--tax-table` names a table file to use instead.
+
 Claim-age scenarios are mutually exclusive alternatives, not a timeline. For example, a Social Security claim-age scenario compares separate possible starts; it does not imply that a person claims at several ages over time.
 
 Planned outputs include a calendar-year track and an income-vs-need gap, shown per person and for the household. Tax data must have a staleness gate: if the versioned tax data is older than the configured allowed tax-year age, the extension fails loudly before producing a projection.
+
+Implemented (M8-06): the text and HTML reports open with a mechanics-not-advice disclaimer and end with the out-of-scope note below; the CSV stays a plain table. `examples/retirement.example.yaml` and `tests/fixtures/us-federal-synthetic.yaml` are the synthetic fixtures (Alex and Sam, round, made-up figures).
 
 Out of scope for the built-in extension:
 
@@ -222,7 +226,7 @@ Boundaries for every extension package, public or private:
 | Dependency | Depend on `household-finance-kit`; declare `contract_version` for the contract you built against. |
 | Imports | `hfk.config`, `hfk.ledger`, `hfk.engine`, and the `hfk.ext` contract types only. Never `hfk.cli`, `hfk.render` internals, or `hfk.source` file handling. |
 | Data | Read the ledger and config core hands over. Never open or write the Tiller workbook. Write only generated output under the instance's `out/`. |
-| Config | Your own YAML file in the instance, validated by your `schema` (proposed ADR-0016). |
+| Config | Your own YAML file in the instance, validated by your `schema` (ADR-0016). |
 | Privacy | A public package carries only Alex, Sam, `Example Bank`, and round numbers, and runs a privacy scan before publishing. A private package stays in a private repository. |
 | Advice | Show arithmetic and scenarios only. Never recommend products, tax strategy, claiming strategy, or investments. |
 

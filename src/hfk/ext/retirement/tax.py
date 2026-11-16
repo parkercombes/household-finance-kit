@@ -28,7 +28,7 @@ guessed: with no table for the needed year, the extension fails loudly.
     tax:
       filing_status: married_joint     # married_joint or single; no default
       max_data_age_years: 1            # the staleness limit; no default
-      state: {module: flat, rate: 0.04}
+      state: {module: flat, rate: 0.04, social_security: exempt}
 
 The staleness gate (ADR-0005): the newest federal table is refused when the
 current year is more than ``max_data_age_years`` after its ``tax_year``.
@@ -40,6 +40,9 @@ the household supplies for its own state:
 - ``flat``: ``rate`` times taxable income, after an optional ``deduction``.
 - ``bracket``: ``brackets`` (``over`` and ``rate``) after an optional
   ``deduction``.
+
+``flat`` and ``bracket`` also require ``social_security: taxed | exempt``: whether
+the state taxes the Social Security that is federally taxable (ADR-0018).
 
 Every function here is plain arithmetic on exact decimals. It recommends no
 filing status, tax strategy, or anything else.
@@ -128,6 +131,7 @@ class FederalTable:
 class StateTax:
     module: str
     compute: Callable[[Decimal], Decimal]
+    taxes_social_security: bool = False
 
 
 @dataclass(frozen=True)
@@ -234,14 +238,16 @@ def load_tax_config(value: Any, path: Path) -> TaxConfig:
 
 
 def _flat(entry: dict[str, Any], path: Path) -> Callable[[Decimal], Decimal]:
-    reject_unknown_keys(entry, ("module", "rate", "deduction"), path, "tax", "state")
+    reject_unknown_keys(entry, ("module", "rate", "deduction", "social_security"), path, "tax",
+                        "state")
     rate = _rate(require(entry, "rate", path, "tax", "state"), path, "tax", "state", "rate")
     deduction = _amount(entry.get("deduction", 0), path, "tax", "state", "deduction")
     return lambda income: money(max(income - deduction, ZERO) * rate)
 
 
 def _bracket(entry: dict[str, Any], path: Path) -> Callable[[Decimal], Decimal]:
-    reject_unknown_keys(entry, ("module", "brackets", "deduction"), path, "tax", "state")
+    reject_unknown_keys(entry, ("module", "brackets", "deduction", "social_security"), path,
+                        "tax", "state")
     brackets = _brackets(require(entry, "brackets", path, "tax", "state"), path, "tax", "state")
     deduction = _amount(entry.get("deduction", 0), path, "tax", "state", "deduction")
     return lambda income: bracket_tax(max(income - deduction, ZERO), brackets)
@@ -271,7 +277,20 @@ def load_state_tax(value: Any, path: Path) -> StateTax:
             f"Unknown state tax module {module!r}", file=path, key="tax.state.module",
             fix=f"use one of {sorted(STATE_MODULES)}",
         )
-    return StateTax(module=module, compute=factory(entry, path))
+    compute = factory(entry, path)
+    taxes_social_security = False
+    if module != "none":
+        choice = require(entry, "social_security", path, "tax", "state")
+        if choice not in ("taxed", "exempt"):
+            raise ConfigError(
+                f"Invalid social_security {choice!r}",
+                file=path,
+                key="tax.state.social_security",
+                fix="write taxed or exempt: whether your state taxes the Social Security that "
+                "is federally taxable (ADR-0018)",
+            )
+        taxes_social_security = choice == "taxed"
+    return StateTax(module=module, compute=compute, taxes_social_security=taxes_social_security)
 
 
 def bracket_tax(taxable: Decimal, brackets: tuple[Bracket, ...]) -> Decimal:

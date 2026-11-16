@@ -18,6 +18,10 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M8-06 (R6): the retirement report's text and HTML open with a mechanics-not-advice disclaimer and end with an out-of-scope note (Monte Carlo, optimisation, Roth conversion strategy, product recommendations, balances and returns, personal advice). Synthetic fixtures: `examples/retirement.example.yaml` and `tests/fixtures/us-federal-synthetic.yaml`.
+- M8-05 (R5): `hfk retirement` prints the calendar-year income-vs-need track in today's dollars (text, CSV or HTML) for the claim ages given with `--claim-age`. The household view counts federal and state tax per ADR-0018; the per-person view is before tax. Income streams now declare `taxable`, and state modules declare whether they tax Social Security. Without a federal tax table the command fails loudly; `--tax-table` names one.
+- ADR-0018 accepted (2026-11-16): income streams declare `taxable`, Social Security tax thresholds shrink in today's dollars, and tax is counted in the household view only. `M8-05`, `M8-06` and `M10-02` are unblocked. The claim-age range 62 to 70 is confirmed against ssa.gov.
+- ADR-0016 accepted (2026-11-16): an extension's config is a YAML file of its own in the instance, never a section inside `household.yaml` or `declarations.yaml`. The code already did this; the docs drop the in-file option.
 - M10-05: [EXTENSIONS](docs/EXTENSIONS.md) records that built-in `settle_up` stays exactly two people while N-person ownership stays in core, and leaves settling up among three or more people to separate packages that state their netting rule. `tests/test_roadmap.py` now accepts a roadmap where no item is ready, provided the "Start here" block says so.
 - M10-03: [EXTENSIONS](docs/EXTENSIONS.md) lists home purchase modelling as a community extension candidate, out of core and out of `retirement`, with why, the shape of a package, and the mechanics-not-advice boundary.
 - M10-01: [EXTENSIONS](docs/EXTENSIONS.md) gains a "Community extension candidates" section listing FSA and reimbursement tracking as out of core, with why, the shape of an extension, and its boundary with core.
