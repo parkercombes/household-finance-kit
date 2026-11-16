@@ -49,7 +49,7 @@ Implemented (M6-02): `hfk.ext.validate_extension` checks every member below and 
 | `config_section` | Yes | `None` when the extension needs no config, or the file name of its own input file in the instance, such as `retirement.yaml`. Core file names are refused. Sections inside `household.yaml` or `declarations.yaml` are not allowed ([ADR-0016](DECISIONS.md#adr-0016-an-extensions-config-is-a-file-of-its-own-in-the-instance)). |
 | `schema` | When `config_section` is set | A callable `schema(data, path)` that validates the loaded mapping and returns the extension's config object, raising `hfk.config.ConfigError` naming the file, key path, and fix. `None` when `config_section` is `None`. |
 | `requires` | Yes | A mapping with optional `ledger_fields` (names of `Ledger` fields: `transactions`, `categories`, `balances`, `accounts`) and `extensions` (other extension names). |
-| `commands()` | Yes | Returns `hfk.ext.ExtensionCommand` objects: `name`, `help`, `configure(parser)`, and `run(args, context)` returning an exit code. |
+| `commands()` | Yes | Returns `hfk.ext.ExtensionCommand` objects: `name`, `help`, `configure(parser)`, and `run(args, context)` returning an exit code. The contract check runs each `configure` on a scratch parser that already has `--home` and `--today`; one that raises, or adds an argument core already adds, is a contract break. |
 | `report_sections()` | Optional | Returns `hfk.ext.ReportSection` objects: `name`, `title`, and `build(context)` returning a report object. |
 | `doctor` | Yes | A callable `doctor(context, config)` that returns `hfk.engine.Diagnostic` objects. |
 
