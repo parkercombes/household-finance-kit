@@ -37,6 +37,7 @@ from hfk.config import (
     load_household,
     load_instance_plan,
 )
+from hfk.config.household import SLUG
 from hfk.engine import (
     BalancesError,
     BucketError,
@@ -269,6 +270,8 @@ class FrontDoor:
         out = self.home / "out"
         out.mkdir(exist_ok=True)
         written: list[Path] = []
+        if who is not None and not SLUG.match(who):
+            raise ServeError(f"who {who!r} is not a person's slug")
         suffix = f"-{who}" if who else ""
         for report in REPORTS:
             page = self.page(report, month=month, who=who)
@@ -392,6 +395,11 @@ def make_handler(front: FrontDoor, *, port_ref: list[int]) -> type[BaseHTTPReque
             report = "scorecard" if path == "/" else path.lstrip("/")
             month_text = (query.get("month") or [""])[0]
             who = (query.get("who") or [""])[0] or None
+            if who is not None and not SLUG.match(who):
+                # who names a file under out/ on Regenerate, so only a slug is accepted.
+                self._send(HTTPStatus.BAD_REQUEST, "who must be a person's slug from household.yaml\n",
+                           content_type="text/plain; charset=utf-8")
+                return
             try:
                 month = (
                     Month.parse(month_text) if month_text else last_finished_month(front.today())

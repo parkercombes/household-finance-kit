@@ -272,6 +272,47 @@ def test_statement_includes_shared_items_and_payer_weights(tmp_path):
     assert (even.transfer.payer, even.transfer.amount) == ("sam", Decimal("45.00"))
 
 
+def add_sharing_rule(home: Path, match: dict, weights: dict) -> None:
+    path = home / "declarations.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["sharing"].append({"match": match, "weights": weights, "reason": "test rule"})
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def test_charge_one_person_owes_and_the_other_paid_is_settled(tmp_path):
+    # The brief's "Sam Only" shape: Sam owes all of the Dining charges on the Joint Card,
+    # which Alex pays. Hand-worked: Groceries 365.00 half each, Dining 105.00 all Sam,
+    # Utilities 210.00 half each. Alex paid 680.00 and owes 182.50 + 105.00 = 287.50;
+    # Sam owes 182.50 + 105.00 + 105.00 = 392.50, so Sam pays Alex 392.50.
+    home = make_instance(tmp_path)
+    add_sharing_rule(home, {"account": "Joint Card", "description": "Corner Cafe*"},
+                     {"sam": 1.0})
+    statement = statement_for(home)
+    assert ("Dining", Decimal("105.00")) in statement.categories
+    assert statement.total == Decimal("680.00")
+    assert statement.paid == (Decimal("680.00"), Decimal("0.00"))
+    assert statement.owed == (Decimal("287.50"), Decimal("392.50"))
+    assert (statement.transfer.payer, statement.transfer.payee, statement.transfer.amount) == (
+        "sam", "alex", Decimal("392.50"))
+
+
+def test_charge_the_same_person_paid_and_owes_is_left_out(tmp_path):
+    # Alex keeps the utility bill whole and paid it from Alex Checking: nothing crosses.
+    # Groceries 365.00 and Dining 105.00 on the Joint Card remain: 235.00 owed each.
+    home = make_instance(tmp_path)
+    path = home / "declarations.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data["sharing"][0]["weights"] = {"alex": 1.0}
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    add_sharing_rule(home, {"account": "Joint Card", "description": "Corner Cafe*"},
+                     {"alex": 1.0})
+    statement = statement_for(home)
+    assert [category for category, _ in statement.categories] == ["Groceries"]
+    assert statement.paid == (Decimal("365.00"), Decimal("0.00"))
+    assert statement.owed == (Decimal("182.50"), Decimal("182.50"))
+    assert statement.transfer.amount == Decimal("182.50")
+
+
 def test_missing_payer_fails_loudly_naming_the_account(tmp_path):
     from hfk.ext.settle_up import SettleUpError
 
