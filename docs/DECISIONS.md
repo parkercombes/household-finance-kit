@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Last verified: 2026-11-12
+Last verified: 2026-11-13
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
 `household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
@@ -643,3 +643,56 @@ following changes apply:
 - Roadmap row `M5-18` implements this ADR, together with the matching updates to the
   brief, the schema doc, the README, the instance templates, and the tests. Until it
   lands, M5-08's two-source behaviour is what the code does.
+
+---
+
+## ADR-0016: An Extension's Config Is a File of Its Own in the Instance
+
+Status: accepted
+Date: 2026-11-13 (proposed); accepted 2026-11-16
+
+### Context
+
+The brief (section 8) says each extension "declares a config section + schema".
+[EXTENSIONS](EXTENSIONS.md) allows two shapes: "Small extensions may own a section in
+`household.yaml` or `declarations.yaml`. Larger features may own a separate file in the
+private instance directory, such as `retirement.yaml`." Neither document says how the
+first shape works. `household.yaml` and `declarations.yaml` reject unknown top-level keys
+(ADR-0002), and core may not know which extensions exist (ADR-0006), so a section named
+after an extension would be an unknown-key error today.
+
+The M6 implementation needed a rule. It was found during unattended roadmap work, so it
+is recorded here as proposed for the maintainer to decide, not as a decision.
+
+Options:
+
+1. **A separate file only.** `config_section` names a YAML file in the instance, such as
+   `retirement.yaml`, or is `None` when the extension needs no config. Core loads and
+   validates the file only when the extension is enabled; a file for a disabled extension
+   is ignored. Core loaders keep rejecting every unknown key.
+2. **Also a top-level key in `household.yaml` or `declarations.yaml`.** The core loaders
+   would accept a top-level key only when an installed extension claims it. A loader's
+   result would then depend on which packages are installed, and a typo in a section name
+   would pass silently whenever an extension with that name happens to be installed.
+3. **A reserved `extensions_config:` mapping in `household.yaml`.** One known key holds
+   every extension's section, keyed by extension name. Core rejects names that no
+   enabled extension owns. Small sections stay in one file, at the cost of one more level
+   of nesting and a new key for every household to learn.
+
+### Decision
+
+Option 1. An extension's config is a YAML file of its own in the instance, named by
+its `config_section`, or the extension has no config (`config_section = None`). Core
+loaders keep rejecting every unknown key in `household.yaml` and `declarations.yaml`,
+and a `config_section` that is not a plain `.yaml` file name is a contract error.
+
+Both planned extensions already use their own inputs (`retirement.yaml`,
+`shared-items/`), a separate file keeps the core loaders strict and independent of
+installed packages, and option 3 can still be added later without breaking option 1.
+
+### Consequences
+
+- An extension cannot keep its settings inside `household.yaml` or `declarations.yaml`.
+- The M6-02 contract and the M6-03 loader already implement this decision.
+- [EXTENSIONS](EXTENSIONS.md) states the file form only; its earlier wording that small
+  extensions "may own a section in `household.yaml` or `declarations.yaml`" is removed.

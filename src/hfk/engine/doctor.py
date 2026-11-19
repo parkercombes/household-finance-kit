@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -87,10 +88,43 @@ class DoctorReport:
         return tuple(diagnostic for diagnostic in self.diagnostics if diagnostic.level == "warning")
 
 
+@dataclass(frozen=True)
+class DoctorContext:
+    """What an extension's doctor hook may inspect; every field is read-only input."""
+
+    home: Path
+    household: Household | None
+    declarations: Declarations | None
+    ledger: Ledger | None
+    today: date
+
+
+@dataclass(frozen=True)
+class DoctorHook:
+    """A named extra check that ``run_doctor`` runs after the core checks.
+
+    Core defines the hook shape and never imports an extension (ADR-0006): the
+    presentation layer builds hooks from installed extensions and passes them in.
+    """
+
+    name: str
+    check: Callable[[DoctorContext], Iterable[Diagnostic]]
+
+
 def run_doctor(
-    home: Path, *, today: date | None = None, stale_after_days: int = 14
+    home: Path,
+    *,
+    today: date | None = None,
+    stale_after_days: int = 14,
+    hooks: Sequence[DoctorHook] = (),
 ) -> DoctorReport:
-    """Run read-only diagnostics for an hfk private instance."""
+    """Run read-only diagnostics for an hfk private instance.
+
+    ``hooks`` run after every core check. A hook that raises, or returns
+    something other than ``Diagnostic`` objects, becomes an
+    ``extension-hook-failed`` error naming the hook; it never stops the core
+    checks or the other hooks from reporting.
+    """
 
     home = Path(home)
     today = date.today() if today is None else today  # noqa: DTZ011
@@ -138,6 +172,10 @@ def run_doctor(
     if plan is not None and not plan_duplicates_checked:
         _check_plan_category_duplicates(plan, diagnostics)
 
+    context = DoctorContext(home, household, declarations, ledger, today)
+    for hook in hooks:
+        diagnostics.extend(_run_hook(hook, context))
+
     readiness = (
         _sheets_readiness(workbook_path),
         _history_readiness(household, ledger, today),
@@ -145,6 +183,27 @@ def run_doctor(
         _plan_readiness(plan),
     )
     return DoctorReport(tuple(diagnostics), readiness)
+
+
+def _run_hook(hook: DoctorHook, context: DoctorContext) -> list[Diagnostic]:
+    def failed(problem: str) -> Diagnostic:
+        return Diagnostic(
+            "error",
+            "extension-hook-failed",
+            f"extension {hook.name}",
+            f"the {hook.name} doctor hook {problem}",
+            f"report this to the {hook.name} extension's maintainer, or remove {hook.name} "
+            "from extensions in household.yaml",
+        )
+
+    try:
+        results = list(hook.check(context))
+    except Exception as error:  # noqa: BLE001 - one bad hook must not hide the rest
+        return [failed(f"raised {type(error).__name__}: {error}")]
+    bad = [item for item in results if not isinstance(item, Diagnostic)]
+    if bad:
+        return [failed(f"returned {bad[0]!r}, not a Diagnostic")]
+    return results
 
 
 def _count(number: int, noun: str, plural: str | None = None) -> str:
