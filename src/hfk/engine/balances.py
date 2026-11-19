@@ -18,8 +18,8 @@ Gap rule (design brief: null amounts are gaps, never zero):
 
 Closed-account cutoff:
 
-- An account declared under ``declarations.yaml``'s ``closed_accounts`` is
-  only considered up to its declared closure date: its cutoff is
+- An account whose ``household.yaml`` entry carries ``closed: YYYY-MM-DD``
+  (ADR-0014) is only considered up to that closure date: its cutoff is
   ``min(as_of, closed date)``. Open accounts use ``as_of`` itself.
 
 Analysis window:
@@ -28,8 +28,7 @@ Analysis window:
   ignored (and counted in ``ignored_before_history_start``), and an ``as_of``
   before ``history_start`` is refused.
 
-Account order: ``household.accounts`` in file order, then declared closed
-accounts in file order, then remaining Balance History account names sorted
+Account order: ``household.accounts`` in file order, then remaining Balance History account names sorted
 by name. All money is `Decimal` cents from the reader; no totals are computed
 here (net worth is M4-03).
 """
@@ -104,7 +103,7 @@ def build_balances(
         )
 
     rows: list[AccountBalance] = []
-    for name, declared, closed in _account_order(household, declarations, ledger):
+    for name, declared, closed in _account_order(household, ledger):
         cutoff = as_of if closed is None else min(as_of, closed)
         considered = tuple(
             balance
@@ -124,31 +123,18 @@ def build_balances(
     )
 
 
-def _account_order(
-    household: Household, declarations: Declarations, ledger: Ledger
-) -> list[tuple[str, bool, date | None]]:
+def _account_order(household: Household, ledger: Ledger) -> list[tuple[str, bool, date | None]]:
     """Yield ``(name, declared, closed)`` in report order for every account."""
 
     ordered: list[tuple[str, bool, date | None]] = []
     listed: set[str] = set()
     for account in household.accounts:
-        closed = _closed_date(declarations, account.name)
-        ordered.append((account.name, True, closed))
-        listed.add(account.name)
-    for account in declarations.closed_accounts:
-        if account.name in listed:
-            continue
         ordered.append((account.name, True, account.closed))
         listed.add(account.name)
     history_accounts = {balance.account for balance in ledger.balances}
     for name in sorted(history_accounts - listed):
         ordered.append((name, False, None))
     return ordered
-
-
-def _closed_date(declarations: Declarations, name: str) -> date | None:
-    account = declarations.closed_account(name)
-    return None if account is None else account.closed
 
 
 def _account_balance(

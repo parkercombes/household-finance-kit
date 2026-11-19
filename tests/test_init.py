@@ -100,7 +100,7 @@ def test_init_creates_skeleton(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stderr == ""
     assert result.stdout.splitlines()[0] == f"created {home}"
-    for name in ("household.yaml", "declarations.yaml", "plan.yaml", "README.md", ".gitignore"):
+    for name in ("household.yaml", "declarations.yaml", "README.md", ".gitignore"):
         assert (home / name).is_file(), name
     assert (home / "shared-items" / "README.md").is_file()
     assert (home / "data").is_dir()
@@ -111,9 +111,11 @@ def test_init_creates_skeleton(tmp_path: Path) -> None:
     assert (home / ".claude" / "settings.json").is_file()
     assert (home / ".claude" / "hooks" / "tiller_guard.py").is_file()
 
-    for name in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for name in ("household.yaml", "declarations.yaml"):
         assert load_yaml(home / name) == load_yaml(INSTANCE_EXAMPLE / name), name
 
+    # ADR-0015: the plan lives in the workbook's HFK Plan sheet, never in a file.
+    assert not (home / "plan.yaml").exists()
     assert "plan" not in load_yaml(home / "household.yaml")
 
     gitignore = (home / ".gitignore").read_text(encoding="utf-8")
@@ -204,12 +206,16 @@ def test_init_does_not_write_into_toolkit(tmp_path: Path) -> None:
 def test_init_instance_passes_plan_check_and_doctor(tmp_path: Path) -> None:
     home = init_home(tmp_path)
 
-    check = run_hfk("plan", "check", "--home", str(home))
-
-    assert check.returncode == 0
-    assert "ok: 9 lines" in check.stdout
+    # The plan needs the workbook: with none yet, plan check names the fix.
+    missing = run_hfk("plan", "check", "--home", str(home))
+    assert missing.returncode == 1
+    assert "put the Tiller workbook download in data/" in missing.stdout
 
     build_fixture(home / "data" / "Tiller-Example.xlsx")
+
+    check = run_hfk("plan", "check", "--home", str(home))
+    assert check.returncode == 0, check.stdout
+    assert "ok: 9 lines" in check.stdout
 
     doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
 
@@ -312,7 +318,6 @@ def test_init_git_installs_pre_commit_hook(tmp_path: Path) -> None:
             "add",
             "household.yaml",
             "declarations.yaml",
-            "plan.yaml",
             "README.md",
             ".gitignore",
         ).returncode
@@ -334,3 +339,20 @@ def test_init_git_installs_pre_commit_hook(tmp_path: Path) -> None:
         line.startswith("!!") and line.endswith("data/")
         for line in status.stdout.splitlines()
     )
+
+
+def test_init_writes_agents_template(tmp_path: Path) -> None:
+    home = init_home(tmp_path)
+    agents = (home / "AGENTS.md").read_text(encoding="utf-8")
+    packaged = importlib.resources.files("hfk.templates").joinpath("AGENTS.md")
+
+    assert agents == packaged.read_text(encoding="utf-8")
+    assert "## Never read the workbook" in agents
+    assert "must never read\nthe Tiller workbook or any statement" in agents
+    assert "`data/`" in agents and "`out/`" in agents
+    assert "it does not block\n  reads" in agents
+    assert "hfk doctor --home ." in agents
+    assert "financial advice" in agents
+    assert (home / "CLAUDE.md").read_text(encoding="utf-8") == "@AGENTS.md\n"
+    readme = (home / "README.md").read_text(encoding="utf-8")
+    assert "`AGENTS.md`" in readme

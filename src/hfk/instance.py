@@ -1,12 +1,14 @@
 """Create a private instance skeleton (design brief section 3; roadmap M5-01).
 
 ``write_instance`` copies the packaged ``hfk.templates`` files into a new
-instance directory: the three example YAML files, a README, a ``.gitignore``,
+instance directory: the two example YAML files, a README, a ``.gitignore``,
 ``shared-items/``, the empty ``data/`` and ``out/`` directories, and the
 ``.claude/`` wiring (``settings.json`` plus the ``tiller_guard`` hook) that
-blocks AI assistants from writing the workbook. With ``git=True`` it also
+blocks AI assistants from writing the workbook, an ``AGENTS.md`` (with a
+``CLAUDE.md`` pointer) that tells assistants never to read it (M5-13), and the two double-click
+launchers ``Open HFK.command`` and ``Open HFK.bat`` (M5-11). With ``git=True`` it also
 runs ``git init`` and installs the privacy pre-commit hook. The M5-06
-interview passes ``documents`` to replace the three YAML files with
+interview passes ``documents`` to replace the two YAML files with
 interview-rendered text; everything else is copied as before. The module
 never reads or writes a workbook.
 """
@@ -24,14 +26,46 @@ from pathlib import Path
 _INSTANCE_FILES = (
     ("household.yaml", "household.yaml"),
     ("declarations.yaml", "declarations.yaml"),
-    ("plan.yaml", "plan.yaml"),
     ("README.md", "README.md"),
+    ("AGENTS.md", "AGENTS.md"),
+    ("CLAUDE.md", "CLAUDE.md"),
     (".gitignore", "gitignore"),
     ("shared-items/README.md", "shared-items-README.md"),
     (".claude/settings.json", "claude-settings.json"),
     (".claude/hooks/tiller_guard.py", "tiller_guard"),
 )
-_INSTANCE_DOCUMENTS = ("household.yaml", "declarations.yaml", "plan.yaml")
+# Double-click launchers (M5-11). Each runs ``hfk open`` on the folder it sits
+# in, found at run time, so the instance can be moved or renamed. They are
+# written from code, not package data, so the Windows file keeps its CRLF line
+# endings whatever git or an editor does to the toolkit checkout.
+LAUNCHER_COMMAND = "Open HFK.command"
+LAUNCHER_BAT = "Open HFK.bat"
+_LAUNCHERS: tuple[tuple[str, str, str], ...] = (
+    (
+        LAUNCHER_COMMAND,
+        (
+            "#!/bin/sh\n"
+            "# Double-click to open this folder's hfk reports in your browser.\n"
+            "# Close this window, or press Ctrl+C in it, to stop.\n"
+            'cd "$(dirname "$0")" || exit 1\n'
+            'exec hfk open --home "$(pwd)"\n'
+        ),
+        "\n",
+    ),
+    (
+        LAUNCHER_BAT,
+        (
+            "@echo off\n"
+            "rem Double-click to open this folder's hfk reports in your browser.\n"
+            "rem Close this window to stop.\n"
+            'hfk open --home "%~dp0."\n'
+            "if errorlevel 1 pause\n"
+        ),
+        "\r\n",
+    ),
+)
+_INSTANCE_DOCUMENTS = ("household.yaml", "declarations.yaml")
+_STARTER_PLAN = "out/hfk-plan-starter.csv"
 _EMPTY_DIRECTORIES = ("data", "out")
 _HOOK_NAME = "pre-commit"
 _GUARD_NAME = ".claude/hooks/tiller_guard.py"
@@ -55,13 +89,19 @@ class InstanceReport:
 
 
 def write_instance(
-    target: Path, *, git: bool = False, documents: Mapping[str, str] | None = None
+    target: Path,
+    *,
+    git: bool = False,
+    documents: Mapping[str, str] | None = None,
+    starter_plan: str | None = None,
 ) -> InstanceReport:
     """Create a private instance skeleton in ``target`` and report what was written.
 
     ``documents`` replaces the text of the named YAML files (household.yaml,
-    declarations.yaml, plan.yaml); every other instance file comes from the
-    packaged templates as usual.
+    declarations.yaml); every other instance file comes from the packaged
+    templates as usual. ``starter_plan`` is CSV text for the ``HFK Plan`` sheet,
+    written to ``out/hfk-plan-starter.csv`` (gitignored) for the household to
+    paste into the workbook; hfk never writes the workbook (ADR-0015).
     """
 
     home = Path(target)
@@ -71,7 +111,7 @@ def write_instance(
         raise InstanceError(
             f"unknown instance documents {unknown}",
             file=home,
-            fix="documents keys must be household.yaml, declarations.yaml, or plan.yaml",
+            fix="documents keys must be household.yaml or declarations.yaml",
         )
     _require_free_target(home)
     if git and shutil.which("git") is None:
@@ -93,10 +133,20 @@ def write_instance(
         if relative == _GUARD_NAME:
             destination.chmod(0o755)
         created.append(destination)
+    for name, text, newline in _LAUNCHERS:
+        destination = home / name
+        with destination.open("w", encoding="utf-8", newline=newline) as handle:
+            handle.write(text)
+        destination.chmod(0o755)
+        created.append(destination)
     for name in _EMPTY_DIRECTORIES:
         directory = home / name
         directory.mkdir(exist_ok=True)
         created.append(directory)
+    if starter_plan is not None:
+        destination = home / _STARTER_PLAN
+        destination.write_text(starter_plan, encoding="utf-8")
+        created.append(destination)
 
     if git:
         _install_hook(home, root)
@@ -112,6 +162,7 @@ def _require_free_target(home: Path) -> None:
     existing = [
         relative for relative, _template in _INSTANCE_FILES if (home / relative).exists()
     ]
+    existing += [name for name, _text, _newline in _LAUNCHERS if (home / name).exists()]
     existing += [
         name
         for name in _EMPTY_DIRECTORIES

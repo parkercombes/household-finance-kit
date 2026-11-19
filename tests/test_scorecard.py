@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 import yaml
 from openpyxl import load_workbook
+from plan_fixture import example_plan, write_plan
 
-from hfk.config import Month, load_declarations, load_household, load_plan
+from hfk.config import Month, load_declarations, load_household, load_instance_plan
 from hfk.engine import (
     BucketError,
     ScorecardError,
@@ -33,7 +34,7 @@ PYTHONPATH = str(ROOT / "src")
 
 def make_instance(tmp_path: Path, **fixture_kwargs: Any) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
     build_fixture(tmp_path / "data" / "Tiller-Example.xlsx", **fixture_kwargs)
     return tmp_path
@@ -135,7 +136,7 @@ def rename_first_transaction_category(
 def load_scorecard(home: Path, who: str, month: str = "2026-09"):
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     ledger = read_tiller(find_workbook(home / "data", household.tiller_glob))
     return build_scorecard(
         ledger=ledger,
@@ -262,7 +263,7 @@ def test_unfinished_month_is_refused(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     ledger = read_tiller(find_workbook(home / "data", household.tiller_glob))
 
     with pytest.raises(ScorecardError, match="has not ended"):
@@ -357,12 +358,12 @@ def test_who_is_required_with_several_people(tmp_path: Path) -> None:
     declarations["sharing"] = []
     dump_yaml(declarations_path, declarations)
 
-    plan_path = solo / "plan.yaml"
-    plan = load_yaml(plan_path)
+    plan_home = solo
+    plan = example_plan()
     plan["plan"]["lines"] = [
         line for line in plan["plan"]["lines"] if line.get("who") == "alex"
     ]
-    dump_yaml(plan_path, plan)
+    write_plan(plan_home, plan)
 
     solo_result = run_hfk(
         "scorecard",
@@ -581,14 +582,14 @@ def test_lines_without_categories_count_and_paced_is_ignored(tmp_path: Path) -> 
     unpaced_home = make_instance(tmp_path / "unpaced")
     paced_home = make_instance(tmp_path / "paced")
     for home, paced in ((unpaced_home, False), (paced_home, True)):
-        plan_path = home / "plan.yaml"
-        plan = load_yaml(plan_path)
+        plan_home = home
+        plan = example_plan()
         streaming = plan["plan"]["lines"][6]
         assert "categories" not in streaming
         streaming["monthly"] = 25.00
         if paced:
             streaming["paced"] = True
-        dump_yaml(plan_path, plan)
+        write_plan(plan_home, plan)
 
     unpaced = load_scorecard(unpaced_home, "alex")
     paced = load_scorecard(paced_home, "alex")

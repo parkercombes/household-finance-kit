@@ -1,21 +1,23 @@
-"""Load the plan from the ``HFK Plan`` workbook sheet (TILLER-SCHEMA; ADR-0013).
+"""Load the plan from the ``HFK Plan`` workbook sheet (TILLER-SCHEMA; ADR-0013, ADR-0015).
 
-The sheet is an optional, user-added tab in the household's own Tiller
-workbook. It is read through the source adapter's read-only loader, by header
+The sheet is a user-added tab in the household's own Tiller workbook, and the
+only plan source (ADR-0015). It is read through the source adapter's read-only loader, by header
 name and never by column position, and nothing here ever writes a workbook.
-Each row becomes the same ``PlanLine`` a ``plan.yaml`` line would: every row is
-converted to the mapping a YAML line would hold and validated by the very same
-``plan.py`` helper, so the two sources cannot disagree about what is valid.
-Problems name the sheet, row, column, and fix.
+Each row is converted to a line mapping and validated by the ``plan.py``
+helper that the ``hfk plan to-sheet`` converter also uses. Problems name the
+sheet, row, column, and fix.
 
-``load_instance_plan`` is the one entry point commands use: it reads
-``plan.yaml`` or the sheet according to ``household.yaml``'s
-``plan: {source: file | workbook}``.
+``load_instance_plan`` is the one entry point commands use. A ``plan.yaml``
+left in the instance is an error, never silently ignored. ``plan_csv`` renders
+plan lines as a CSV with the sheet's thirteen headers, for the household to
+paste or import into the sheet; hfk never writes the workbook.
 """
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
+import io
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -26,7 +28,7 @@ from typing import Any
 from hfk.config.declarations import Declarations
 from hfk.config.errors import ConfigError, PlanSheetError
 from hfk.config.household import Household
-from hfk.config.plan import Month, Plan, PlanLine, _line, load_plan, plan_path
+from hfk.config.plan import PLAN_FILE, Month, Plan, PlanLine, _line
 from hfk.source import SheetRows, TillerFormatError, find_workbook, read_optional_sheet
 
 PLAN_SHEET = "HFK Plan"
@@ -71,39 +73,76 @@ class SheetLine:
     error: PlanSheetError | None
 
 
+STARTER_CSV = "out/hfk-plan-starter.csv"
+
+
 def load_instance_plan(
     home: Path, *, household: Household, declarations: Declarations
 ) -> Plan:
-    """Load the plan from the source ``household.yaml`` selects."""
+    """Load the plan from the workbook's ``HFK Plan`` sheet, the only plan source."""
 
-    if household.plan_source == "workbook":
-        return load_plan_sheet(
-            plan_workbook(home, household), declarations=declarations, people=household.slugs
+    reject_plan_file(home)
+    return load_plan_sheet(
+        plan_workbook(home, household), declarations=declarations, people=household.slugs
+    )
+
+
+def reject_plan_file(home: Path) -> None:
+    """A ``plan.yaml`` in the instance is an error: it used to change numbers (ADR-0015)."""
+
+    path = Path(home) / PLAN_FILE
+    if path.exists():
+        raise ConfigError(
+            "plan.yaml is no longer read; the plan lives only in the HFK Plan sheet",
+            file=path,
+            key="(file)",
+            fix=(
+                f"run hfk plan to-sheet --home {Path(home)} to write its lines to "
+                f"{STARTER_CSV}, add an {PLAN_SHEET} sheet to the workbook and paste or "
+                "import that file into it, then delete plan.yaml"
+            ),
         )
-    return load_plan(home, declarations=declarations, people=household.slugs)
 
 
 def plan_workbook(home: Path, household: Household) -> Path:
-    """The workbook whose ``HFK Plan`` sheet holds the plan under ``source: workbook``."""
+    """The workbook whose ``HFK Plan`` sheet holds the plan."""
 
     try:
         return find_workbook(Path(home) / "data", household.tiller_glob)
     except TillerFormatError as error:
         raise ConfigError(
-            f"plan.source is workbook but no workbook was found ({error})",
+            f"the plan is read from the {PLAN_SHEET} sheet but no workbook was found ({error})",
             file=household.path,
-            key="plan.source",
-            fix="put the Tiller workbook export in data/, or set plan: {source: file}",
+            key="files.tiller_glob",
+            fix="put the Tiller workbook download in data/, or fix files.tiller_glob",
         ) from error
 
 
-def unused_plan_file(home: Path, household: Household) -> Path | None:
-    """``plan.yaml`` when it exists but is ignored because the plan comes from the workbook."""
+def plan_csv(lines: Iterable[PlanLine]) -> str:
+    """The lines as CSV text with the thirteen ``HFK Plan`` headers in contract order."""
 
-    path = plan_path(Path(home))
-    if household.plan_source == "workbook" and path.exists():
-        return path
-    return None
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(HEADERS)
+    for line in lines:
+        writer.writerow(
+            (
+                line.desc,
+                line.who,
+                line.bucket,
+                f"{line.monthly:.2f}",
+                "; ".join(line.categories),
+                "yes" if line.paced else "",
+                str(line.effective_from),
+                "" if line.effective_until is None else str(line.effective_until),
+                "" if line.annual_bill is None else f"{line.annual_bill:.2f}",
+                "" if line.annual_full is None else f"{line.annual_full:.2f}",
+                line.account or "",
+                "" if line.due is None else str(line.due[0]),
+                "" if line.due is None else str(line.due[1]),
+            )
+        )
+    return buffer.getvalue()
 
 
 def load_plan_sheet(
@@ -144,7 +183,7 @@ def read_plan_sheet(workbook: Path) -> SheetRows:
             column="",
             fix=(
                 f"add a sheet named {PLAN_SHEET} with headers {', '.join(HEADERS)} "
-                "in row 1, or set plan: {source: file} in household.yaml"
+                "in row 1, then one row per budget line"
             ),
         )
     for header in REQUIRED_HEADERS:

@@ -70,7 +70,16 @@ def test_sheet_names(tmp_path: Path) -> None:
     path = build_fixture(tmp_path / "fixture.xlsx")
     workbook = load_workbook(path, read_only=True, data_only=True)
 
-    assert workbook.sheetnames == ["Transactions", "Categories", "Balance History", "Accounts"]
+    assert workbook.sheetnames == [
+        "Transactions",
+        "Categories",
+        "Balance History",
+        "Accounts",
+        "HFK Plan",
+    ]
+    bare = build_fixture(tmp_path / "bare.xlsx", plan_tab=False)
+    bare_book = load_workbook(bare, read_only=True, data_only=True)
+    assert bare_book.sheetnames == ["Transactions", "Categories", "Balance History", "Accounts"]
 
 
 def test_headers_match_schema_tables(tmp_path: Path) -> None:
@@ -177,4 +186,5 @@ def test_cli_dev_fixture_end_to_end(tmp_path: Path) -> None:
         "Categories",
         "Balance History",
         "Accounts",
+        "HFK Plan",
     ]

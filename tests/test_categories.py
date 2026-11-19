@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 import yaml
 from openpyxl import load_workbook
+from plan_fixture import example_plan, write_plan
 
-from hfk.config import Month, load_declarations, load_household, load_plan
+from hfk.config import Month, load_declarations, load_household, load_instance_plan
 from hfk.engine import CategoriesError, build_categories
 from hfk.source import find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
@@ -26,7 +27,7 @@ PYTHONPATH = str(ROOT / "src")
 
 def make_instance(tmp_path: Path, **fixture_kwargs: Any) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
     build_fixture(tmp_path / "data" / "Tiller-Example.xlsx", **fixture_kwargs)
     return tmp_path
@@ -107,7 +108,7 @@ def load_categories(
 ):
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     ledger = read_tiller(find_workbook(home / "data", household.tiller_glob))
     return build_categories(
         ledger=ledger,
@@ -293,8 +294,8 @@ def test_history_start_prorates_paced_lines(tmp_path: Path) -> None:
 
 def test_duplicate_category_lines_stop(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
-    plan_path = home / "plan.yaml"
-    plan = load_yaml(plan_path)
+    plan_home = home
+    plan = example_plan()
     plan["plan"]["lines"].append(
         {
             "desc": "Example Grocer Extra",
@@ -305,7 +306,7 @@ def test_duplicate_category_lines_stop(tmp_path: Path) -> None:
             "effective_from": "2025-01",
         }
     )
-    dump_yaml(plan_path, plan)
+    write_plan(plan_home, plan)
 
     with pytest.raises(CategoriesError) as error:
         load_categories(home, "alex")
@@ -402,12 +403,12 @@ def test_who_is_required_with_several_people(tmp_path: Path) -> None:
     declarations["sharing"] = []
     dump_yaml(declarations_path, declarations)
 
-    plan_path = solo / "plan.yaml"
-    plan = load_yaml(plan_path)
+    plan_home = solo
+    plan = example_plan()
     plan["plan"]["lines"] = [
         line for line in plan["plan"]["lines"] if line.get("who") == "alex"
     ]
-    dump_yaml(plan_path, plan)
+    write_plan(plan_home, plan)
 
     solo_result = run_hfk(
         "categories",
@@ -457,12 +458,12 @@ def test_refund_reduces_actual(tmp_path: Path) -> None:
 
 def test_no_kept_lines_reports_and_exits_zero(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
-    plan_path = home / "plan.yaml"
-    plan = load_yaml(plan_path)
+    plan_home = home
+    plan = example_plan()
     for line in plan["plan"]["lines"]:
         if line.get("who") == "alex":
             line.pop("categories", None)
-    dump_yaml(plan_path, plan)
+    write_plan(plan_home, plan)
 
     result = run_hfk(
         "categories",

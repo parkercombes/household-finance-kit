@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from hfk.config import Month, load_declarations, load_household, load_plan
+from hfk.config import Month, load_declarations, load_household, load_instance_plan
 from hfk.engine import (
     build_balances,
     build_categories,
@@ -85,7 +85,7 @@ SNAPSHOT_COMMANDS = (
 
 def make_instance(tmp_path: Path, **fixture_kwargs: Any) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
     build_fixture(tmp_path / "data" / "Tiller-Example.xlsx", **fixture_kwargs)
     return tmp_path
@@ -115,7 +115,7 @@ def text_snapshot(name: str) -> str:
 def load_loaded_instance(home: Path):
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     ledger = read_tiller(find_workbook(home / "data", household.tiller_glob))
     return household, declarations, plan, ledger
 

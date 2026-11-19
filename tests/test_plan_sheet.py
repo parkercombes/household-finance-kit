@@ -1,8 +1,11 @@
-"""The ``HFK Plan`` workbook sheet as a plan source (roadmap M5-08; ADR-0013)."""
+"""The ``HFK Plan`` workbook sheet, the only plan source (M5-08, M5-18; ADR-0013, ADR-0015)."""
 
 from __future__ import annotations
 
+import ast
+import csv
 import hashlib
+import io
 import os
 import shutil
 import subprocess
@@ -13,6 +16,7 @@ from typing import Any
 import openpyxl
 import pytest
 import yaml
+from plan_fixture import EXAMPLE_PLAN_YAML
 
 from hfk.cli import main
 from hfk.config import (
@@ -23,31 +27,41 @@ from hfk.config import (
     load_declarations,
     load_household,
     load_instance_plan,
-    load_plan,
     load_plan_sheet,
+    plan_csv,
 )
+from hfk.config.plan_convert import load_plan_file
 from hfk.engine import run_doctor
 from hfk.source.fixture import build_fixture
 
 ROOT = Path(__file__).resolve().parent.parent
 INSTANCE_EXAMPLE = ROOT / "examples" / "instance"
 PYTHONPATH = str(ROOT / "src")
+SRC = ROOT / "src" / "hfk"
 
 
-def make_instance(home: Path, *, source: str | None, plan_file: bool) -> Path:
+def make_instance(home: Path, *, plan_yaml: bool = False) -> Path:
     home.mkdir(parents=True, exist_ok=True)
     for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, home / filename)
-    if plan_file:
-        shutil.copyfile(INSTANCE_EXAMPLE / "plan.yaml", home / "plan.yaml")
-    if source is not None:
-        household = yaml.safe_load((home / "household.yaml").read_text(encoding="utf-8"))
-        household["plan"] = {"source": source}
-        (home / "household.yaml").write_text(
-            yaml.safe_dump(household, sort_keys=False), encoding="utf-8"
-        )
+    if plan_yaml:
+        (home / "plan.yaml").write_text(EXAMPLE_PLAN_YAML, encoding="utf-8")
     build_fixture(home / "data" / "Tiller-Example.xlsx", plan_tab=True)
     return home
+
+
+def former_plan(tmp_path: Path, declarations, people):
+    """The example plan as it used to be written in examples/instance/plan.yaml."""
+
+    path = tmp_path / "former-plan.yaml"
+    path.write_text(EXAMPLE_PLAN_YAML, encoding="utf-8")
+    return load_plan_file(path, declarations=declarations, people=people)
+
+
+def csv_rows(text: str) -> list[dict[str, object]]:
+    """CSV text as sheet rows, each cell the plain text a paste would put there."""
+
+    return [dict(row) for row in csv.DictReader(io.StringIO(text))]
 
 
 def workbook(home: Path) -> Path:
@@ -92,12 +106,12 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_fixture_tab_loads_equal_to_example_plan_yaml(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+def test_fixture_tab_loads_equal_to_the_former_plan_yaml(tmp_path: Path) -> None:
+    home = make_instance(tmp_path / "home")
     household, declarations = loaded(home)
 
     from_sheet = load_instance_plan(home, household=household, declarations=declarations)
-    from_file = load_plan(INSTANCE_EXAMPLE, declarations=declarations, people=household.slugs)
+    from_file = former_plan(tmp_path, declarations, household.slugs)
 
     assert from_sheet.source == "workbook"
     assert from_sheet.path == workbook(home)
@@ -109,45 +123,134 @@ def test_fixture_tab_loads_equal_to_example_plan_yaml(tmp_path: Path) -> None:
     assert from_sheet.describe_line(0) == "HFK Plan row 2"
 
 
-def test_source_defaults_to_file(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source=None, plan_file=True)
+def test_example_readme_table_matches_the_fixture_tab(tmp_path: Path) -> None:
+    home = make_instance(tmp_path)
+    household, declarations = loaded(home)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
+    readme = (INSTANCE_EXAMPLE / "README.md").read_text(encoding="utf-8")
+    table = [
+        [cell.strip() for cell in line.strip().strip("|").split("|")]
+        for line in readme.splitlines()
+        if line.startswith("| Example ")
+    ]
+    expected = list(csv.reader(io.StringIO(plan_csv(plan.lines))))[1:]
+
+    assert table == expected
+
+
+def test_plan_yaml_is_an_error_for_every_plan_command(tmp_path: Path) -> None:
+    home = make_instance(tmp_path, plan_yaml=True)
     household, declarations = loaded(home)
 
-    plan = load_instance_plan(home, household=household, declarations=declarations)
+    with pytest.raises(ConfigError) as caught:
+        load_instance_plan(home, household=household, declarations=declarations)
+    assert caught.value.file == home / "plan.yaml"
+    assert "hfk plan to-sheet" in caught.value.fix
+    assert "then delete plan.yaml" in caught.value.fix
 
-    assert household.plan_source == "file"
-    assert plan.source == "file"
-    assert plan.path == home / "plan.yaml"
+    month = ("--month", "2026-09")
+    for args in (
+        ("scorecard", *month, "--who", "alex", "--today", "2026-10-01"),
+        ("categories", *month, "--who", "alex", "--today", "2026-10-01"),
+        ("renewals", *month),
+        ("rebaseline", "--who", "alex", "--today", "2026-10-01"),
+    ):
+        result = run_hfk(args[0], "--home", str(home), *args[1:])
+        assert result.returncode == 1, args
+        assert "plan.yaml is no longer read" in result.stderr, args
+    check = run_hfk("plan", "check", "--home", str(home))
+    assert check.returncode == 1
+    assert "plan.yaml is no longer read" in check.stdout
+    report = run_doctor(home, today=__import__("datetime").date(2026, 10, 1))
+    assert not report.ok
+    assert any("plan.yaml is no longer read" in d.message for d in report.errors())
 
 
-@pytest.mark.parametrize("who", ["alex", "sam"])
-def test_scorecard_matches_to_the_cent_between_sources(tmp_path: Path, who: str) -> None:
-    file_home = make_instance(tmp_path / "file", source="file", plan_file=True)
-    sheet_home = make_instance(tmp_path / "sheet", source="workbook", plan_file=False)
-    args = ("--month", "2026-09", "--who", who, "--today", "2026-10-01")
+def test_household_plan_key_is_a_loud_error(tmp_path: Path) -> None:
+    home = make_instance(tmp_path)
+    data = yaml.safe_load((home / "household.yaml").read_text(encoding="utf-8"))
+    data["plan"] = {"source": "workbook"}
+    (home / "household.yaml").write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
-    for fmt in ("text", "csv"):
-        from_file = run_hfk("scorecard", "--home", str(file_home), *args, "--format", fmt)
-        from_sheet = run_hfk("scorecard", "--home", str(sheet_home), *args, "--format", fmt)
-        assert from_file.returncode == 0, from_file.stderr
-        assert from_sheet.returncode == 0, from_sheet.stderr
-        assert from_sheet.stderr == ""
-        assert from_sheet.stdout == from_file.stdout
+    with pytest.raises(ConfigError) as caught:
+        load_household(home)
+    assert caught.value.key == "plan"
+    assert caught.value.fix == "delete the plan key from household.yaml"
 
 
-def test_other_plan_commands_match_between_sources(tmp_path: Path) -> None:
-    file_home = make_instance(tmp_path / "file", source="file", plan_file=True)
-    sheet_home = make_instance(tmp_path / "sheet", source="workbook", plan_file=False)
+def test_to_sheet_converts_the_former_plan_yaml_line_for_line(tmp_path: Path) -> None:
+    home = make_instance(tmp_path / "home", plan_yaml=True)
+    household, declarations = loaded(home)
+
+    result = run_hfk("plan", "to-sheet", "--home", str(home))
+
+    assert result.returncode == 0, result.stderr
+    output = home / "out" / "hfk-plan-starter.csv"
+    assert f"wrote 9 plan lines to {output}" in result.stdout
+    text = output.read_text(encoding="utf-8")
+    assert text.splitlines()[0] == (
+        "Description,Who,Bucket,Monthly,Categories,Paced,Effective From,Effective Until,"
+        "Annual Bill,Annual Full,Account,Due Month,Due Day"
+    )
+    pasted = build_fixture(tmp_path / "pasted.xlsx", plan_rows=csv_rows(text))
+    from_csv = load_plan_sheet(pasted, declarations=declarations, people=household.slugs)
+    fixture_tab = load_plan_sheet(workbook(home), declarations=declarations, people=household.slugs)
+    assert from_csv.lines == fixture_tab.lines
+    assert (home / "plan.yaml").exists(), "to-sheet never deletes plan.yaml"
+
+    again = run_hfk("plan", "to-sheet", "--home", str(home))
+    assert again.returncode == 1
+    assert "already exists" in again.stderr
+
+
+def test_to_sheet_without_plan_yaml_fails_loudly(tmp_path: Path) -> None:
+    home = make_instance(tmp_path)
+    result = run_hfk("plan", "to-sheet", "--home", str(home))
+    assert result.returncode == 1
+    assert "nothing to convert" in result.stderr
+    assert not (home / "out").exists()
+
+
+def test_converted_plan_gives_the_same_reports(tmp_path: Path) -> None:
+    home = make_instance(tmp_path / "home", plan_yaml=True)
+    assert run_hfk("plan", "to-sheet", "--home", str(home)).returncode == 0
+    text = (home / "out" / "hfk-plan-starter.csv").read_text(encoding="utf-8")
+    converted = make_instance(tmp_path / "converted")
+    build_fixture(workbook(converted), plan_rows=csv_rows(text))
+    original = make_instance(tmp_path / "original")
 
     for args in (
+        ("scorecard", "--month", "2026-09", "--who", "alex", "--today", "2026-10-01"),
+        ("scorecard", "--month", "2026-09", "--who", "sam", "--today", "2026-10-01"),
         ("renewals", "--month", "2026-09"),
         ("categories", "--month", "2026-09", "--who", "alex", "--today", "2026-10-01"),
     ):
-        from_file = run_hfk(args[0], "--home", str(file_home), *args[1:])
-        from_sheet = run_hfk(args[0], "--home", str(sheet_home), *args[1:])
-        assert from_file.returncode == 0, from_file.stderr
-        assert from_sheet.returncode == 0, from_sheet.stderr
-        assert from_sheet.stdout == from_file.stdout
+        expected = run_hfk(args[0], "--home", str(original), *args[1:])
+        actual = run_hfk(args[0], "--home", str(converted), *args[1:])
+        assert expected.returncode == 0, expected.stderr
+        assert actual.stdout == expected.stdout, args
+
+
+def test_only_the_converter_reads_plan_yaml() -> None:
+    """No module under src/hfk but the to-sheet converter loads a plan.yaml."""
+
+    readers = set()
+    for path in SRC.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+                if name in {"load_plan_file", "load_mapping"}:
+                    readers.add((path.relative_to(SRC).as_posix(), name))
+    plan_yaml_readers = {
+        module for module, name in readers if name == "load_mapping"
+        and "PLAN_FILE" in (SRC / module).read_text(encoding="utf-8")
+    }
+    assert plan_yaml_readers <= {"config/plan_convert.py"}
+    assert {module for module, name in readers if name == "load_plan_file"} == {"cli.py"}
+    cli = (SRC / "cli.py").read_text(encoding="utf-8")
+    assert cli.count("load_plan_file(") == 1
+    assert "def _plan_to_sheet(" in cli
 
 
 @pytest.mark.parametrize(
@@ -171,7 +274,7 @@ def test_other_plan_commands_match_between_sources(tmp_path: Path) -> None:
 def test_malformed_row_names_sheet_row_column_and_fix(
     tmp_path: Path, row: int, column: str, value: Any, problem: str, fix: str
 ) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+    home = make_instance(tmp_path)
     edit_plan_sheet(home, row, column, value)
     household, declarations = loaded(home)
 
@@ -195,20 +298,19 @@ def test_malformed_row_names_sheet_row_column_and_fix(
 
 
 def test_plan_check_reports_every_bad_row_at_once(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+    home = make_instance(tmp_path)
     edit_plan_sheet(home, 3, "Monthly", "ninety")
     edit_plan_sheet(home, 7, "Bucket", "Nope")
     household, declarations = loaded(home)
 
     report = check_instance_plan(home, household=household, declarations=declarations)
 
-    assert report.source == "workbook"
     assert [(p.line, p.column) for p in report.problems] == [(3, "Monthly"), (7, "Bucket")]
     assert report.line_count == 9
 
 
 def test_plan_check_passes_on_the_fixture_tab(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+    home = make_instance(tmp_path)
 
     result = run_hfk("plan", "check", "--home", str(home))
 
@@ -218,7 +320,7 @@ def test_plan_check_passes_on_the_fixture_tab(tmp_path: Path) -> None:
 
 
 def test_duplicate_category_across_rows_names_the_later_row(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+    home = make_instance(tmp_path)
     edit_plan_sheet(home, 5, "Effective Until", None)
     household, declarations = loaded(home)
 
@@ -232,7 +334,7 @@ def test_duplicate_category_across_rows_names_the_later_row(tmp_path: Path) -> N
 
 
 def test_missing_required_column_names_sheet_and_column(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+    home = make_instance(tmp_path)
     path = workbook(home)
     book = openpyxl.load_workbook(path)
     sheet = book[PLAN_SHEET]
@@ -249,14 +351,14 @@ def test_missing_required_column_names_sheet_and_column(tmp_path: Path) -> None:
 
 
 def test_missing_sheet_is_a_loud_error(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+    home = make_instance(tmp_path)
     build_fixture(workbook(home), plan_tab=False)
     household, declarations = loaded(home)
 
     with pytest.raises(PlanSheetError, match="Missing plan sheet") as caught:
         load_instance_plan(home, household=household, declarations=declarations)
 
-    assert "plan: {source: file}" in caught.value.fix
+    assert "add a sheet named HFK Plan" in caught.value.fix
 
 
 def test_columns_are_read_by_header_not_position(tmp_path: Path) -> None:
@@ -272,44 +374,13 @@ def test_columns_are_read_by_header_not_position(tmp_path: Path) -> None:
     household, declarations = loaded(home)
 
     plan = load_plan_sheet(path, declarations=declarations, people=household.slugs)
-    expected = load_plan(INSTANCE_EXAMPLE, declarations=declarations, people=household.slugs)
+    expected = former_plan(tmp_path, declarations, household.slugs)
 
     assert plan.lines == expected.lines
 
 
-def test_tab_plus_plan_yaml_warns_that_the_file_is_ignored(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=True)
-    (home / "plan.yaml").write_text("not: [valid yaml for a plan\n", encoding="utf-8")
-
-    scorecard = run_hfk(
-        "scorecard", "--home", str(home), "--month", "2026-09", "--who", "alex",
-        "--today", "2026-10-01",
-    )
-    check = run_hfk("plan", "check", "--home", str(home))
-    report = run_doctor(home, today=__import__("datetime").date(2026, 10, 1))
-
-    for result in (scorecard, check):
-        assert result.returncode == 0, result.stdout + result.stderr
-        assert "plan.yaml is ignored because household.yaml sets plan: {source: workbook}" in (
-            result.stderr
-        )
-    unused = [d for d in report.diagnostics if d.code == "plan-file-unused"]
-    assert len(unused) == 1
-    assert unused[0].level == "warning"
-    assert unused[0].where == "plan.yaml"
-
-
-def test_unknown_plan_source_is_an_error(tmp_path: Path) -> None:
-    home = make_instance(tmp_path, source="sheet", plan_file=True)
-
-    with pytest.raises(ConfigError) as caught:
-        load_household(home)
-
-    assert caught.value.key == "plan.source"
-
-
 def test_workbook_is_never_saved(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    home = make_instance(tmp_path, source="workbook", plan_file=False)
+    home = make_instance(tmp_path)
     edit_plan_sheet(home, 3, "Monthly", "ninety")
     before = digest(workbook(home))
 

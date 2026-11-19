@@ -12,8 +12,9 @@ from typing import Any
 import pytest
 import yaml
 from openpyxl import load_workbook
+from plan_fixture import example_plan, write_plan
 
-from hfk.config import Month, load_declarations, load_household, load_plan
+from hfk.config import Month, load_declarations, load_household, load_instance_plan
 from hfk.engine import RebaselineError, build_rebaseline
 from hfk.source import find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
@@ -27,7 +28,7 @@ WIDTH = len("Annual Membership")
 
 def make_instance(tmp_path: Path, **fixture_kwargs: Any) -> Path:
     tmp_path.mkdir(parents=True, exist_ok=True)
-    for filename in ("household.yaml", "declarations.yaml", "plan.yaml"):
+    for filename in ("household.yaml", "declarations.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, tmp_path / filename)
     build_fixture(tmp_path / "data" / "Tiller-Example.xlsx", **fixture_kwargs)
     return tmp_path
@@ -112,7 +113,7 @@ def load_rebaseline(
 ):
     household = load_household(home)
     declarations = load_declarations(home, people=household.slugs)
-    plan = load_plan(home, declarations=declarations, people=household.slugs)
+    plan = load_instance_plan(home, household=household, declarations=declarations)
     ledger = read_tiller(find_workbook(home / "data", household.tiller_glob))
     return build_rebaseline(
         ledger=ledger,
@@ -136,7 +137,7 @@ def row(category: str, rest: str) -> str:
 
 def test_rebaseline_cli_runs_on_example_instance(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
-    plan_before = (home / "plan.yaml").read_bytes()
+    plan_before = (home / "data" / "Tiller-Example.xlsx").read_bytes()
 
     result = run_hfk(
         "rebaseline",
@@ -182,7 +183,7 @@ def test_rebaseline_cli_runs_on_example_instance(tmp_path: Path) -> None:
     )
     assert lines[6] == "stable 4  lumpy 0  spiky 1"
     assert len(lines) == 7
-    assert (home / "plan.yaml").read_bytes() == plan_before
+    assert (home / "data" / "Tiller-Example.xlsx").read_bytes() == plan_before
 
     default_through = run_hfk(
         "rebaseline",
@@ -370,8 +371,8 @@ def test_current_target_comes_from_the_single_category_line(tmp_path: Path) -> N
 
 def test_multi_category_line_gives_no_current(tmp_path: Path) -> None:
     home = make_instance(tmp_path)
-    plan_path = home / "plan.yaml"
-    plan = load_yaml(plan_path)
+    plan_home = home
+    plan = example_plan()
     for line in plan["plan"]["lines"]:
         if line.get("desc") == "Example Rent" and line.get("who") == "alex":
             line["desc"] = "Example Housing"
@@ -381,7 +382,7 @@ def test_multi_category_line_gives_no_current(tmp_path: Path) -> None:
         for line in plan["plan"]["lines"]
         if not (line.get("desc") == "Example Utilities" and line.get("who") == "alex")
     ]
-    dump_yaml(plan_path, plan)
+    write_plan(plan_home, plan)
 
     report = load_rebaseline(home, "alex")
     lines = by_category(report)

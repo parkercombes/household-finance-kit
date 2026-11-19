@@ -23,4 +23,3 @@ sharing:
   - match: {account: "Alex Checking", description: "City Utilities*"}
     weights: {alex: 0.5, sam: 0.5}
     reason: "Utilities are a joint bill paid from Alex's account."
-closed_accounts: {}

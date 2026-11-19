@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -36,10 +36,8 @@ TOP_LEVEL_KEYS = (
     "history_start",
     "accounts",
     "extensions",
-    "plan",
 )
-PLAN_SOURCES = ("file", "workbook")
-ACCOUNT_KEYS = ("owner", "shared", "kind", "unsynced")
+ACCOUNT_KEYS = ("owner", "shared", "kind", "unsynced", "closed", "note")
 
 
 @dataclass(frozen=True)
@@ -60,6 +58,8 @@ class AccountOwnership:
     weights: tuple[tuple[str, Decimal], ...]
     kind: str | None = None
     unsynced: bool = False
+    closed: date | None = None
+    note: str | None = None
 
     @property
     def owner(self) -> str | None:
@@ -85,7 +85,6 @@ class Household:
     history_start: date | None
     accounts: tuple[AccountOwnership, ...]
     extensions: tuple[str, ...]
-    plan_source: str = "file"
 
     def person(self, slug: str) -> Person | None:
         for person in self.people:
@@ -115,6 +114,13 @@ def load_household(home_or_file: Path) -> Household:
     if path.is_dir():
         path = household_path(path)
     data = load_mapping(path)
+    if "plan" in data:
+        raise ConfigError(
+            "Unknown key 'plan': the plan always comes from the HFK Plan sheet (ADR-0015)",
+            file=path,
+            key="plan",
+            fix="delete the plan key from household.yaml",
+        )
     reject_unknown_keys(data, TOP_LEVEL_KEYS, path)
 
     schema_version = require_schema_version(data, path)
@@ -124,7 +130,6 @@ def load_household(home_or_file: Path) -> Household:
     history_start = _history_start(data.get("history_start"), path)
     accounts = _accounts(require(data, "accounts", path), slugs, path)
     extensions = _extensions(data.get("extensions", []), path)
-    plan_source = _plan_source(data.get("plan"), path)
     return Household(
         path=path,
         schema_version=schema_version,
@@ -133,7 +138,6 @@ def load_household(home_or_file: Path) -> Household:
         history_start=history_start,
         accounts=accounts,
         extensions=extensions,
-        plan_source=plan_source,
     )
 
 
@@ -234,6 +238,12 @@ def _accounts(value: Any, slugs: set[str], path: Path) -> tuple[AccountOwnership
                     fix="write unsynced as true or false",
                 )
             unsynced = raw_unsynced
+        closed = None
+        if "closed" in entry:
+            closed = _closed_date(entry["closed"], path, *parents, "closed")
+        note = None
+        if "note" in entry:
+            note = require_text(entry["note"], path, *parents, "note")
         has_owner = "owner" in entry
         has_shared = "shared" in entry
         if has_owner == has_shared:
@@ -249,8 +259,38 @@ def _accounts(value: Any, slugs: set[str], path: Path) -> tuple[AccountOwnership
             weights: tuple[tuple[str, Decimal], ...] = ((owner, Decimal(1)),)
         else:
             weights = _shared_weights(entry["shared"], slugs, path, *parents, "shared")
-        accounts.append(AccountOwnership(name=name, weights=weights, kind=kind, unsynced=unsynced))
+        accounts.append(
+            AccountOwnership(
+                name=name,
+                weights=weights,
+                kind=kind,
+                unsynced=unsynced,
+                closed=closed,
+                note=note,
+            )
+        )
     return tuple(accounts)
+
+
+def _closed_date(value: Any, path: Path, *parents: str) -> date:
+    """``closed: YYYY-MM-DD`` on an account entry (ADR-0014)."""
+
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            parsed = date.fromisoformat(text)
+        except ValueError:
+            parsed = None
+        if parsed is not None and text == parsed.isoformat():
+            return parsed
+    raise ConfigError(
+        f"closed is not an ISO date: {value!r}",
+        file=path,
+        key=key_path(*parents),
+        fix="write closed as YYYY-MM-DD, the day the account closed",
+    )
 
 
 def _shared_weights(
@@ -324,22 +364,3 @@ def _extensions(value: Any, path: Path) -> tuple[str, ...]:
             )
         result.append(name)
     return tuple(result)
-
-
-def _plan_source(value: Any, path: Path) -> str:
-    """``plan: {source: file | workbook}``; an absent ``plan`` key means ``file`` (ADR-0013)."""
-
-    if value is None:
-        return "file"
-    plan = require_mapping(value, path, "plan")
-    reject_unknown_keys(plan, ("source",), path, "plan")
-    source = require_text(require(plan, "source", path, "plan"), path, "plan", "source")
-    if source not in PLAN_SOURCES:
-        raise ConfigError(
-            f"Unknown plan source {source!r}",
-            file=path,
-            key="plan.source",
-            fix="write plan: {source: file} to read plan.yaml or plan: {source: workbook} "
-            "to read the HFK Plan sheet",
-        )
-    return source

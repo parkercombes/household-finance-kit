@@ -1,6 +1,6 @@
 # Extensions
 
-Last verified: 2026-10-08
+Last verified: 2026-11-13
 
 This document describes the planned extension API for `hfk`. It is a contract proposal for milestone M6 and later. Nothing in this file works yet: the extension system, config loader, and engine are planned. See the [README milestone table](../README.md#milestones) for what is implemented. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
 
@@ -12,7 +12,7 @@ The planned API treats extensions as clients of the lower layers:
 
 - Source adapter reads Tiller into a normalized ledger.
 - Ledger exposes frozen transaction, category, account, balance, and ledger objects.
-- Config loads and validates `household.yaml`, `declarations.yaml`, and `plan.yaml`.
+- Config loads and validates `household.yaml`, `declarations.yaml`, and the `HFK Plan` sheet.
 - Engine provides pure finance calculations over ledger plus config.
 - Extensions import engine, ledger, and config APIs to add optional behavior.
 - Presentation exposes CLI and renderers.

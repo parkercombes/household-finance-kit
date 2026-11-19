@@ -29,7 +29,6 @@ from hfk.source.tiller import read_tiller
 ROOT = Path(__file__).resolve().parents[1]
 HOUSEHOLD_EXAMPLE = ROOT / "examples" / "household.example.yaml"
 DECLARATIONS_EXAMPLE = ROOT / "examples" / "declarations.example.yaml"
-PLAN_EXAMPLE = ROOT / "examples" / "plan.example.yaml"
 PROFILES = ROOT / "profiles"
 
 
@@ -39,10 +38,6 @@ def declarations_data() -> dict[str, Any]:
 
 def household_data() -> dict[str, Any]:
     return copy.deepcopy(yaml.safe_load(HOUSEHOLD_EXAMPLE.read_text(encoding="utf-8")))
-
-
-def plan_data() -> dict[str, Any]:
-    return copy.deepcopy(yaml.safe_load(PLAN_EXAMPLE.read_text(encoding="utf-8")))
 
 
 def write_yaml(tmp_path: Path, name: str, data: dict[str, Any]) -> Path:
@@ -66,7 +61,6 @@ def fixture_ledger(tmp_path: Path) -> Ledger:
 def instance_home(tmp_path: Path, declarations: dict[str, Any]) -> Path:
     write_yaml(tmp_path, "household.yaml", household_data())
     write_yaml(tmp_path, "declarations.yaml", declarations)
-    write_yaml(tmp_path, "plan.yaml", plan_data())
     build_fixture(tmp_path / "data" / "Tiller-Example.xlsx")
     return tmp_path
 

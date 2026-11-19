@@ -4,12 +4,12 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import yaml
+from plan_fixture import example_plan
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = [
     ROOT / "examples" / "household.example.yaml",
     ROOT / "examples" / "declarations.example.yaml",
-    ROOT / "examples" / "plan.example.yaml",
 ]
 PROFILES = [
     ROOT / "profiles" / "simple.yaml",
@@ -63,7 +63,7 @@ def test_packaged_profiles_match_documented_copies() -> None:
 
 
 def test_plan_annual_bill_matches_monthly_to_cent() -> None:
-    data = load_yaml(ROOT / "examples" / "plan.example.yaml")
+    data = example_plan()
     assert isinstance(data, dict)
 
     annual_lines = [line for line in data["plan"]["lines"] if "annual_bill" in line]
@@ -79,7 +79,7 @@ def _month(value: object) -> tuple[int, int]:
 
 def test_plan_lines_use_declared_buckets_and_not_type() -> None:
     declarations = load_yaml(ROOT / "examples" / "declarations.example.yaml")
-    plan = load_yaml(ROOT / "examples" / "plan.example.yaml")
+    plan = example_plan()
     assert isinstance(declarations, dict) and isinstance(plan, dict)
 
     declared = {bucket["name"] for bucket in declarations["buckets"]}
@@ -89,7 +89,7 @@ def test_plan_lines_use_declared_buckets_and_not_type() -> None:
 
 
 def test_plan_lines_are_dated_and_one_category_per_person_per_month() -> None:
-    plan = load_yaml(ROOT / "examples" / "plan.example.yaml")
+    plan = example_plan()
     assert isinstance(plan, dict)
     default_start = _month(plan["plan"]["effective_from"])
 
@@ -157,7 +157,7 @@ def test_example_declarations_map_every_fixture_expense_group(tmp_path: Path) ->
 
 def test_example_plan_categories_resolve_to_their_line_bucket() -> None:
     declarations = load_yaml(ROOT / "examples" / "declarations.example.yaml")
-    plan = load_yaml(ROOT / "examples" / "plan.example.yaml")
+    plan = example_plan()
     assert isinstance(declarations, dict) and isinstance(plan, dict)
 
     from hfk.source.fixture import _category_rows
