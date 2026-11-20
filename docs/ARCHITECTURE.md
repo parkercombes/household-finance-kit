@@ -33,7 +33,7 @@ Import rule: a layer imports only from layers below it. Higher layers may depend
 
 | Layer | Package | Responsibility | Inputs | Outputs | Must never do |
 |---|---|---|---|---|---|
-| Source adapter | `hfk.source` | Read source systems and normalize them. M1 starts with Tiller `.xlsx`/`.xlsm`; M9 adds Google Sheets. Tiller columns are resolved by header name, never by column position. | Tiller workbook path and source options from config | A normalized `Ledger` | Write to Tiller, rely on column position, perform budgeting policy, hide missing required columns |
+| Source adapter | `hfk.source` | Read source systems and normalize them. It reads a downloaded Tiller `.xlsx`/`.xlsm`; Google Sheets users download their workbook too, and there is no Sheets adapter (ADR-0019). Tiller columns are resolved by header name, never by column position. | Tiller workbook path and source options from config | A normalized `Ledger` | Write to Tiller, rely on column position, perform budgeting policy, hide missing required columns |
 | Ledger | `hfk.ledger` | Hold frozen domain records: transactions, categories, accounts, balance rows, and ledger helpers. | Normalized rows from source adapters | Immutable ledger collections using `Decimal` money | Know Tiller sheet names, read files, validate household intent, render reports |
 | Config | `hfk.config` | Load and validate private YAML files and the `HFK Plan` sheet, the only plan source (ADR-0015). Errors name file, key path, and fix, or sheet, row, column, and fix. | `household.yaml`, `declarations.yaml`, the `HFK Plan` sheet's raw rows from `hfk.source`, extension config sections | Typed config objects | Open a workbook itself or read any sheet but `HFK Plan` (its rows come only from the source adapter's read-only loader), infer missing required decisions, calculate reports |
 | Engine | `hfk.engine` | Calculate ownership shares, bucket mappings, scorecards, targets, balances, renewals, rebaseline proposals, and doctor diagnostics. | `Ledger` plus validated config | Pure result objects and diagnostics | Mutate source data, write YAML without an explicit command, call renderers, import extensions |
@@ -180,7 +180,7 @@ The package names below are the approved architecture from the design brief. Sta
 
 | Path | Layer | Implementation status |
 |---|---|---|
-| `src/hfk/source` | Source adapter | Done (M1): Tiller workbook reader and synthetic fixture generator; planned M9 for Google Sheets adapter |
+| `src/hfk/source` | Source adapter | Done (M1): Tiller workbook reader and synthetic fixture generator; no Google Sheets adapter (ADR-0019) |
 | `src/hfk/ledger` | Ledger | Done (M1): frozen dataclasses and helpers |
 | `src/hfk/config` | Config | Planned M2 YAML loading and validation |
 | `src/hfk/engine` | Engine | Planned M2 doctor basics; M3 ownership, buckets, scorecard; M4 targets, balances, renewals |

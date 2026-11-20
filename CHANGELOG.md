@@ -23,6 +23,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- M9-01 / ADR-0019 (2026-11-16): no Google Sheets adapter. Google Sheets households download the workbook into `data/`, and hfk never signs in to Google or stores Google credentials. `M9-02` to `M9-04` are not planned; ADR-0019 supersedes the "Google Sheets later" part of ADR-0007.
 - M7-07: `hfk settle YYYY-MM --format paste` prints a tab-separated block to paste into a household's own settle-up tab. Tests show settle-up opens the workbook read-only, never saves it, and leaves it byte-identical.
 - M7-06: `hfk settle YYYY-MM --compare FILE` checks the statement against a hand-built one to the cent and names every difference, for households moving from a hand-built settle-up tab.
 - M7-05: `hfk settle` refuses a month that has not ended (the current month, including its last day, and any future month) before it reads the workbook or prints a transfer.

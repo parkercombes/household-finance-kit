@@ -156,14 +156,14 @@ Goal: add a mechanics-only retirement income-vs-need model, with explicit discla
 
 ## M9 Google Sheets Adapter
 
-Goal: add a Google Sheets source adapter that produces the same `Ledger` as the workbook adapter.
+Goal: decide how Google Sheets households get their data to hfk. Decided 2026-11-16 ([ADR-0019](DECISIONS.md#adr-0019-no-google-sheets-adapter-households-download-the-workbook)): they download the workbook, so no adapter is built and `M9-02` to `M9-04` are not planned.
 
 | ID | Item | Status | Dependencies | Acceptance |
 |---|---|---:|---|---|
-| `M9-01` | Record the chosen Google Sheets authentication approach after the maintainer decides it, without storing secrets in the public toolkit. | `blocked` | `M6-05` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms the auth approach is documented without credentials. Blocked 2026-11-13: needs the maintainer to choose the Google Sheets authentication approach (the open question below); nothing may be recorded until that decision is made. |
-| `M9-02` | Implement the Sheets source adapter behind the same source-layer boundary as the workbook reader. | `blocked` | `M1-03`, `M9-01` | Run `python -m pytest -q tests/test_sheets_source.py::test_sheets_adapter_returns_ledger`; expected: mocked Sheets rows produce a `Ledger` with no Tiller details above `hfk.source`. Blocked 2026-11-13: depends on `M9-01`. |
-| `M9-03` | Add parity tests proving workbook and Sheets adapters produce equivalent ledgers from the same synthetic dataset. | `blocked` | `M9-02`, `M1-04` | Run `python -m pytest -q tests/test_source_parity.py`; expected: transactions, categories, accounts, and balance rows match except for source metadata that stays below the ledger. Blocked 2026-11-13: depends on `M9-02`, which depends on `M9-01`. |
-| `M9-04` | Add doctor coverage for Sheets-source configuration and stale or missing Sheets data. | `blocked` | `M9-02`, `M2-04` | Run `python -m pytest -q tests/test_doctor_sheets.py`; expected: missing access, stale data, and malformed rows fail with actionable messages. Blocked 2026-11-13: depends on `M9-02`, which depends on `M9-01`. |
+| `M9-01` | Record the chosen Google Sheets authentication approach after the maintainer decides it, without storing secrets in the public toolkit. | `done` | `M6-05` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0, and the doc review check confirms the auth approach is documented without credentials. Result 2026-11-16: passed; privacy scan clean. The maintainer chose to keep downloading the workbook and build no Google sign-in. [ADR-0019](DECISIONS.md#adr-0019-no-google-sheets-adapter-households-download-the-workbook) records the five options weighed and the decision. It states that hfk stores no Google credentials, tokens or keys and calls no Google API, so the "auth approach" is no authentication at all, and nothing secret appears anywhere. ADR-0019 supersedes the "Google Sheets later" part of ADR-0007, and the brief, architecture and README now say so. |
+| `M9-02` | Implement the Sheets source adapter behind the same source-layer boundary as the workbook reader. | `blocked` | `M1-03`, `M9-01` | Run `python -m pytest -q tests/test_sheets_source.py::test_sheets_adapter_returns_ledger`; expected: mocked Sheets rows produce a `Ledger` with no Tiller details above `hfk.source`. Not planned 2026-11-16: [ADR-0019](DECISIONS.md#adr-0019-no-google-sheets-adapter-households-download-the-workbook) decided there is no Sheets adapter. Stays closed unless a later ADR supersedes it. |
+| `M9-03` | Add parity tests proving workbook and Sheets adapters produce equivalent ledgers from the same synthetic dataset. | `blocked` | `M9-02`, `M1-04` | Run `python -m pytest -q tests/test_source_parity.py`; expected: transactions, categories, accounts, and balance rows match except for source metadata that stays below the ledger. Not planned 2026-11-16: [ADR-0019](DECISIONS.md#adr-0019-no-google-sheets-adapter-households-download-the-workbook) decided there is no Sheets adapter. Stays closed unless a later ADR supersedes it. |
+| `M9-04` | Add doctor coverage for Sheets-source configuration and stale or missing Sheets data. | `blocked` | `M9-02`, `M2-04` | Run `python -m pytest -q tests/test_doctor_sheets.py`; expected: missing access, stale data, and malformed rows fail with actionable messages. Not planned 2026-11-16: [ADR-0019](DECISIONS.md#adr-0019-no-google-sheets-adapter-households-download-the-workbook) decided there is no Sheets adapter. Stays closed unless a later ADR supersedes it. |
 
 ## M10+ Community Candidates
 
@@ -178,7 +178,6 @@ Goal: document and preserve clean boundaries for useful extensions that are outs
 
 ## Open questions
 
-- What Google Sheets authentication approach should M9 use for a public toolkit while keeping credentials entirely out of the repository?
 - What package name should be used on PyPI if `hfk` is unavailable or too ambiguous?
 - Should `hfk dev fixture` support multiple named synthetic scenarios at launch, or begin with one canonical scenario and add more only when tests need them?
 - Which report formats should be the default for CLI commands once text, CSV, and HTML renderers all exist?

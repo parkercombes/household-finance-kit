@@ -218,7 +218,7 @@ core must not import extension packages directly.
 
 ## ADR-0007: V1 Source Is Exported Excel, Google Sheets Later
 
-Status: accepted
+Status: accepted; the "Google Sheets later" part is superseded by [ADR-0019](#adr-0019-no-google-sheets-adapter-households-download-the-workbook)
 Date: 2026-10-08
 
 ### Context
@@ -831,3 +831,53 @@ declared.
   a default.
 - The report needs a federal tax table (M8-04). No table ships until its figures are
   cited to IRS publications, so the report fails loudly until the maintainer adds one.
+
+---
+
+## ADR-0019: No Google Sheets Adapter; Households Download the Workbook
+
+Status: accepted
+Date: 2026-11-16
+
+Supersedes the "Google Sheets later" part of
+[ADR-0007](#adr-0007-v1-source-is-exported-excel-google-sheets-later).
+
+### Context
+
+ADR-0007 made a downloaded `.xlsx`/`.xlsm` file the v1 source and deferred a Google
+Sheets adapter to M9, and roadmap item `M9-01` waited on the maintainer to choose how
+hfk would sign in to Google. Reading a private Tiller sheet directly needs credentials on
+the household's computer, and every way to get them has a cost for a toolkit aimed at
+households that do not program. The options weighed on 2026-11-16 were:
+
+1. **Keep downloading.** The household downloads the workbook (File > Download >
+   `.xlsx`) into the instance's `data/`, as hfk works today.
+2. **Google sign-in (OAuth, read-only).** hfk opens the browser once and stores a
+   token, using either one OAuth client published by the toolkit (which Google may
+   require to be verified) or a client each household creates in its own Google Cloud
+   project.
+3. **A service account** with a long-lived key file and the sheet shared with it.
+4. **Sign-in through the `gcloud` tool.**
+5. **An API key or "Publish to web"**, which would make household financial data
+   readable without signing in.
+
+### Decision
+
+Option 1 only. hfk reads the workbook the household downloads into `data/`, and nothing
+else. It has no Google sign-in, stores no Google credentials or tokens, and calls no
+Google API.
+
+### Consequences
+
+- The toolkit and every private instance hold no Google credentials, so there is nothing
+  to leak, rotate, or revoke.
+- Reports are as fresh as the last download. `hfk doctor`'s stale-data check (M2) already
+  says when the downloaded data is old, and `hfk init` already recognises Tiller's
+  Google Sheets download name (M5-17).
+- Roadmap item `M9-01` records this decision. `M9-02` to `M9-04` (a live Sheets adapter,
+  parity tests, and Sheets doctor checks) are not planned. They keep their IDs and stay
+  closed unless a later ADR supersedes this one.
+- The source-adapter boundary stays as it is (ADR-0007), so a future adapter would still
+  need no change above `hfk.source`.
+- Option 5 is unsafe for private financial data, and must not be offered even as an
+  opt-in.
