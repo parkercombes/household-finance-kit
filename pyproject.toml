@@ -24,6 +24,11 @@ dev = [
 [project.scripts]
 hfk = "hfk.cli:main"
 
+# Built-in-first extensions: shipped in this distribution, still discovered
+# through entry points so core never imports them (ADR-0006).
+[project.entry-points."hfk.extensions"]
+settle_up = "hfk.ext.settle_up:SettleUp"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

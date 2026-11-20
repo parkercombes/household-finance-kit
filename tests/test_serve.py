@@ -35,7 +35,7 @@ TODAY = date(2026, 9, 15)
 def make_instance(tmp_path: Path) -> Path:
     home = tmp_path / "instance"
     home.mkdir()
-    for filename in ("household.yaml", "declarations.yaml"):
+    for filename in ("household.yaml", "declarations.yaml", "settle_up.yaml"):
         shutil.copyfile(INSTANCE_EXAMPLE / filename, home / filename)
     build_fixture(home / "data" / "Tiller-Example.xlsx")
     return home

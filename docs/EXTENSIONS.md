@@ -21,7 +21,7 @@ That boundary matters because `hfk` is public software used with private househo
 
 ## Discovery
 
-Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Wiring `commands()` into the `hfk` command line is planned for `M7-01`, where `settle_up` first needs it, and wiring `report_sections()` into the renderers and `hfk serve` is planned with the first extension report (`M7-04`).
+Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Implemented (M7-01): every installed extension's `commands()` become `hfk` subcommands. Each gets `--home` and `--today` from core plus its own arguments. Before `run(args, context)` is called, core checks that the household enabled the extension and loads its config; the `hfk.ext.CommandContext` carries `home`, `household`, `declarations`, `config`, `today`, and `load_ledger()`. An extension may not take a core command's name. Wiring `report_sections()` into the renderers and `hfk serve` is planned with the first extension report.
 
 Illustrative `pyproject.toml` snippet:
 
@@ -144,7 +144,7 @@ The extension boundary is part of the privacy and correctness model.
 
 ### `settle_up`
 
-Planned for M7, `settle_up` computes a monthly statement for exactly two people. It is intended for a household that would otherwise maintain a manual settle-up spreadsheet, but wants the calculation to come from the read-only Tiller ledger plus a small private YAML file for off-ledger items.
+Implemented (M7-01): the `settle_up` extension is registered through the `hfk.extensions` entry point in this distribution's `pyproject.toml`, and `hfk doctor` reports an error when it is enabled for a household that does not list exactly two people. Planned for the rest of M7, `settle_up` computes a monthly statement for exactly two people. It is intended for a household that would otherwise maintain a manual settle-up spreadsheet, but wants the calculation to come from the read-only Tiller ledger plus a small private YAML file for off-ledger items.
 
 Scope and limits:
 
@@ -152,12 +152,12 @@ Scope and limits:
 - The default split is weighted 50/50.
 - Other two-person weights are allowed when declared, such as 60/40.
 - Larger groups are explicitly out of scope for the built-in extension and open to the community.
-- The extension never settles an unfinished month.
+- The extension never settles an unfinished month (M7-05): the current month, including its last day, and any future month are refused before the workbook is read.
 - The extension never writes to Tiller.
 
-On-ledger shares come from the core share function: account ownership weights from `household.yaml`, overridden per transaction by the `sharing` rules in `declarations.yaml`. The extension declares no sharing rules of its own, so a joint bill paid from one person's account is split the same way in settle-up and in the scorecard. The result is a shared expense allocation, not a mutation of the ledger.
+Implemented (M7-02, `hfk.ext.settle_up.shares`): on-ledger shares come from the core share function: account ownership weights from `household.yaml`, overridden per transaction by the `sharing` rules in `declarations.yaml`. The extension declares no sharing rules of its own, so a joint bill paid from one person's account is split the same way in settle-up and in the scorecard. The result is a shared expense allocation, not a mutation of the ledger.
 
-Off-ledger shared items live in `shared-items/YYYY-MM.yaml` in the private instance. These are costs not present in the user's Tiller workbook, such as a bill paid from another person's untracked account. Example using only fictional data:
+Implemented (M7-03, `hfk.ext.settle_up.items`): off-ledger shared items live in `shared-items/YYYY-MM.yaml` in the private instance. Each item needs `label`, a positive `amount`, `paid_by` and `weights` naming people from `household.yaml` (weights sum to exactly 1), and a declared `bucket`. A month without a file has no shared items, and `hfk doctor` reports every bad file, including one not named after a month. These are costs not present in the user's Tiller workbook, such as a bill paid from another person's untracked account. Example using only fictional data:
 
 ```yaml
 schema_version: 1
@@ -174,9 +174,9 @@ items:
     bucket: "Variable Essential"
 ```
 
-Planned command behavior: `hfk settle YYYY-MM` outputs category totals for shared accounts and shared items, per-person paid versus owed, and the net transfer. Renderers are planned to support text, CSV, and HTML. A paste-ready block may be emitted for users who keep their own manual tab, but the workbook remains read-only.
+Implemented (M7-04): `hfk settle YYYY-MM [--format text|csv|html]` prints the statement for a finished month: category totals of the shared charges and shared items, what each person paid and owes, their net, and the one transfer that settles it. A shared charge is one both people owe part of, or one that a person owes wholly and the other paid part of, such as a `{sam: 1.0}` sharing rule on a card Alex pays; a charge the same person paid and owes is left out. Who owes comes from the core share function. Who paid is the account's single owner, or the payer weights in the extension's own `settle_up.yaml` for a shared account (ADR-0017); a shared charge on a shared account with no payer entry is an error naming the account. `hfk doctor` checks `settle_up.yaml` against `household.yaml`. Implemented (M7-07): `--format paste` prints a tab-separated block (categories, total, paid, owes and net per person, and the transfer) that a household pastes into its own settle-up tab. The workbook stays read-only: settle-up opens it only through the read-only loader and never saves it.
 
-Regression testing should compare the planned computation against a hand-built historical statement to the cent. The private instance owner can create a small expected statement from a finished month, run the synthetic or private fixture locally, and confirm that category totals, paid amounts, owed amounts, and net transfer match. Public tests must use synthetic data only.
+Implemented (M7-06): `hfk settle YYYY-MM --compare FILE` checks the statement against a hand-built one written as YAML (`month`, optional `categories`, `paid`, `owes`, `transfer`; the format is in `hfk.ext.settle_up.regression`). It lists every figure more than one cent apart and exits 1 if there are any; nothing is adjusted to make them agree. Regression testing should compare the computation against a hand-built historical statement to the cent. The private instance owner can create a small expected statement from a finished month, run the synthetic or private fixture locally, and confirm that category totals, paid amounts, owed amounts, and net transfer match. Public tests must use synthetic data only.
 
 ### `retirement`
 
@@ -232,7 +232,7 @@ Extensions should test against the synthetic fixture (`hfk dev fixture`, or `hfk
 - Renderer output using fictional data only.
 - Privacy scan before publishing.
 
-Command tests wait on the CLI wiring of `commands()`, planned for `M7-01`.
+Command tests run the `hfk` CLI in a subprocess with the throwaway package's directory on `PYTHONPATH`; see `test_extension_commands_run_through_the_cli` in `tests/test_extensions.py`.
 
 ## Stability and versioning
 

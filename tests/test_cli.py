@@ -7,8 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHONPATH = str(ROOT / "src")
+# `settle` is a real command from the settle_up extension since M7-04.
 STUBS = {
-    "settle": "M7",
     "retirement": "M8",
 }
 
