@@ -761,3 +761,73 @@ settle-up reads into a core file, against ADR-0016.
   schema for `payers`, the example instance gains a `settle_up.yaml`, and the statement's
   paid column is: on-ledger shared charges by payer weights, plus shared items by
   `paid_by`.
+
+---
+
+## ADR-0018: How Tax Enters the Retirement Income-vs-Need Gap
+
+Status: accepted
+Date: 2026-11-13 (proposed); accepted 2026-11-16
+
+### Context
+
+The retirement report (M8-05, brief section 8b) shows a calendar-year track of income,
+need, and the gap, per person and for the household, and the brief gives the extension
+pluggable tax (M8-04). Three things that change the gap are not decided anywhere:
+
+1. **Which income is taxable.** A pension is usually taxable and Social Security is partly
+   taxable by the base-amount rule. An `account_drawdown` may come from a pre-tax account
+   (fully taxable), an after-tax account (not taxable), or a taxable brokerage account
+   (only gains are taxable). `retirement.yaml` cannot tell these apart today, and
+   guessing would change the gap.
+2. **Thresholds in today's dollars.** ADR-0008 puts every figure in real dollars. Federal
+   brackets and the standard deduction are indexed to inflation by law each year, so
+   holding them flat in real terms is a reasonable model. The Social Security base
+   amounts are fixed in nominal dollars, so in real terms they shrink every year, and
+   holding them flat would understate tax decades out.
+3. **Per-person tax.** A married couple files one joint return, so tax is a household
+   figure. The per-person view needs either no tax or a declared way to split it.
+
+This was found during unattended roadmap work and is recorded as proposed for the
+maintainer to decide.
+
+Options:
+
+1. **Report before tax.** Show income, need, and gap with no tax, labelled "before
+   income tax" on every page and row. This is simple and needs no new input, but every
+   gap overstates what the household can spend: the plausible-but-wrong number this
+   project exists to prevent, softened only by a label.
+2. **Declared taxability, statute-aware thresholds.** Every income stream gains a required
+   `taxable: full | none` (Social Security always uses the base-amount rule). Federal
+   brackets and the standard deduction stay flat in today's dollars. The Social Security
+   base amounts shrink by `inflation` each year after the table's tax year, and the
+   report says so. The household view's gap is income minus federal tax, state tax, and
+   need. The per-person view shows income and need with no tax, and says that tax is
+   counted only in the household view.
+3. **Option 2, but every threshold flat in today's dollars.** This is simpler, but it
+   understates tax on Social Security more each year.
+
+### Decision
+
+Option 2. It keeps every number traceable to a declared input, follows how each
+threshold is actually indexed, and avoids splitting a joint tax bill by a rule nobody
+declared.
+
+- Every income stream except `social_security` declares `taxable: full | none`, with no
+  default. Social Security always follows the base-amount rule.
+- Federal brackets and the standard deduction stay flat in today's dollars. The Social
+  Security base amounts shrink by `inflation` each year after the federal table's tax
+  year, so `inflation` is required whenever Social Security is taxed.
+- The household view's gap is income minus federal tax, state tax, and need. The
+  per-person view shows income and need with no tax, and says that tax is counted only
+  in the household view.
+
+### Consequences
+
+- Roadmap items `M8-05`, `M8-06` and `M10-02` are unblocked.
+- The income schema (M8-02) gains `taxable` on every stream except `social_security`.
+- States differ on whether they tax Social Security, so the `flat` and `bracket` state
+  modules (M8-04) gain a required `social_security: taxed | exempt`: a declared input, not
+  a default.
+- The report needs a federal tax table (M8-04). No table ships until its figures are
+  cited to IRS publications, so the report fails loudly until the maintainer adds one.

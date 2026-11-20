@@ -182,18 +182,27 @@ Implemented (M7-06): `hfk settle YYYY-MM --compare FILE` checks the statement ag
 
 Planned for M8, `retirement` is an income-vs-need model. It models mechanics, not advice. It must not recommend financial products, claiming strategies, Roth conversion plans, or optimized behavior.
 
-Input lives in `retirement.yaml` in the private instance. The planned schema includes:
+Input lives in `retirement.yaml` in the private instance. The extension is registered through this distribution's `hfk.extensions` entry point; a household enables it with `extensions: [retirement]`.
 
-- People, with birth year-month and retirement year.
-- Income streams with type `social_security`, `pension`, `account_drawdown`, or `other`.
-- Optional COLA per income stream. Income is flat after retirement unless COLA is declared.
-- Itemized expenses in today's dollars, with inflation assumptions.
-- Versioned tax data tagged with tax year.
-- State-tax module selection, such as none, flat, or bracket.
+Implemented (M8-01, `hfk.ext.retirement.schema`): `people` maps every person slug from `household.yaml` to a `birth` year-month and a `retire_year`, and `assumptions` holds a required `until_age` (the track runs through the year the youngest person reaches it) and an optional annual `inflation` such as `0.025`. A rate above `0.20` is refused, because `2.5` meant as 2.5 percent would otherwise be read as 250 percent. `hfk doctor` checks the file when the extension is enabled. See `examples/retirement.example.yaml`.
+
+Implemented (M8-02, `hfk.ext.retirement.income`): `income` lists typed streams, each a monthly amount in today's dollars with a required `cola`:
+
+- `social_security` lists `claim_ages`, the monthly benefit for each claim age from 62 to 70 that the household wants to compare. Per ssa.gov, a benefit can be claimed from 62 (early), at 67 (full retirement age) or as late as 70 (delayed); any whole age in that range may be listed. A scenario picks one listed age per person; hfk never picks one. The stream starts in the year the person reaches that age, pays for the months from the birth month on in that year, and pays twelve months a year after that.
+- `pension`, `account_drawdown` and `other` take `monthly`, `start_year` and an optional inclusive `end_year`. An `account_drawdown` is the withdrawal the household declares; no account balance is modelled.
+- `cola: full` keeps a stream flat in today's dollars. `cola: none` keeps it flat in nominal dollars, so its real value falls by `inflation` each year after it starts. A number is a nominal growth rate, converted to real with `inflation`. `inflation` is required as soon as any stream is not `full` (ADR-0008).
+
+Implemented (M8-03, `hfk.ext.retirement.expenses`): `expenses.items` lists monthly costs in today's dollars, each for the household or one person (`who`), optionally limited by `start_year` and `end_year`. They stay flat in today's dollars: `inflation` never touches them (ADR-0008). One item may declare `real_growth`, a yearly rate above prices, and must then give a `reason`. `expenses.seed_from_plan: {month: YYYY-MM}` turns every line of the household's `HFK Plan` sheet effective in that month into an expense, with its description, person and amount, before the listed items.
+
+Implemented (M8-04, `hfk.ext.retirement.tax`): federal tax tables are versioned YAML data files tagged with `tax_year` and a `source` naming the official IRS or SSA publication behind every figure. They ship in `hfk/ext/retirement/tax_data/`. `retirement.yaml`'s `tax` section declares `filing_status` (`married_joint` or `single`), `max_data_age_years` (the staleness limit), and `state`: the `none`, `flat` or `bracket` module, with the household's own state figures. The newest table is refused when it is more than `max_data_age_years` older than the current year (ADR-0005). **No federal table ships yet**: the 2026 figures could not be read from irs.gov while M8-04 was built, so the extension stops with "no federal tax table is installed" until the maintainer adds a cited one.
+
+Implemented (M8-05, `hfk.ext.retirement.report`): `hfk retirement --claim-age alex=67 --claim-age sam=67 [--format text|csv|html] [--tax-table PATH]` prints the calendar-year track in today's dollars, priced in the current year. The household view shows income, ordinary taxable income, Social Security and its taxable part, federal tax, state tax, need, and the gap (income minus both taxes and need). The per-person view shows each person's own income and own expenses before tax. Following ADR-0018, every non-Social-Security stream declares `taxable: full | none`, and the `flat` and `bracket` state modules declare `social_security: taxed | exempt`. Federal brackets and the standard deduction stay flat in today's dollars, and the Social Security base amounts shrink by `inflation` each year after the table's tax year. The command needs a federal tax table, so it fails loudly until one is installed; `--tax-table` names a table file to use instead.
 
 Claim-age scenarios are mutually exclusive alternatives, not a timeline. For example, a Social Security claim-age scenario compares separate possible starts; it does not imply that a person claims at several ages over time.
 
 Planned outputs include a calendar-year track and an income-vs-need gap, shown per person and for the household. Tax data must have a staleness gate: if the versioned tax data is older than the configured allowed tax-year age, the extension fails loudly before producing a projection.
+
+Implemented (M8-06): the text and HTML reports open with a mechanics-not-advice disclaimer and end with the out-of-scope note below; the CSV stays a plain table. `examples/retirement.example.yaml` and `tests/fixtures/us-federal-synthetic.yaml` are the synthetic fixtures (Alex and Sam, round, made-up figures).
 
 Out of scope for the built-in extension:
 
