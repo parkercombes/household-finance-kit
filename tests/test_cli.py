@@ -90,7 +90,9 @@ def test_every_command_is_listed_in_help() -> None:
     missing = sorted(name for name, text in commands.items() if not text)
     assert missing == [], f"commands without help text: {missing}"
 
-    listing = run_hfk("--help").stdout
+    # argparse puts a long name's help on the next line when the terminal is narrow.
+    listed = {line.split()[0] for line in run_hfk("--help").stdout.splitlines()
+              if line.startswith("    ") and not line.startswith("     ")}
     for name in commands:
         if " " not in name:
-            assert f"    {name} " in listing, name
+            assert name in listed, name
