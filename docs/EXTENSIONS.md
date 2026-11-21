@@ -1,6 +1,6 @@
 # Extensions
 
-Last verified: 2026-11-13
+Last verified: 2026-11-21
 
 This document describes the extension API for `hfk`. Each section says whether it is implemented, with its roadmap item, or planned. See the [README milestone table](../README.md#milestones) for milestone status. The design baseline is [DESIGN-BRIEF](DESIGN-BRIEF.md).
 
@@ -21,7 +21,7 @@ That boundary matters because `hfk` is public software used with private househo
 
 ## Discovery
 
-Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Implemented (M7-01): every installed extension's `commands()` become `hfk` subcommands. Each gets `--home` and `--today` from core plus its own arguments. Before `run(args, context)` is called, core checks that the household enabled the extension and loads its config; the `hfk.ext.CommandContext` carries `home`, `household`, `declarations`, `config`, `today`, and `load_ledger()`. An extension may not take a core command's name. Wiring `report_sections()` into the renderers and `hfk serve` is planned with the first extension report.
+Implemented (M6-01): `hfk.ext.discover_extensions()` finds extensions through the Python entry-point group `hfk.extensions`. An installed package registers one target under that group: the extension object, its class, or a function that returns it. Discovery loads every entry point in name order. A package that fails to import is reported as a problem naming the entry point; it never stops other extensions or core. Core then validates each extension against the contract (M6-02), loads config only for the extensions the household enables (M6-03), and runs their doctor hooks (M6-04). Implemented (M7-01): every installed extension's `commands()` become `hfk` subcommands. Each gets `--home` and `--today` from core plus its own arguments. Before `run(args, context)` is called, core checks that the household enabled the extension and loads its config; the `hfk.ext.CommandContext` carries `home`, `household`, `declarations`, `config`, `today`, and `load_ledger()`. An extension may not take a core command's name. The contract checks `report_sections()`, but core does not yet place those sections in its own reports or in `hfk serve`; the built-in extensions report through their own commands instead. No roadmap item covers this yet.
 
 Illustrative `pyproject.toml` snippet:
 
@@ -140,11 +140,11 @@ The extension boundary is part of the privacy and correctness model.
 
 ## Built-in-first extensions
 
-`settle_up` (M7) and `retirement` (M8) are planned as built-in-first extensions. They ship inside the `household-finance-kit` distribution as subpackages of `hfk.ext` and register through its own `hfk.extensions` entry points, so one install brings them, yet core still discovers them like any other extension and never imports them. A household turns each on by listing it under `extensions` in `household.yaml`.
+`settle_up` (M7) and `retirement` (M8) are built-in-first extensions. They ship inside the `household-finance-kit` distribution as subpackages of `hfk.ext` and register through its own `hfk.extensions` entry points, so one install brings them, yet core still discovers them like any other extension and never imports them. A household turns each on by listing it under `extensions` in `household.yaml`.
 
 ### `settle_up`
 
-Implemented (M7-01): the `settle_up` extension is registered through the `hfk.extensions` entry point in this distribution's `pyproject.toml`, and `hfk doctor` reports an error when it is enabled for a household that does not list exactly two people. Planned for the rest of M7, `settle_up` computes a monthly statement for exactly two people. It is intended for a household that would otherwise maintain a manual settle-up spreadsheet, but wants the calculation to come from the read-only Tiller ledger plus a small private YAML file for off-ledger items.
+Implemented (M7-01): the `settle_up` extension is registered through the `hfk.extensions` entry point in this distribution's `pyproject.toml`, and `hfk doctor` reports an error when it is enabled for a household that does not list exactly two people. `settle_up` computes a monthly statement for exactly two people (M7-02 to M7-07, below). It is intended for a household that would otherwise maintain a manual settle-up spreadsheet, but wants the calculation to come from the read-only Tiller ledger plus a small private YAML file for off-ledger items.
 
 Scope and limits:
 
@@ -180,7 +180,7 @@ Implemented (M7-06): `hfk settle YYYY-MM --compare FILE` checks the statement ag
 
 ### `retirement`
 
-Planned for M8, `retirement` is an income-vs-need model. It models mechanics, not advice. It must not recommend financial products, claiming strategies, Roth conversion plans, or optimized behavior.
+`retirement` is an income-vs-need model. It models mechanics, not advice. It must not recommend financial products, claiming strategies, Roth conversion plans, or optimized behavior.
 
 Input lives in `retirement.yaml` in the private instance. The extension is registered through this distribution's `hfk.extensions` entry point; a household enables it with `extensions: [retirement]`.
 
@@ -199,8 +199,6 @@ Implemented (M8-04, `hfk.ext.retirement.tax`): federal tax tables are versioned 
 Implemented (M8-05, `hfk.ext.retirement.report`): `hfk retirement --claim-age alex=67 --claim-age sam=67 [--format text|csv|html] [--tax-table PATH]` prints the calendar-year track in today's dollars, priced in the current year. The household view shows income, ordinary taxable income, Social Security and its taxable part, federal tax, state tax, need, and the gap (income minus both taxes and need). The per-person view shows each person's own income and own expenses before tax. Following ADR-0018, every non-Social-Security stream declares `taxable: full | none`, and the `flat` and `bracket` state modules declare `social_security: taxed | exempt`. Federal brackets and the standard deduction stay flat in today's dollars, and the Social Security base amounts shrink by `inflation` each year after the table's tax year. The command needs a federal tax table, so it fails loudly until one is installed; `--tax-table` names a table file to use instead.
 
 Claim-age scenarios are mutually exclusive alternatives, not a timeline. For example, a Social Security claim-age scenario compares separate possible starts; it does not imply that a person claims at several ages over time.
-
-Planned outputs include a calendar-year track and an income-vs-need gap, shown per person and for the household. Tax data must have a staleness gate: if the versioned tax data is older than the configured allowed tax-year age, the extension fails loudly before producing a projection.
 
 Implemented (M8-06): the text and HTML reports open with a mechanics-not-advice disclaimer and end with the out-of-scope note below; the CSV stays a plain table. `examples/retirement.example.yaml` and `tests/fixtures/us-federal-synthetic.yaml` are the synthetic fixtures (Alex and Sam, round, made-up figures).
 

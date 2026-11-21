@@ -1,8 +1,8 @@
 # Tiller Schema
 
-Last verified: 2026-11-13
+Last verified: 2026-11-21
 
-This document describes the workbook contract for `hfk`. It is derived from [DESIGN-BRIEF](DESIGN-BRIEF.md), especially section 5. The M1 source adapter reads a local `.xlsx` or `.xlsm` workbook into the normalized ledger model. Current CLI analysis commands remain planned until later milestones.
+This document describes the workbook contract for `hfk`. It is derived from [DESIGN-BRIEF](DESIGN-BRIEF.md), especially section 5. The source adapter reads a local `.xlsx` or `.xlsm` workbook into the normalized ledger model; every `hfk` report reads the workbook through it.
 
 `hfk` is unofficial and not affiliated with Tiller. It reads a user's own workbook read-only and produces reports outside the workbook.
 
@@ -56,7 +56,7 @@ The source adapter reads by header name, never by column position.
 | Header | Required by hfk | Notes |
 |---|---:|---|
 | `Date` | Yes | Transaction date. |
-| `Description` | Yes | User-facing description used for reports and planned matching rules. |
+| `Description` | Yes | User-facing description used for reports and for `description` matches in `sharing` rules. |
 | `Category` | Yes | Tiller category name. |
 | `Amount` | Yes | Signed amount. Expenses are negative; income is positive. |
 | `Account` | Yes | Account name as shown in Tiller. |
@@ -79,7 +79,7 @@ The reader maps optional `Transaction ID`, `Account ID`, `Institution`, and `Ful
 | Header | Required by hfk | Notes |
 |---|---:|---|
 | `Category` | Yes | Category name used by transaction rows. |
-| `Group` | Yes | Category group. Planned config can map buckets from Tiller group by default. |
+| `Group` | Yes | Category group. With `mapping_source: tiller_group` (the default), `declarations.yaml` maps each group to a bucket. |
 | `Type` | Yes | Must be one of `Expense`, `Income`, or `Transfer`. |
 | `Hide From Reports` | No | Tiller writes `Hide`. `Hide`, `TRUE`, `Yes` map to `Category.hidden=True`; blank, `Show`, `FALSE`, `No` map to `False`; any other value is an error naming the row. |
 | Monthly columns | No | Tiller includes month columns after the core fields. They are tolerated but not part of the required `hfk` contract in the design brief. |
@@ -105,7 +105,7 @@ The reader maps optional `Transaction ID`, `Account ID`, `Institution`, and `Ful
 | `Account Status` | No | Tiller account status metadata. |
 | `Date Added` | No | Tiller workbook field. |
 
-Balances support planned `hfk balances` and `hfk networth` reports in M4. A closed account is declared on its `household.yaml` account entry with `closed: YYYY-MM-DD` (ADR-0014); hfk never infers closure from `Account Status`. Stale data, undeclared accounts, and transactions after a declared closure are `hfk doctor` errors.
+Balances feed the `hfk balances` and `hfk networth` reports. A closed account is declared on its `household.yaml` account entry with `closed: YYYY-MM-DD` (ADR-0014); hfk never infers closure from `Account Status`. Stale data, undeclared accounts, and transactions after a declared closure are `hfk doctor` errors.
 
 The reader maps optional `Account ID`, `Institution`, `Type`, `Class`, and `Account Status` values to the ledger balance row when present. Empty `Balance` cells are represented as balance gaps (`None`), never as zero.
 

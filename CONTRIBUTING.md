@@ -1,6 +1,6 @@
 # Contributing
 
-Last verified: 2026-10-08
+Last verified: 2026-11-21
 
 Thanks for contributing to `household-finance-kit` (`hfk`). This repository is intended to become a public MIT-licensed toolkit, so the main contribution rule is simple: useful work is welcome, but private financial data is never welcome here.
 
@@ -18,7 +18,7 @@ python -m ruff check .
 python scripts/privacy_scan.py --root .
 ```
 
-Implementation status is recorded once, in the [README milestone table](README.md#milestones). Analysis commands such as scorecard, balances, settle-up, and retirement are planned by milestone and should not be represented as working until their roadmap acceptance commands pass.
+Implementation status is recorded once, in the [README milestone table](README.md#milestones). Do not describe a new command as working until its roadmap acceptance command passes.
 
 ## Branch And PR Flow
 
@@ -53,7 +53,7 @@ Design changes need an ADR in [DECISIONS](docs/DECISIONS.md). If a change contra
 
 Extensions should follow [EXTENSIONS](docs/EXTENSIONS.md). Start by describing the household problem, required config section, ledger fields needed, CLI command shape, doctor checks, and privacy risks. Core should define extension hooks, but it must not import extension implementation details.
 
-The first planned extensions are `settle_up` for exactly two people and `retirement` for income-vs-need mechanics. New extensions should preserve the same boundary: mechanics are allowed, financial advice is not.
+The built-in extensions are `settle_up` for exactly two people and `retirement` for income-vs-need mechanics. New extensions should preserve the same boundary: mechanics are allowed, financial advice is not.
 
 ## Code Style
 
