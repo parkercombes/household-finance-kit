@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last verified: 2026-11-13
+Last verified: 2026-11-21
 
 This is the LLM entry point for `household-finance-kit` (`hfk`). Read it before changing code, docs, tests, examples, hooks, or workflows. The repository is public, and real user data belongs only in private instances. Implementation status is recorded once, in the [README milestone table](README.md#milestones); do not restate it in other docs.
 
@@ -46,7 +46,7 @@ The CLI version command is also expected to work:
 hfk --version
 ```
 
-Current planned analysis subcommands are stubs until their milestone lands. Do not document a command as working unless it is implemented and covered by the roadmap acceptance command.
+Every current `hfk` subcommand is implemented; `hfk --help` lists them. Do not document a new command as working unless it is implemented and covered by its roadmap acceptance command.
 
 ## How To Pick Up The Next Task
 
@@ -72,7 +72,7 @@ Documentation must distinguish implemented behavior from planned behavior. If so
 
 ## Repository Map
 
-Planned public toolkit layout:
+Public toolkit layout:
 
 ```text
 household-finance-kit/
@@ -104,7 +104,7 @@ The six design layers are:
 | Extensions | `hfk.ext` | Entry-point plugins such as `settle_up` and `retirement` |
 | Presentation | `hfk.cli`, `hfk.render` | CLI and text, CSV, HTML output |
 
-Private instances are separate from this repo and may contain `household.yaml`, `declarations.yaml`, `shared-items/`, `retirement.yaml`, `data/`, `out/`, `.claude/settings.json`, and a `.gitignore`. Never copy private instance data into the public toolkit.
+Private instances are separate from this repo and may contain `household.yaml`, `declarations.yaml`, `settle_up.yaml`, `shared-items/`, `retirement.yaml`, `data/`, `out/`, `.claude/settings.json`, and a `.gitignore`. Never copy private instance data into the public toolkit.
 
 ## Things That Look Right But Are Wrong
 
