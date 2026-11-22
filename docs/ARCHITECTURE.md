@@ -1,6 +1,6 @@
 # Architecture
 
-Last verified: 2026-11-21
+Last verified: 2026-11-22
 
 This document explains the architecture of `hfk`, the household-finance-kit toolkit, for both human maintainers and LLM agents resuming the project cold. The source of truth for product scope is [DESIGN-BRIEF.md](DESIGN-BRIEF.md). Planned work is tracked in [ROADMAP.md](ROADMAP.md), and architectural decisions are recorded in [DECISIONS.md](DECISIONS.md).
 
@@ -186,7 +186,7 @@ The package names below are the approved architecture from the design brief. Sta
 | `src/hfk/engine` | Engine | Done (M2 to M4): doctor checks; ownership, buckets and scorecard; targets, balances, net worth, renewals and rebaseline |
 | `src/hfk/ext` | Extensions | Done (M6-01 to M6-04): entry-point discovery, the extension contract, config files, and doctor hooks |
 | `src/hfk/ext/settle_up` | Extensions | Done (M7): the two-person settle-up statement, `hfk settle` |
-| `src/hfk/ext/retirement` | Extensions | Done (M8): the income-vs-need track, `hfk retirement`; no federal tax table ships yet |
+| `src/hfk/ext/retirement` | Extensions | Done (M8): the income-vs-need track, `hfk retirement`, and the 2026 federal tax table |
 | `src/hfk/render` | Presentation | Done (M5): text, CSV, and HTML renderers |
 | `src/hfk/serve.py` | Presentation | Done (M5-10): `hfk serve`, the loopback-only, GET-only web front door over the HTML renderers |
 | `src/hfk/cli.py` | Presentation | Done (M0 to M7): every core subcommand, and the subcommands installed extensions add |

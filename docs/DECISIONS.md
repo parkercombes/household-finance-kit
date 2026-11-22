@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Last verified: 2026-11-13
+Last verified: 2026-11-22
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
 `household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
@@ -881,3 +881,55 @@ Google API.
   need no change above `hfk.source`.
 - Option 5 is unsafe for private financial data, and must not be offered even as an
   opt-in.
+
+---
+
+## ADR-0020: Age-Based Federal Deductions in the Retirement Report
+
+Status: proposed
+Date: 2026-11-22
+
+### Context
+
+The first federal tax table, `us-federal-2026.yaml`, holds each filing status's standard
+deduction and ordinary income brackets (M8-04, ADR-0018). Federal tax also gives two
+deductions that depend on age, and the extension models neither:
+
+- The additional standard deduction for the aged under section 63(f): $1,650 per person
+  65 or older for 2026, or $2,050 if unmarried (IRS Rev. Proc. 2025-32, section
+  3.14(3)). It is indexed each year.
+- The deduction for seniors: $6,000 per person 65 or older, for tax years 2025 through
+  2028, phasing out above $75,000 of modified adjusted gross income ($150,000 filing
+  jointly), and claimed only on a joint return when married (IRS newsroom, "Working
+  Families Tax Cuts: tax deductions for working Americans and seniors").
+
+Every year of a retirement track is a year when someone is likely to be 65 or older, so
+leaving both out overstates federal tax and understates the gap. The choice changes the
+gap, so it cannot be guessed (ADR-0002).
+
+Options:
+
+1. **Leave both out and say so.** The report's out-of-scope note states that federal tax
+   is overstated for people 65 and older. No new config or table fields.
+2. **Model the section 63(f) amount only.** Each table gains an `additional_aged` amount
+   per filing status, cited to its Rev. Proc. The report adds it for each person who is
+   65 or older that year, from `birth` in `retirement.yaml`. The deduction for seniors
+   stays out and is named in the out-of-scope note.
+3. **Model both.** As option 2, plus the deduction for seniors with its years, amount
+   and phase-out as cited table data. The phase-out needs modified adjusted gross
+   income, which the report approximates by its ordinary taxable income plus taxable
+   Social Security, and the deduction ends after 2028 unless a later table extends it.
+
+### Decision
+
+Not decided. Until the maintainer decides, the extension follows option 1: the report's
+out-of-scope note says federal tax leaves out the age-based deductions and is overstated
+for people 65 and older.
+
+### Consequences
+
+- Option 1 needs nothing further. Options 2 and 3 need a new roadmap item, a
+  `schema_version: 2` for the federal tables, and tests with hand-worked figures.
+- Option 3 adds an approximation of modified adjusted gross income, which the report
+  must name in its output.
+

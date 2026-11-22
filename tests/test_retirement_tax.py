@@ -99,18 +99,22 @@ def test_stale_tax_data_fails_loudly(tmp_path):
     check_staleness(fresh, current_year=2026, max_age_years=0, config_path=config_path)
 
 
-def test_missing_tax_data_fails_loudly_and_none_ships_unverified(tmp_path):
-    from hfk.ext.retirement.tax import newest_federal_table, tax_data_dir
+def test_missing_tax_data_fails_loudly_and_shipped_tables_cite_sources(tmp_path):
+    from hfk.ext.retirement.tax import load_federal_table, newest_federal_table, tax_data_dir
 
     with pytest.raises(ConfigError, match="no federal tax table is installed") as caught:
         newest_federal_table(tmp_path / "empty")
     assert "hfk never guesses tax figures" in caught.value.fix
 
-    # No federal table ships until its figures are verified against IRS publications.
+    # Every shipped table names an IRS publication; none is a synthetic test table.
     assert (tax_data_dir() / "README.md").exists()
-    assert list(tax_data_dir().glob("us-federal-*.yaml")) == []
-    with pytest.raises(ConfigError, match="no federal tax table is installed"):
-        newest_federal_table()
+    shipped = sorted(tax_data_dir().glob("us-federal-*.yaml"))
+    assert shipped
+    for path in shipped:
+        table = load_federal_table(path)
+        assert path.name == f"us-federal-{table.tax_year}.yaml"
+        assert "IRS" in table.source and "IRS" in table.social_security.source
+        assert "SYNTHETIC" not in table.source.upper()
 
 
 @pytest.mark.parametrize(

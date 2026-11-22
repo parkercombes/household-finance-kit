@@ -13,7 +13,10 @@ Rules for adding a table:
   table lists under `filing_status`; a missing one is an error naming the key.
 - A figure you cannot verify is left out. hfk then fails loudly; it never guesses.
 - The maintainer checks each new table against its publication before release.
+- Add a year's table once that year has started. The extension uses the newest
+  table and treats its figures as the current year's dollars, so a table for a
+  later year would put brackets and thresholds a year of inflation ahead.
 
-No table ships yet: the 2026 figures could not be read from irs.gov when M8-04 was
-built, so the extension stops with "no federal tax table is installed" until the
-maintainer adds one.
+`us-federal-2026.yaml` holds the 2026 figures from IRS Rev. Proc. 2025-32 and
+IRS Publication 915 (2026), retrieved from irs.gov on 2026-11-22. The 2027 figures
+are in IRS Rev. Proc. 2026-35; add `us-federal-2027.yaml` from it in January 2027.
