@@ -110,7 +110,9 @@ household-finance-kit/
    (`hfk.extensions`). Each declares a config section + schema, required ledger fields,
    CLI subcommands, and optional report sections. Settle-up and retirement are the first.
 6. **Presentation** (`hfk.cli`, `hfk.render`). CLI first; renderers: text, CSV, HTML.
-   A local read-only web front door (127.0.0.1 only) is `hfk serve` (M5-10).
+   A local web front door (127.0.0.1 only) is `hfk serve` (M5-10); its reports are
+   read-only. Planned (M5-20 to M5-23, ADR-0022): a double-click installer, a default
+   `HFK` folder, and a setup page that asks the interview's questions as a form.
 
 Rule: a layer imports only from layers below it. Extensions may import engine, ledger,
 config; never the reverse.
@@ -338,6 +340,10 @@ lines. The sheet is ADR-0013, implemented in M5-08; the single source is ADR-001
   month picker and a Regenerate action that re-reads the workbook; GET only, and its one
   write path is `out/`. `hfk open` starts it on a free port and opens the browser; the
   instance's `Open HFK.command` and `Open HFK.bat` launchers run `hfk open` on their own folder.
+  Planned (M5-21, ADR-0022): on a folder with no `household.yaml` it serves a setup page,
+  which may write the settings files once, and any page may copy a workbook download into
+  `data/`; every page and action then needs a per-run token, and writes need POST with an
+  exact `Origin` match. The workbook itself is still never written.
 - `hfk init`, `hfk plan check`, `hfk plan to-sheet` (one-time `plan.yaml` conversion),
   `hfk dev fixture` (generate synthetic Tiller workbook).
 - Hard invariant: any analysis window is clamped to `history_start`.
