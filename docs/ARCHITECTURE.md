@@ -1,6 +1,6 @@
 # Architecture
 
-Last verified: 2026-11-13
+Last verified: 2026-11-21
 
 This document explains the architecture of `hfk`, the household-finance-kit toolkit, for both human maintainers and LLM agents resuming the project cold. The source of truth for product scope is [DESIGN-BRIEF.md](DESIGN-BRIEF.md). Planned work is tracked in [ROADMAP.md](ROADMAP.md), and architectural decisions are recorded in [DECISIONS.md](DECISIONS.md).
 
@@ -10,7 +10,7 @@ This document explains the architecture of `hfk`, the household-finance-kit tool
 
 The project is deliberately conservative. A wrong finance report can look plausible, so the architecture favors explicit configuration, loud validation, frozen normalized data, and deterministic calculations over convenience guesses. The core rule is: read source data, normalize it, validate the user's declared intent, calculate from those inputs, and render output without changing the source workbook.
 
-Implementation status is recorded once, in the milestone table in [README](../README.md#milestones), with item-level detail in [ROADMAP](ROADMAP.md). Other documents link there instead of restating it. The layer descriptions below cover both implemented and planned layers; the package map marks which is which.
+Implementation status is recorded once, in the milestone table in [README](../README.md#milestones), with item-level detail in [ROADMAP](ROADMAP.md). Other documents link there instead of restating it. All six layers are implemented; the package map gives the milestone that built each.
 
 ## Two-repo model
 
@@ -170,7 +170,7 @@ Diagnostics should be deterministic and suitable for tests. Do not rely on trace
 
 Extensions are optional plugins discovered through the `hfk.extensions` Python entry-point group. An extension declares its name, version, config section and schema, required ledger fields, CLI commands, optional report sections, and a `doctor()` hook.
 
-The first planned extensions are `settle_up` and `retirement`. `settle_up` produces a two-person monthly sharing statement from declared account ownership, on-ledger sharing rules, and off-ledger shared items. `retirement` models income versus need using `retirement.yaml`; it is arithmetic and reporting, not financial advice.
+Two extensions are built in: `settle_up` and `retirement`. `settle_up` produces a two-person monthly sharing statement from declared account ownership, on-ledger sharing rules, and off-ledger shared items. `retirement` models income versus need using `retirement.yaml`; it is arithmetic and reporting, not financial advice.
 
 See [EXTENSIONS.md](EXTENSIONS.md) for the extension API contract and extension-specific rules.
 
@@ -182,12 +182,15 @@ The package names below are the approved architecture from the design brief. Sta
 |---|---|---|
 | `src/hfk/source` | Source adapter | Done (M1): Tiller workbook reader and synthetic fixture generator; no Google Sheets adapter (ADR-0019) |
 | `src/hfk/ledger` | Ledger | Done (M1): frozen dataclasses and helpers |
-| `src/hfk/config` | Config | Planned M2 YAML loading and validation |
-| `src/hfk/engine` | Engine | Planned M2 doctor basics; M3 ownership, buckets, scorecard; M4 targets, balances, renewals |
-| `src/hfk/ext` | Extensions | Done (M6-01 to M6-04): entry-point discovery, the extension contract, config sections, and doctor hooks |
-| `src/hfk/render` | Presentation | Planned M5 text, CSV, and HTML renderers |
+| `src/hfk/config` | Config | Done (M2, M5-08, M5-18): YAML loading and validation, and the `HFK Plan` sheet as the only plan source |
+| `src/hfk/engine` | Engine | Done (M2 to M4): doctor checks; ownership, buckets and scorecard; targets, balances, net worth, renewals and rebaseline |
+| `src/hfk/ext` | Extensions | Done (M6-01 to M6-04): entry-point discovery, the extension contract, config files, and doctor hooks |
+| `src/hfk/ext/settle_up` | Extensions | Done (M7): the two-person settle-up statement, `hfk settle` |
+| `src/hfk/ext/retirement` | Extensions | Done (M8): the income-vs-need track, `hfk retirement`; no federal tax table ships yet |
+| `src/hfk/render` | Presentation | Done (M5): text, CSV, and HTML renderers |
 | `src/hfk/serve.py` | Presentation | Done (M5-10): `hfk serve`, the loopback-only, GET-only web front door over the HTML renderers |
-| `src/hfk/cli.py` | Presentation | `--version` and `dev fixture` work; analysis subcommands are stubs that become functional across M2-M8 |
+| `src/hfk/cli.py` | Presentation | Done (M0 to M7): every core subcommand, and the subcommands installed extensions add |
+| `src/hfk/interview.py`, `src/hfk/instance.py` | Presentation | Done (M5): the `hfk init` interview and the instance files and launchers it writes |
 
 ## Implemented vs planned
 
@@ -197,7 +200,7 @@ See the [README milestone table](../README.md#milestones). It is the only place 
 
 Tests must use synthetic data only. No real workbook, real account, real institution, real employer, real address, or real private category set belongs in the public repository.
 
-The synthetic Tiller workbook fixture planned for M1 is the base for source, ledger, engine, and presentation tests. It should contain fictional rows with Alex, Sam, Example Bank, round amounts, and edge cases that matter: missing optional columns, extra unknown columns, hidden categories, transfers, income, expenses, null balances, renamed categories, and lumpy annual bills.
+The synthetic Tiller workbook fixture (M1, written by `hfk dev fixture`) is the base for source, ledger, engine, and presentation tests. It contains fictional rows with Alex, Sam, Example Bank, round amounts, and edge cases that matter: missing optional columns, extra unknown columns, hidden categories, transfers, income, expenses, null balances, renamed categories, and lumpy annual bills.
 
 Layer test expectations:
 

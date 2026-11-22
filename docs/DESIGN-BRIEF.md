@@ -110,7 +110,7 @@ household-finance-kit/
    (`hfk.extensions`). Each declares a config section + schema, required ledger fields,
    CLI subcommands, and optional report sections. Settle-up and retirement are the first.
 6. **Presentation** (`hfk.cli`, `hfk.render`). CLI first; renderers: text, CSV, HTML.
-   A local read-only web front door (127.0.0.1 only) comes later.
+   A local read-only web front door (127.0.0.1 only) is `hfk serve` (M5-10).
 
 Rule: a layer imports only from layers below it. Extensions may import engine, ledger,
 config; never the reverse.

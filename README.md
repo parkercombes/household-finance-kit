@@ -1,6 +1,6 @@
 # household-finance-kit
 
-Last verified: 2026-11-13
+Last verified: 2026-11-21
 
 ## What Is This
 
@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-M0 Foundations through M4 Analyses are done, including the `M3-07` parity check against a private instance. M5 Usability is in progress: `M5-00` through `M5-13` and `M5-16` through `M5-18` are done. `M5-14` (a usability session) and `M5-15` (the README rewrite that follows it) are blocked on the maintainer, so M6 work has started: M6 (the extension API) is done, and M7 is done: `settle_up` registration, on-ledger shares, off-ledger shared items, and `hfk settle` (never for an unfinished month, with `--compare` against a hand-built statement and a paste-ready block), with payers in `settle_up.yaml` (ADR-0017). In M8, `M8-01` to `M8-04` (the `retirement.yaml` schema, income streams, expenses, and tax data mechanics) are done. ADR-0018 is accepted, and `M8-05` and `M8-06` (`hfk retirement`, the report, with its disclaimer) are done; real federal tax figures are still to be added. M9 is decided: Google Sheets households download their workbook, and hfk never signs in to Google (ADR-0019). M10's documented boundaries (`M10-01` to `M10-05`) are done. Every remaining item now waits on the maintainer; see [ROADMAP](docs/ROADMAP.md). The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+Every milestone except M5 is done. In M5, everything is done except the usability session (`M5-14`) and the README rewrite that follows it (`M5-15`); both wait on the maintainer, as does publishing the package (`M0-07`). The `retirement` extension works, but no federal tax table ships yet, so `hfk retirement` needs one before it can run. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -23,6 +23,8 @@ Working today:
 - `hfk serve` shows the reports as a local read-only web page on `127.0.0.1`, with a month picker and a Regenerate button. `hfk open` starts it on a free port and opens your browser, and `hfk init` writes double-click launchers (`Open HFK.command`, `Open HFK.bat`) that run `hfk open` for you.
 - `hfk dev fixture --out PATH [--no-plan-tab]` writes a synthetic workbook, with the example `HFK Plan` sheet, for tests and demos.
 - `hfk plan to-sheet` converts a `plan.yaml` from before ADR-0015 to CSV rows for the `HFK Plan` sheet.
+- `hfk settle YYYY-MM` prints the two-person settle-up statement for a finished month: what each person paid and owes, and the one transfer that settles it. Turn it on with `extensions: [settle_up]` in `household.yaml` and declare who pays each shared account in `settle_up.yaml`. It also takes `--format text|csv|html|paste` and `--compare` against a hand-built statement.
+- `hfk retirement --claim-age alex=67 --claim-age sam=67` prints a calendar-year income-vs-need track in today's dollars from `retirement.yaml`, per person and for the household. Turn it on with `extensions: [retirement]`. It shows arithmetic, not advice. It needs a federal tax table: none ships yet, so pass one with `--tax-table PATH` or add one to `src/hfk/ext/retirement/tax_data/`.
 
 The budget plan lives only in an `HFK Plan` sheet that you add to your own workbook ([ADR-0015](docs/DECISIONS.md#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed)). hfk never writes the workbook, so `hfk init` writes starter rows to `out/hfk-plan-starter.csv` for you to paste in. A leftover `plan.yaml` is an error whose fix is `hfk plan to-sheet`.
 
@@ -57,6 +59,7 @@ Instance layout (the plan lives in the workbook's `HFK Plan` sheet, not in a fil
 my-finances/
   household.yaml
   declarations.yaml
+  settle_up.yaml
   shared-items/
   retirement.yaml
   data/
@@ -99,20 +102,13 @@ python -m pytest -q
 python scripts/privacy_scan.py --root .
 ```
 
-## Coming Soon
+## Still To Come
 
-What has landed by milestone, and what is still planned:
+These wait on the maintainer; see [ROADMAP](docs/ROADMAP.md):
 
-- Available now (M1): `hfk dev fixture --out PATH` generates a synthetic Tiller workbook for tests and demos.
-- Available now (M2): `hfk doctor` for config validation and loud data-quality checks, including plan-line and sharing-rule conflicts.
-- Available now (M3): `hfk scorecard --month YYYY-MM [--who SLUG]` for closed-month plan-vs-actual by bucket, using the selected person's share.
-- Available now (M4): `hfk categories --month YYYY-MM`, `hfk balances`, `hfk networth`, `hfk renewals`, `hfk rebaseline`, and `hfk plan check`.
-- Available now (M5): `hfk init <dir>` as an interview that writes the config from your workbook, the `HFK Plan` sheet as a plan source, `--format text|csv|html` on the reports, a readiness section in `hfk doctor`, `hfk serve` for a local read-only page, and `hfk open` with double-click launchers.
-- Available now (M5): a one-line install from a built wheel (`uv tool install`); the PyPI name works once the package is published (`M0-07`).
-- Available now (M5): [WORKING-WITH-AI](docs/WORKING-WITH-AI.md) and an `AGENTS.md` in every new instance.
-- Available now (M5): the `HFK Plan` sheet as the only plan source (M5-18).
-- Planned (M5): the non-programmer README rewrite, after the usability session.
-- Planned (M7): `hfk settle YYYY-MM` from the `settle_up` extension.
+- A usability session with a non-programmer on a clean machine (`M5-14`), then a non-programmer README rewrite (`M5-15`).
+- Publishing the package, so `uv tool install household-finance-kit` works (`M0-07`).
+- A federal tax table, cited to its IRS publication, for `hfk retirement`.
 
 ## Milestones
 
@@ -125,20 +121,20 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M2 | Done | Config loading, validation, and `hfk doctor` with orphan, stale-data, and closed-account checks |
 | M3 | Done | Ownership shares, bucket mapping, monthly scorecard, doctor conflict checks, and the `M3-07` parity check against a private instance |
 | M4 | Done | Category targets, balances, net worth, renewals, rebaseline, plan check |
-| M5 | In progress | Instance interview, plan-in-workbook tab, renderers, local front door and launcher, one-line install, non-programmer docs |
+| M5 | In progress | Instance interview, plan-in-workbook tab, renderers, local front door and launcher, one-line install, non-programmer docs; `M5-14` and `M5-15` wait on the maintainer |
 | M6 | Done | Extension API: entry-point discovery, contract, config files, doctor hooks |
 | M7 | Done | `settle_up` extension for exactly two people |
 | M8 | Done | `retirement` extension, R1 through R6 (federal tax figures still to be added) |
 | M9 | Done | Google Sheets: households download the workbook; no adapter or Google sign-in (ADR-0019) |
 | M10 | Done | Community extensions: FSA tracking, pension add-ons, home purchase modelling |
 
-## What It Will Do
+## What It Does
 
 Core `hfk` analysis reads the Tiller `Transactions`, `Categories`, and `Balance History` sheets by header name, normalizes them into a Ledger, validates household configuration, and produces budgeting views: monthly scorecards, category targets, balances and net worth, renewals with sinking-fund adequacy, rebaseline proposals, and doctor checks for stale or unmapped data.
 
-The first planned extension is `settle_up` (M7). It is limited to exactly two people and computes monthly paid-vs-owed totals, shared on-ledger transactions, off-ledger shared items, and a net transfer. It never settles an unfinished month and never writes back to Tiller.
+Two extensions are built in, and a household turns each on in `household.yaml`. The first is `settle_up`. It is limited to exactly two people and computes monthly paid-vs-owed totals, shared on-ledger transactions, off-ledger shared items, and a net transfer. It never settles an unfinished month and never writes back to Tiller.
 
-The second planned extension is `retirement` (M8). It models income-vs-need mechanics from declared people, income streams, expenses, inflation assumptions, and versioned tax data. It is arithmetic, not advice: no product recommendations, no optimization strategy, and no claim that a scenario is the right financial decision.
+The second is `retirement`. It models income-vs-need mechanics from declared people, income streams, expenses, inflation assumptions, and versioned tax data. It is arithmetic, not advice: no product recommendations, no optimization strategy, and no claim that a scenario is the right financial decision.
 
 ## Documentation Map
 
@@ -149,10 +145,10 @@ The second planned extension is `retirement` (M8). It models income-vs-need mech
 - [CHANGELOG](CHANGELOG.md): release history.
 - [LICENSE](LICENSE): MIT license.
 - [DESIGN-BRIEF](docs/DESIGN-BRIEF.md): approved source of truth.
-- [ARCHITECTURE](docs/ARCHITECTURE.md): planned system layers and boundaries.
+- [ARCHITECTURE](docs/ARCHITECTURE.md): system layers and boundaries.
 - [ROADMAP](docs/ROADMAP.md): milestones and acceptance criteria.
 - [DECISIONS](docs/DECISIONS.md): architecture decision records.
-- [EXTENSIONS](docs/EXTENSIONS.md): extension API and planned first extensions.
+- [EXTENSIONS](docs/EXTENSIONS.md): extension API and the built-in `settle_up` and `retirement` extensions.
 - [TILLER-SCHEMA](docs/TILLER-SCHEMA.md): Tiller sheets and headers.
 - [PRIVACY](docs/PRIVACY.md): public-repo privacy model.
 - [WORKING-WITH-AI](docs/WORKING-WITH-AI.md): using `hfk` with or without an AI assistant, and keeping your data private.

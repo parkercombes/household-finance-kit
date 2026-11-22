@@ -717,7 +717,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="store_true", help="Print version and exit.")
 
     subparsers = parser.add_subparsers(dest="command", metavar="command")
-    doctor_parser = subparsers.add_parser("doctor")
+    doctor_parser = subparsers.add_parser(
+        "doctor", help="Check config and data quality, then report readiness."
+    )
     doctor_parser.add_argument(
         "--home",
         default=argparse.SUPPRESS,
@@ -727,7 +729,9 @@ def _build_parser() -> argparse.ArgumentParser:
     doctor_parser.add_argument("--stale-days", type=int, default=14, help="Stale data threshold.")
     doctor_parser.set_defaults(func=_doctor)
 
-    scorecard_parser = subparsers.add_parser("scorecard")
+    scorecard_parser = subparsers.add_parser(
+        "scorecard", help="Show plan vs actual by bucket for a closed month."
+    )
     scorecard_parser.add_argument("--month", required=True, type=_parse_month, help="Closed month.")
     scorecard_parser.add_argument("--who", help="Household person slug.")
     scorecard_parser.add_argument("--today", type=_parse_date, help="Date for reproducible checks.")
@@ -744,7 +748,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     scorecard_parser.set_defaults(func=_scorecard)
 
-    categories_parser = subparsers.add_parser("categories")
+    categories_parser = subparsers.add_parser(
+        "categories", help="Show plan vs actual by category for a closed month."
+    )
     categories_parser.add_argument("--month", required=True, type=_parse_month, help="Month to report.")
     categories_parser.add_argument("--who", help="Household person slug.")
     categories_parser.add_argument("--today", type=_parse_date, help="Date for reproducible pacing.")
@@ -761,7 +767,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     categories_parser.set_defaults(func=_categories)
 
-    balances_parser = subparsers.add_parser("balances")
+    balances_parser = subparsers.add_parser(
+        "balances", help="Show each account's latest balance on a date."
+    )
     balances_parser.add_argument(
         "--as-of",
         type=_parse_date,
@@ -782,7 +790,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     balances_parser.set_defaults(func=_balances)
 
-    networth_parser = subparsers.add_parser("networth")
+    networth_parser = subparsers.add_parser("networth", help="Show the household's net worth on a date.")
     networth_parser.add_argument(
         "--as-of",
         type=_parse_date,
@@ -810,7 +818,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     networth_parser.set_defaults(func=_networth)
 
-    renewals_parser = subparsers.add_parser("renewals")
+    renewals_parser = subparsers.add_parser(
+        "renewals", help="Show annual bills and whether each sinking fund will cover it."
+    )
     renewals_parser.add_argument(
         "--month",
         type=_parse_month,
@@ -831,7 +841,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     renewals_parser.set_defaults(func=_renewals)
 
-    rebaseline_parser = subparsers.add_parser("rebaseline")
+    rebaseline_parser = subparsers.add_parser(
+        "rebaseline", help="Propose monthly category targets from recent closed months."
+    )
     rebaseline_parser.add_argument("--who", help="Household person slug.")
     rebaseline_parser.add_argument(
         "--months",
@@ -852,7 +864,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     rebaseline_parser.set_defaults(func=_rebaseline)
 
-    serve_parser = subparsers.add_parser("serve")
+    serve_parser = subparsers.add_parser(
+        "serve", help="Serve the reports as a local read-only web page."
+    )
     serve_parser.add_argument(
         "--host",
         default=DEFAULT_HOST,
@@ -872,7 +886,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     serve_parser.set_defaults(func=_serve)
 
-    open_parser = subparsers.add_parser("open")
+    open_parser = subparsers.add_parser(
+        "open", help="Start hfk serve on a free port and open it in your browser."
+    )
     open_parser.add_argument(
         "--no-browser",
         action="store_true",
@@ -887,16 +903,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     open_parser.set_defaults(func=_open)
 
-    plan_parser = subparsers.add_parser("plan")
+    plan_parser = subparsers.add_parser("plan", help="Check or convert the budget plan.")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", metavar="command")
-    plan_check_parser = plan_subparsers.add_parser("check")
+    plan_check_parser = plan_subparsers.add_parser(
+        "check", help="Validate the HFK Plan sheet."
+    )
     plan_check_parser.add_argument(
         "--home",
         default=argparse.SUPPRESS,
         help="Instance directory (default: HFK_HOME or current directory).",
     )
     plan_check_parser.set_defaults(func=_plan_check)
-    to_sheet_parser = plan_subparsers.add_parser("to-sheet")
+    to_sheet_parser = plan_subparsers.add_parser(
+        "to-sheet", help="Convert an old plan.yaml to HFK Plan sheet rows."
+    )
     to_sheet_parser.add_argument(
         "--out",
         help=f"CSV file to write (default: {STARTER_CSV} in the instance).",
@@ -911,7 +931,9 @@ def _build_parser() -> argparse.ArgumentParser:
         func=lambda _args, plan_parser=plan_parser: _subcommand_help(plan_parser)
     )
 
-    init_parser = subparsers.add_parser("init")
+    init_parser = subparsers.add_parser(
+        "init", help="Set up a private instance folder from your workbook."
+    )
     init_parser.add_argument("dir", help="New instance directory.")
     init_parser.add_argument(
         "--git",
@@ -935,9 +957,11 @@ def _build_parser() -> argparse.ArgumentParser:
         subparser = subparsers.add_parser(name)
         subparser.set_defaults(func=lambda _args, command=name: _stub(command))
 
-    dev_parser = subparsers.add_parser("dev")
+    dev_parser = subparsers.add_parser("dev", help="Developer tools.")
     dev_subparsers = dev_parser.add_subparsers(dest="dev_command", metavar="command")
-    fixture_parser = dev_subparsers.add_parser("fixture")
+    fixture_parser = dev_subparsers.add_parser(
+        "fixture", help="Write a synthetic Tiller workbook for tests and demos."
+    )
     fixture_parser.add_argument("--out", required=True, help="Output workbook path.")
     fixture_parser.add_argument("--months", type=int, default=6, help="Number of months.")
     fixture_parser.add_argument(
