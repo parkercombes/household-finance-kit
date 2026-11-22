@@ -248,14 +248,17 @@ def write_setup_folder(target: Path, *, python: Path | None = None) -> SetupRepo
     present = [name for name in _SETTINGS_FILES if (home / name).exists()]
     if len(present) == 2:
         return SetupReport(home=home, created=(), configured=True)
+    # settle_up.yaml is written with the settings, so alone it is a partial folder too.
+    present += ["settle_up.yaml"] if (home / "settle_up.yaml").exists() else []
     if present:
-        missing = next(name for name in _SETTINGS_FILES if name not in present)
+        missing = [name for name in _SETTINGS_FILES if name not in present]
+        have = " and ".join(present)
         raise InstanceError(
-            f"this folder is only partly set up: it has {present[0]} but no {missing}",
+            f"this folder is only partly set up: it has {have} but no {' or '.join(missing)}",
             file=home,
             fix=(
-                f"put back {missing} from a backup, or move {present[0]} out of the "
-                "folder and run hfk setup again to start over"
+                f"put back {' and '.join(missing)} from a backup, or move {have} out of "
+                "the folder and run hfk setup again to start over"
             ),
         )
     for name in _EMPTY_DIRECTORIES:

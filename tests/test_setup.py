@@ -257,3 +257,20 @@ def test_setup_is_a_core_command_name() -> None:
     from hfk.ext.contract import CORE_COMMANDS
 
     assert "setup" in CORE_COMMANDS
+
+
+def test_a_lone_settle_up_file_is_a_partly_set_up_folder(tmp_path: Path) -> None:
+    folder = tmp_path / "HFK"
+    folder.mkdir()
+    (folder / "settle_up.yaml").write_text("schema_version: 1\n", encoding="utf-8")
+
+    result = run_hfk("setup", "--no-open", home=tmp_path)
+
+    # hfk init would refuse this folder, so hfk setup must not call it ready for init.
+    assert result.returncode == 1
+    assert (
+        "setup: this folder is only partly set up: it has settle_up.yaml but no "
+        "household.yaml or declarations.yaml"
+    ) in result.stderr
+    assert "move settle_up.yaml out of the folder" in result.stderr
+    assert files(folder) == {"settle_up.yaml"}
