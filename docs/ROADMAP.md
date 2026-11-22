@@ -1,11 +1,11 @@
 # household-finance-kit Roadmap
 
-Last verified: 2026-11-13
+Last verified: 2026-11-22
 
 ## Start here when resuming
 
 Read this file from the top once, then work the milestone tables in ID order.
-No item is ready: every remaining item is blocked or waits on a blocked item. The blocked items name what the maintainer must do. Repository publication (`M0-07`) is blocked on the maintainer's decision.
+No item is ready: every remaining item is blocked or waits on a blocked item. The blocked items name what the maintainer must do. Publishing the package to PyPI (`M0-08`) is blocked on the maintainer's PyPI account and release decision.
 `tests/test_roadmap.py` checks that the line above names the first `todo` item whose dependencies are all `done`, or, when none is ready, says so; update it when you flip a status.
 Take the first `todo` item whose dependencies are all `done`; do not skip ahead because a later item looks easier.
 After finishing an item, update its status and acceptance result in this file before starting another item.
@@ -34,7 +34,8 @@ Goal: establish the public, private-data-safe project baseline that later worker
 | `M0-04` | Add the privacy scanner that blocks workbooks, CSV-like data, account-number patterns, email addresses outside the allowlist, and local denylist terms. | `done` | `M0-02` | Run `python scripts/privacy_scan.py --root .`; expected: exit 0 on the public repo. |
 | `M0-05` | Add the Tiller read-only guard hook so agents are warned before code writes workbook files. | `done` | `M0-02` | Run `python -m pytest -q`; expected: hook-related tests pass with the rest of the suite. |
 | `M0-06` | Add CI that runs tests and privacy checks for the public toolkit. | `done` | `M0-02`, `M0-04` | Run `python -m pytest -q && python scripts/privacy_scan.py --root .`; expected: both commands exit 0 locally before CI publication. |
-| `M0-07` | Publish the repository to GitHub. | `blocked` | `M0-01`, `M0-04`, `M0-06` | Waiting on the maintainer's destination decision. Once unblocked, run `git ls-remote --exit-code origin HEAD`; expected: exit 0 against the chosen public GitHub remote after publication. |
+| `M0-07` | Publish the repository to GitHub. | `done` | `M0-01`, `M0-04`, `M0-06` | Run `git ls-remote --exit-code origin HEAD`; expected: exit 0 against the chosen public GitHub remote after publication. Result 2026-11-22: passed. The repository is public at `github.com/parkercombes/household-finance-kit`; `git ls-remote --exit-code` against that URL printed `master`'s head and exited 0. This item covers the repository only; publishing the package to PyPI is `M0-08`. |
+| `M0-08` | Publish the package to PyPI as `household-finance-kit`, so the one-line install from `M5-12` works without a checkout. | `blocked` | `M0-07`, `M5-12` | On a machine with no checkout, run `uv tool install household-finance-kit && hfk --version`; expected: installs from PyPI and prints the published version, exit 0. Blocked 2026-11-22: needs the maintainer's PyPI account, the choice of how to upload (a PyPI API token or trusted publishing from GitHub Actions), and the decision to release a version. The name had no PyPI project on 2026-11-22. |
 
 ## M1 Reader + Fixture
 

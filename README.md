@@ -1,6 +1,6 @@
 # household-finance-kit
 
-Last verified: 2026-11-21
+Last verified: 2026-11-22
 
 ## What Is This
 
@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-Every milestone except M5 is done. In M5, everything is done except the usability session (`M5-14`) and the README rewrite that follows it (`M5-15`); both wait on the maintainer, as does publishing the package (`M0-07`). The `retirement` extension works, but no federal tax table ships yet, so `hfk retirement` needs one before it can run. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+Every milestone except M0 and M5 is done, and what is left in those two waits on the maintainer. M0 lacks only publishing the package to PyPI (`M0-08`). M5 lacks the usability session (`M5-14`) and the README rewrite that follows it (`M5-15`). The `retirement` extension works, but no federal tax table ships yet, so `hfk retirement` needs one before it can run. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -80,7 +80,7 @@ uv tool install household-finance-kit
 
 If you use pipx instead of uv, `pipx install household-finance-kit` does the same. Either command puts `hfk` on your `PATH` and keeps it apart from other Python programs.
 
-The package is not on PyPI yet: publication waits on `M0-07`. Until then, install from a checkout of this repository:
+The package is not on PyPI yet: publication waits on `M0-08`. Until then, install from a checkout of this repository:
 
 ```bash
 uv tool install .
@@ -107,7 +107,7 @@ python scripts/privacy_scan.py --root .
 These wait on the maintainer; see [ROADMAP](docs/ROADMAP.md):
 
 - A usability session with a non-programmer on a clean machine (`M5-14`), then a non-programmer README rewrite (`M5-15`).
-- Publishing the package, so `uv tool install household-finance-kit` works (`M0-07`).
+- Publishing the package to PyPI, so `uv tool install household-finance-kit` works (`M0-08`).
 - A federal tax table, cited to its IRS publication, for `hfk retirement`.
 
 ## Milestones
@@ -116,7 +116,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 
 | Milestone | Status | Summary |
 |---|---:|---|
-| M0 | Done | Foundations: design brief, docs, skeleton, CI, privacy scan, Tiller guard hook |
+| M0 | In progress | Foundations: design brief, docs, skeleton, CI, privacy scan, Tiller guard hook, public repository; PyPI publication (`M0-08`) waits on the maintainer |
 | M1 | Done | Reader, Ledger types, synthetic workbook fixture |
 | M2 | Done | Config loading, validation, and `hfk doctor` with orphan, stale-data, and closed-account checks |
 | M3 | Done | Ownership shares, bucket mapping, monthly scorecard, doctor conflict checks, and the `M3-07` parity check against a private instance |
