@@ -113,7 +113,7 @@ This is the draft path for a household that does not program; the usability sess
    hfk doctor --home my-finances
    ```
 
-   It prints a readiness section and ends with `doctor: 0 errors`. Each problem it finds names the file or sheet row to fix. With the sample workbook, expect one warning that the latest transaction is old: the sample's made-up transactions stop in September 2026.
+   It prints a readiness section and ends with a count of errors and warnings. With the sample workbook, the last line is `doctor: 0 errors, 1 warning`: the warning says the latest transaction is old, because the sample's made-up transactions stop in September 2026. Each problem it finds names the file or sheet row to fix.
 5. Open your reports: double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows) in the `my-finances` folder. Your browser opens the scorecard. Keep the window that opens with it while you read; close it to stop.
 
 ## Quickstart

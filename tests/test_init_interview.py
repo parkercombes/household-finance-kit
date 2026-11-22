@@ -865,3 +865,23 @@ def test_a_plan_category_in_no_sheet_is_a_doctor_error(tmp_path: Path) -> None:
     assert len(unknown) == 1
     assert 'lists category "Rnet", which is not in the Categories sheet' in unknown[0].message
     assert "exact name from the Categories sheet" in unknown[0].fix
+
+
+def test_overrides_answers_with_an_unreadable_plan_sheet_fail_loudly(tmp_path: Path) -> None:
+    home = tmp_path / "finances"
+    (home / "data").mkdir(parents=True)
+    # An HFK Plan sheet with its headers but no rows: a sheet-level problem.
+    build_fixture(home / "data" / "Tiller-Example.xlsx", plan_rows=[])
+    answers = write_answers(tmp_path, {**four_bucket_answers(), "overrides": {"Utilities": "plan"}})
+
+    result = run_hfk("init", str(home), "--answers", str(answers))
+
+    assert result.returncode == 1
+    assert "overrides are answered, but the HFK Plan sheet could not be read" in result.stderr
+    assert "The plan sheet has no plan lines" in result.stderr
+    assert not (home / "declarations.yaml").exists()
+
+    without = write_answers(tmp_path, four_bucket_answers())
+    result = run_hfk("init", str(home), "--answers", str(without))
+    assert result.returncode == 0, result.stderr
+    assert "plan: the HFK Plan sheet could not be read: The plan sheet has no plan lines" in result.stdout

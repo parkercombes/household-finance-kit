@@ -318,6 +318,14 @@ def _resolve_plan_exceptions(
             )
         return (), ()
     if plan_sheet.sheet is None:
+        if chosen:
+            raise InterviewError(
+                f"overrides are answered, but the {PLAN_SHEET} sheet could not be read: "
+                f"{plan_sheet.problem}",
+                question="overrides",
+                fix="fix the sheet and download the workbook again, or remove overrides from "
+                "the answers file",
+            )
         return (), (
             f"plan: the {PLAN_SHEET} sheet could not be read: {plan_sheet.problem}",
             "plan: fix the sheet, download the workbook again, then run hfk plan check",
