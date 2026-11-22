@@ -25,6 +25,15 @@ they appear in the sheet:
 The Grocer rows show a dated amount change: end the old row with `Effective Until`
 and add a new row, rather than editing the amount in place.
 
+## How the sample workbook and this example agree
+
+The Utilities and Cafe rows put Utilities and Dining outside their groups' buckets,
+and `declarations.yaml` declares the same two `overrides`. Run `hfk init` on the sample
+workbook and the interview finds both on the `HFK Plan` sheet, asks whether to keep
+them, and writes the same overrides (ADR-0021), so a fresh instance and this one both
+pass `hfk doctor`. The Fuel split and the sharing rule for City Utilities are judgement
+calls the interview does not ask about; this example adds them by hand.
+
 ## Running doctor by hand
 
 ```bash

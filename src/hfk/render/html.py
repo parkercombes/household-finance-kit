@@ -34,7 +34,7 @@ from hfk.engine.networth import NetWorthLine
 from hfk.engine.renewals import Renewal
 from hfk.engine.scorecard import BucketScore
 from hfk.render.csv import _cell
-from hfk.render.text import money
+from hfk.render.text import doctor_summary, money
 
 _STYLESHEET = """\
 body {
@@ -313,7 +313,7 @@ def render_doctor_html(report: DoctorReport) -> str:
     """Render ``hfk doctor`` output as a static HTML page with the CLI's wording."""
     errors = len(report.errors())
     warnings = len(report.warnings())
-    header = f"doctor: {errors} errors, {warnings} warnings"
+    header = doctor_summary(errors, warnings)
     body = ""
     if report.diagnostics:
         rows = "".join(

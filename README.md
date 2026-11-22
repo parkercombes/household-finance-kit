@@ -16,7 +16,7 @@ Every milestone except M0 and M5 is done, and what is left in those two waits on
 
 Working today:
 
-- `hfk init <dir>` interviews you from the newest workbook in `data/` and writes a private instance with `household.yaml` and `declarations.yaml`, plus the Tiller read-only hook (`--git` also sets up git and the privacy hook).
+- `hfk init <dir>` interviews you from the newest workbook in `data/` and writes a private instance with `household.yaml` and `declarations.yaml`, plus the Tiller read-only hook (`--git` also sets up git and the privacy hook). If the workbook already has an `HFK Plan` sheet, the interview reads it and asks about each category the sheet puts outside its group's bucket ([ADR-0021](docs/DECISIONS.md#adr-0021-hfk-init-reads-an-existing-hfk-plan-sheet)).
 - `hfk doctor` checks config and data quality and fails loudly on stale data, unmapped categories, conflicts and undeclared closed accounts. It ends with a readiness section that says, in plain words, whether the workbook, history, category mapping and plan are ready and what to fix.
 - `hfk scorecard`, `hfk categories`, `hfk balances`, `hfk networth`, `hfk renewals` and `hfk rebaseline` report from closed months, each with `--format text|csv|html`.
 - `hfk plan check` validates the budget plan.
@@ -26,7 +26,7 @@ Working today:
 - `hfk settle YYYY-MM` prints the two-person settle-up statement for a finished month: what each person paid and owes, and the one transfer that settles it. Turn it on with `extensions: [settle_up]` in `household.yaml` and declare who pays each shared account in `settle_up.yaml`. It also takes `--format text|csv|html|paste` and `--compare` against a hand-built statement.
 - `hfk retirement --claim-age alex=67 --claim-age sam=67` prints a calendar-year income-vs-need track in today's dollars from `retirement.yaml`, per person and for the household. Turn it on with `extensions: [retirement]`. It shows arithmetic, not advice. It uses the 2026 federal tax table that ships with hfk, cited to IRS publications, or one you name with `--tax-table PATH`. Federal tax leaves out the deductions for people 65 and older, so it is overstated for them (proposed ADR-0020).
 
-The budget plan lives only in an `HFK Plan` sheet that you add to your own workbook ([ADR-0015](docs/DECISIONS.md#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed)). hfk never writes the workbook, so `hfk init` writes starter rows to `out/hfk-plan-starter.csv` for you to paste in. A leftover `plan.yaml` is an error whose fix is `hfk plan to-sheet`.
+The budget plan lives only in an `HFK Plan` sheet that you add to your own workbook ([ADR-0015](docs/DECISIONS.md#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed)). hfk never writes the workbook. If your workbook has no `HFK Plan` sheet yet, `hfk init` writes starter rows to `out/hfk-plan-starter.csv` for you to paste in; if it has one, hfk uses it. A leftover `plan.yaml` is an error whose fix is `hfk plan to-sheet`.
 
 ## Who It Is For
 
@@ -72,7 +72,7 @@ The toolkit never reads its own directory for user data. A private instance is l
 
 ## Install
 
-Installing is one line in a terminal, and it is the only terminal step a non-programmer needs. Install [uv](https://docs.astral.sh/uv/) first, then run:
+Install [uv](https://docs.astral.sh/uv/) first. Once the package is on PyPI, installing hfk is one line in a terminal:
 
 ```bash
 uv tool install household-finance-kit
@@ -80,19 +80,48 @@ uv tool install household-finance-kit
 
 If you use pipx instead of uv, `pipx install household-finance-kit` does the same. Either command puts `hfk` on your `PATH` and keeps it apart from other Python programs.
 
-The package is not on PyPI yet: publication waits on `M0-08`. Until then, install from a checkout of this repository:
+The package is not on PyPI yet: publication waits on `M0-08`. Until then, install it straight from this repository. You do not need git or Python; uv downloads Python if it needs to:
 
 ```bash
-uv tool install .
+uv tool install https://github.com/parkercombes/household-finance-kit/archive/refs/heads/master.zip
 ```
 
-Check the install with `hfk --version`. After that, `hfk init <folder>` writes double-click launchers into your folder, so you do not need the terminal to read reports.
+Check the install with `hfk --version`. If the terminal says `hfk` is not found, run `uv tool update-shell`, then open a new terminal window.
+
+## Getting Started
+
+This is the draft path for a household that does not program; the usability session (`M5-14`) tests it. It uses a sample workbook with made-up data, so you can try hfk before using your own.
+
+1. Install hfk as shown in [Install](#install).
+2. Make a folder for your finances with a sample workbook in it:
+
+   ```bash
+   hfk dev fixture --out my-finances/data/Tiller-Example.xlsx
+   ```
+
+   To use your own data instead, put your Tiller workbook download in `my-finances/data/`.
+3. Answer the setup questions about the people, accounts and categories in the workbook:
+
+   ```bash
+   hfk init my-finances
+   ```
+
+   Pressing Enter takes the answer shown in brackets. The sample's `HFK Plan` sheet puts two categories, Utilities and Dining, in a different bucket from the rest of their group; the interview asks whether to keep each one there.
+4. Check that everything is ready:
+
+   ```bash
+   hfk doctor --home my-finances
+   ```
+
+   It prints a readiness section and ends with `doctor: 0 errors`. Each problem it finds names the file or sheet row to fix. With the sample workbook, expect one warning that the latest transaction is old: the sample's made-up transactions stop in September 2026.
+5. Open your reports: double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows) in the `my-finances` folder. Your browser opens the scorecard. Keep the window that opens with it while you read; close it to stop.
 
 ## Quickstart
-These commands set up a development checkout and run the checks. The clone command shown is for making a disposable local copy from an existing checkout before the public URL is assigned.
+
+These commands set up a development checkout and run the checks. They are for contributors; to use hfk, see [Getting Started](#getting-started).
 
 ```bash
-git clone . household-finance-kit
+git clone https://github.com/parkercombes/household-finance-kit
 cd household-finance-kit
 python3 -m venv .venv
 source .venv/bin/activate

@@ -23,13 +23,16 @@ from pathlib import Path
 
 from hfk.config._yaml import load_mapping
 from hfk.config.declarations import available_profiles
+from hfk.config.errors import PlanSheetError
 from hfk.config.household import SLUG
 from hfk.config.plan import Month, PlanLine
-from hfk.config.plan_sheet import plan_csv
+from hfk.config.plan_sheet import PLAN_SHEET, SheetBuckets, plan_csv, read_plan_sheet, sheet_buckets
 from hfk.ledger import BalanceRow, Category, Ledger
-from hfk.source import find_workbooks, read_tiller, workbook_sort_key
+from hfk.source import find_workbooks, read_optional_sheet, read_tiller, workbook_sort_key
 
-ANSWER_KEYS = ("people", "accounts", "profile", "groups", "history_start")
+ANSWER_KEYS = ("people", "accounts", "profile", "groups", "history_start", "overrides")
+# Answers for a category the HFK Plan sheet puts outside its group's bucket (ADR-0021).
+KEEP_PLAN, FOLLOW_GROUP = "plan", "group"
 WORKBOOK_GLOB = "Tiller*.xls*"
 # Tiller's Google Sheets download is named "<owner's name> Tiller Spreadsheet - <created
 # date>.xlsx", which Tiller*.xls* does not match (M3-07 parity run).
@@ -92,13 +95,52 @@ class Proposal:
 
 
 @dataclass(frozen=True)
+class PlanSheetFacts:
+    """What an ``HFK Plan`` sheet already in the workbook says (ADR-0021).
+
+    ``found`` is false when the workbook has no such sheet. ``problem`` is a
+    sheet-level problem (a missing column, no rows) that stops hfk from reading
+    any line; ``sheet`` is ``None`` then.
+    """
+
+    found: bool
+    problem: str | None = None
+    sheet: SheetBuckets | None = None
+
+
+@dataclass(frozen=True)
+class PlanOverride:
+    """A category the plan sheet puts outside its group's bucket, and the answer."""
+
+    category: str
+    group: str
+    group_bucket: str
+    plan_bucket: str
+    rows: tuple[int, ...]
+    keep: bool
+
+    def reason(self) -> str:
+        rows = ", ".join(str(row) for row in self.rows)
+        label = "row" if len(self.rows) == 1 else "rows"
+        return (
+            f"The {PLAN_SHEET} sheet puts {self.category} on {self.plan_bucket} ({label} {rows}); "
+            f"the rest of {self.group} is {self.group_bucket}."
+        )
+
+
+@dataclass(frozen=True)
 class InterviewResult:
-    """The resolved interview: proposal, rendered documents, and summary lines."""
+    """The resolved interview: proposal, rendered documents, and summary lines.
+
+    ``starter_plan`` is ``None`` when the workbook already has an ``HFK Plan``
+    sheet, so no starter rows are written over the household's own plan.
+    """
 
     proposal: Proposal
     documents: dict[str, str]
     summary: tuple[str, ...]
-    starter_plan: str = ""
+    starter_plan: str | None = ""
+    plan_sheet: PlanSheetFacts = PlanSheetFacts(found=False)
 
 
 # Tiller's Sheets feed writes "ACTIVE" in Balance History's Account Status column; the
@@ -172,17 +214,23 @@ def run_interview(
             "the workbook has no open accounts in Balance History",
             fix="restore the Balance History sheet or reopen the accounts in Tiller, then rerun",
         )
+    plan_sheet = read_plan_facts(workbook)
     people = _resolve_people(answers, ask)
     ownership = _resolve_accounts(proposal, people, answers, ask)
-    profile = _resolve_profile(answers, ask)
+    profile = _resolve_profile(answers, ask, plan_sheet)
     buckets = _profile_bucket_names(profile)
     groups = _resolve_groups(proposal, profile, buckets, answers, ask)
+    exceptions, plan_notes = _resolve_plan_exceptions(
+        proposal, plan_sheet, buckets, groups, answers, ask
+    )
     history_start, answered = _resolve_history_start(proposal, answers, ask)
     documents = {
         "household.yaml": _render_household(proposal, people, ownership, history_start, answered),
-        "declarations.yaml": _render_declarations(proposal, profile, buckets, groups),
+        "declarations.yaml": _render_declarations(proposal, profile, buckets, groups, exceptions),
     }
-    starter_plan = _render_plan(proposal, people, groups, history_start)
+    starter_plan = (
+        None if plan_sheet.found else _render_plan(proposal, people, groups, history_start)
+    )
     accounts_line = (
         f"accounts: {len(proposal.accounts)} open from Balance History, "
         f"{len(proposal.closed_accounts)} closed"
@@ -200,10 +248,167 @@ def run_interview(
         accounts_line,
         groups_line,
         history_line,
+        *plan_notes,
     )
     return InterviewResult(
-        proposal=proposal, documents=documents, summary=summary, starter_plan=starter_plan
+        proposal=proposal,
+        documents=documents,
+        summary=summary,
+        starter_plan=starter_plan,
+        plan_sheet=plan_sheet,
     )
+
+
+def read_plan_facts(workbook: Path) -> PlanSheetFacts:
+    """Read an existing ``HFK Plan`` sheet's buckets, read-only; absent is not an error."""
+
+    if read_optional_sheet(workbook, PLAN_SHEET) is None:
+        return PlanSheetFacts(found=False)
+    try:
+        sheet = read_plan_sheet(workbook)
+    except PlanSheetError as error:
+        return PlanSheetFacts(found=True, problem=str(error))
+    return PlanSheetFacts(found=True, sheet=sheet_buckets(sheet))
+
+
+def _exception_question(found: PlanOverride) -> Question:
+    rows = ", ".join(str(row) for row in found.rows)
+    return Question(
+        key=f"override:{found.category}",
+        text=(
+            f'The {PLAN_SHEET} sheet puts "{found.category}" on {found.plan_bucket} '
+            f"(row{'s' if len(found.rows) > 1 else ''} {rows}), but the \"{found.group}\" group "
+            f"is {found.group_bucket}. Keep {found.category} on {found.plan_bucket} "
+            f"({KEEP_PLAN}), or move it with its group ({FOLLOW_GROUP})?"
+        ),
+        default=KEEP_PLAN,
+    )
+
+
+def _resolve_plan_exceptions(
+    proposal: Proposal,
+    plan_sheet: PlanSheetFacts,
+    buckets: tuple[str, ...],
+    groups: dict[str, str],
+    answers: Mapping[str, object] | None,
+    ask: Callable[[Question], str] | None,
+) -> tuple[tuple[PlanOverride, ...], tuple[str, ...]]:
+    """Ask about each category the plan sheet puts outside its group's bucket (ADR-0021).
+
+    The sheet is the household's own statement of where each category belongs, so
+    the interview offers it as an override, with a reason naming the rows. Anything
+    it cannot turn into one override (a category on lines in two buckets, a bucket
+    the profile lacks) is reported, never guessed; ``hfk doctor`` names the rows.
+    """
+
+    raw = None if answers is None else answers.get("overrides")
+    if raw is not None and not isinstance(raw, dict):
+        raise InterviewError(
+            f"invalid overrides answer {raw!r}",
+            question="overrides",
+            fix=f"write overrides as a mapping of category to {KEEP_PLAN} or {FOLLOW_GROUP}",
+        )
+    chosen: dict[str, object] = dict(raw or {})
+    if not plan_sheet.found:
+        if chosen:
+            raise InterviewError(
+                f"overrides are answered, but the workbook has no {PLAN_SHEET} sheet",
+                question="overrides",
+                fix="remove overrides from the answers file; they answer the plan sheet's questions",
+            )
+        return (), ()
+    if plan_sheet.sheet is None:
+        return (), (
+            f"plan: the {PLAN_SHEET} sheet could not be read: {plan_sheet.problem}",
+            "plan: fix the sheet, download the workbook again, then run hfk plan check",
+        )
+
+    sheet = plan_sheet.sheet
+    group_of = {
+        category: facts.name for facts in proposal.expense_groups for category in facts.categories
+    }
+    found: list[PlanOverride] = []
+    notes: list[str] = []
+    for category, placed in sheet.category_rows().items():
+        group = group_of.get(category)
+        if group is None:
+            continue  # not an expense category in the Categories sheet; hfk doctor names it
+        group_bucket = groups[group]
+        on = sorted({bucket for _row, bucket in placed})
+        rows = tuple(row for row, _bucket in placed)
+        if group_bucket == NON_SPEND:
+            notes.append(
+                f'plan: "{category}" is planned (rows {", ".join(map(str, rows))}) but its group '
+                f'"{group}" is {NON_SPEND}; hfk doctor will name the rows'
+            )
+            continue
+        if len(on) > 1:
+            notes.append(
+                f'plan: "{category}" is on lines in {" and ".join(on)} (rows '
+                f'{", ".join(map(str, rows))}); declare a split in declarations.yaml '
+                "or move the lines to one bucket"
+            )
+            continue
+        plan_bucket = on[0]
+        if plan_bucket == group_bucket:
+            continue
+        if plan_bucket not in buckets:
+            notes.append(
+                f'plan: "{category}" is on bucket "{plan_bucket}" (rows '
+                f'{", ".join(map(str, rows))}), which the chosen profile does not have'
+            )
+            continue
+        found.append(PlanOverride(category, group, group_bucket, plan_bucket, rows, keep=True))
+
+    unknown = sorted(set(chosen) - {item.category for item in found})
+    if unknown:
+        raise InterviewError(
+            f"overrides answers name {', '.join(unknown)}, which the {PLAN_SHEET} sheet "
+            "does not put outside its group",
+            question="overrides",
+            fix=f"answer only: {', '.join(item.category for item in found) or 'nothing'}",
+        )
+    resolved: list[PlanOverride] = []
+    for item in found:
+        if answers is not None:
+            answer: object = chosen.get(item.category, KEEP_PLAN)
+        else:
+            answer = _prompt_answer(_exception_question(item), ask)
+        text = str(answer).strip().lower()
+        if text in (KEEP_PLAN, "yes", "y"):
+            keep = True
+        elif text in (FOLLOW_GROUP, "no", "n"):
+            keep = False
+        else:
+            raise InterviewError(
+                f"invalid answer {answer!r} for {item.category}",
+                question=f"override:{item.category}",
+                fix=f"answer {KEEP_PLAN} or {FOLLOW_GROUP}",
+            )
+        resolved.append(PlanOverride(**{**item.__dict__, "keep": keep}))
+
+    kept = [item for item in resolved if item.keep]
+    line_count = len(sheet.rows) + len(sheet.unreadable_rows)
+    summary = f"plan: the {PLAN_SHEET} sheet has {line_count} lines"
+    if kept:
+        summary += (
+            f"; {len(kept)} override{'s' if len(kept) > 1 else ''} recorded in declarations.yaml "
+            f"({', '.join(item.category for item in kept)})"
+        )
+    lines = [summary]
+    for item in resolved:
+        if not item.keep:
+            lines.append(
+                f'plan: "{item.category}" follows its group to {item.group_bucket}; move '
+                f'{PLAN_SHEET} rows {", ".join(map(str, item.rows))} to {item.group_bucket} '
+                "before hfk doctor passes"
+            )
+    if sheet.unreadable_rows:
+        lines.append(
+            f"plan: rows {', '.join(map(str, sheet.unreadable_rows))} could not be read; "
+            "hfk plan check names each problem"
+        )
+    return tuple(resolved), (*lines, *notes)
 
 
 def _account_facts(ledger: Ledger) -> dict[str, AccountFacts]:
@@ -285,9 +490,34 @@ def _account_default(name: str, people: tuple[tuple[str, str], ...]) -> str | No
     return None
 
 
-def _profile_question() -> Question:
+def _profile_question(default: str | None = None) -> Question:
     names = ", ".join(available_profiles())
-    return Question(key="profile", text=f"Which bucket profile should the budget use: {names}?")
+    return Question(
+        key="profile",
+        text=f"Which bucket profile should the budget use: {names}?",
+        default=default,
+    )
+
+
+def _profile_for_plan(plan_sheet: PlanSheetFacts) -> str | None:
+    """The profile whose buckets cover every bucket the plan sheet names, if one does.
+
+    A profile with exactly those buckets wins over a larger one; with no plan sheet,
+    or none that fits, there is no default and the household chooses.
+    """
+
+    if plan_sheet.sheet is None or not plan_sheet.sheet.buckets():
+        return None
+    wanted = set(plan_sheet.sheet.buckets())
+    fits = []
+    for name in available_profiles():
+        try:
+            have = set(_profile_bucket_names(name))
+        except InterviewError:
+            continue
+        if wanted <= have:
+            fits.append((len(have - wanted), name))
+    return min(fits)[1] if fits else None
 
 
 def _group_question(facts: GroupFacts, buckets: tuple[str, ...]) -> Question:
@@ -541,9 +771,13 @@ def _validate_account_entry(
 
 
 def _resolve_profile(
-    answers: Mapping[str, object] | None, ask: Callable[[Question], str] | None
+    answers: Mapping[str, object] | None,
+    ask: Callable[[Question], str] | None,
+    plan_sheet: PlanSheetFacts | None = None,
 ) -> str:
-    question = _profile_question()
+    question = _profile_question(
+        None if plan_sheet is None or answers is not None else _profile_for_plan(plan_sheet)
+    )
     if answers is not None:
         raw = _file_answer(question, answers, fix="add profile to the answers file")
     else:
@@ -801,6 +1035,7 @@ def _render_declarations(
     profile: str,
     buckets: tuple[str, ...],
     groups: dict[str, str],
+    exceptions: tuple[PlanOverride, ...] = (),
 ) -> str:
     lines = _header(proposal.workbook)
     lines.append("schema_version: 1")
@@ -826,8 +1061,18 @@ def _render_declarations(
     )
     non_spend = ", ".join(_quote(name) for name in (*proposal.non_spend_groups, *answered))
     lines.append(f"non_spend_groups: [{non_spend}]")
+    kept = [item for item in exceptions if item.keep]
     lines.append("# overrides: per-category bucket changes, each with a reason.")
-    lines.append("overrides: {}")
+    if kept:
+        lines.append(f"# These come from the {PLAN_SHEET} sheet, confirmed in the interview (ADR-0021).")
+        lines.append("overrides:")
+        for item in kept:
+            lines.append(
+                f"  {_quote(item.category)}: {{bucket: {_quote(item.plan_bucket)}, "
+                f"reason: {_quote(item.reason())}}}"
+            )
+    else:
+        lines.append("overrides: {}")
     lines.append("# splits: categories split across buckets by weights, each with a reason.")
     lines.append("splits: {}")
     lines.append("# sharing: per-transaction ownership overrides, each with a reason.")

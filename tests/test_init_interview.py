@@ -35,7 +35,7 @@ from hfk.config import (
     load_plan_sheet,
 )
 from hfk.instance import write_instance
-from hfk.interview import Question, propose_from_ledger, run_interview
+from hfk.interview import PlanSheetFacts, Question, propose_from_ledger, run_interview
 from hfk.ledger import BalanceRow, Category, Ledger, Transaction
 from hfk.source.fixture import build_fixture
 
@@ -497,6 +497,8 @@ def test_closed_accounts_keep_owner_and_are_declared_closed(
     assert proposal.closed_accounts[0].last_balance == date(2026, 3, 28)
 
     monkeypatch.setattr("hfk.interview.read_tiller", lambda _path: ledger)
+    # The ledger is in memory, so there is no workbook file and no HFK Plan sheet.
+    monkeypatch.setattr("hfk.interview.read_plan_facts", lambda _path: PlanSheetFacts(found=False))
     scripted = ScriptedAsk({**prompt_replies(), "account:Old Card": "sam"})
     result = run_interview(
         tmp_path / "Tiller-Example.xlsx", answers=None, ask=scripted
@@ -720,3 +722,146 @@ def test_older_workbook_chosen_gets_its_exact_name(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert load_household(home).tiller_glob == "Tiller Finance v4.xlsx"
+
+
+# ADR-0021: a workbook that already has an HFK Plan sheet.
+
+
+def make_home_with_plan(tmp_path: Path, name: str = "finances") -> Path:
+    """A household folder whose sample workbook already carries the example HFK Plan sheet."""
+
+    home = tmp_path / name
+    (home / "data").mkdir(parents=True)
+    build_fixture(home / "data" / "Tiller-Example.xlsx")
+    return home
+
+
+def test_sample_workbook_interview_matches_the_example_and_passes_doctor(tmp_path: Path) -> None:
+    home = make_home_with_plan(tmp_path)
+    answers = write_answers(tmp_path, four_bucket_answers())
+
+    result = run_hfk("init", str(home), "--answers", str(answers))
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "plan: the HFK Plan sheet has 9 lines; 2 overrides recorded in declarations.yaml "
+        "(Utilities, Dining)"
+    ) in result.stdout
+    assert "your workbook's HFK Plan sheet is your budget plan" in result.stdout
+    assert "paste or import" not in result.stdout
+    # The household's own plan is never paved over with starter rows.
+    assert not (home / "out" / "hfk-plan-starter.csv").exists()
+
+    written = load_yaml(home / "declarations.yaml")
+    example = load_yaml(INSTANCE_EXAMPLE / "declarations.yaml")
+    assert {name: entry["bucket"] for name, entry in written["overrides"].items()} == {
+        name: entry["bucket"] for name, entry in example["overrides"].items()
+    }
+    assert written["overrides"]["Utilities"]["reason"] == (
+        "The HFK Plan sheet puts Utilities on Variable Essential (rows 3, 4); "
+        "the rest of Housing is Fixed Essential."
+    )
+    assert written["groups"] == example["groups"]
+
+    doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
+    assert doctor.returncode == 0, doctor.stdout
+    assert "doctor: 0 errors" in doctor.stdout
+    check = run_hfk("plan", "check", "--home", str(home))
+    assert check.returncode == 0, check.stdout + check.stderr
+
+
+def test_a_category_answered_group_is_not_overridden_and_doctor_names_its_row(
+    tmp_path: Path,
+) -> None:
+    home = make_home_with_plan(tmp_path)
+    answers = write_answers(tmp_path, {**four_bucket_answers(), "overrides": {"Dining": "group"}})
+
+    result = run_hfk("init", str(home), "--answers", str(answers))
+
+    assert result.returncode == 0, result.stderr
+    assert "1 override recorded in declarations.yaml (Utilities)" in result.stdout
+    assert (
+        'plan: "Dining" follows its group to Variable Essential; move HFK Plan rows 10 to '
+        "Variable Essential before hfk doctor passes"
+    ) in result.stdout
+    assert list(load_yaml(home / "declarations.yaml")["overrides"]) == ["Utilities"]
+    doctor = run_hfk("doctor", "--home", str(home), "--today", "2026-10-01")
+    assert doctor.returncode == 1
+    assert 'lists category "Dining" on bucket "Variable Discretionary"' in doctor.stdout
+
+
+def test_overrides_answers_must_name_a_category_the_sheet_puts_elsewhere(tmp_path: Path) -> None:
+    home = make_home_with_plan(tmp_path)
+    answers = write_answers(tmp_path, {**four_bucket_answers(), "overrides": {"Rent": "plan"}})
+
+    result = run_hfk("init", str(home), "--answers", str(answers))
+
+    assert result.returncode == 1
+    assert "overrides answers name Rent" in result.stderr
+    assert "answer only: Utilities, Dining" in result.stderr
+    assert not (home / "declarations.yaml").exists()
+
+    plain = make_home(tmp_path, "no-plan")
+    answers = write_answers(tmp_path, {**four_bucket_answers(), "overrides": {"Dining": "plan"}})
+    result = run_hfk("init", str(plain), "--answers", str(answers))
+    assert result.returncode == 1
+    assert "the workbook has no HFK Plan sheet" in result.stderr
+
+
+def test_interactive_interview_offers_the_plan_sheet_as_defaults(tmp_path: Path) -> None:
+    home = make_home_with_plan(tmp_path)
+    replies = {
+        **prompt_replies(),
+        "profile": "",  # take the default the plan sheet suggests
+        "override:Utilities": "",
+        "override:Dining": "",
+    }
+    scripted = ScriptedAsk(replies)
+
+    result = run_interview(home / "data" / "Tiller-Example.xlsx", answers=None, ask=scripted)
+
+    asked = {question.key: question for question in scripted.asked}
+    assert asked["profile"].default == "four-bucket"
+    utilities = asked["override:Utilities"]
+    assert utilities.default == "plan"
+    assert utilities.text == (
+        'The HFK Plan sheet puts "Utilities" on Variable Essential (rows 3, 4), but the '
+        '"Housing" group is Fixed Essential. Keep Utilities on Variable Essential (plan), '
+        "or move it with its group (group)?"
+    )
+    assert result.starter_plan is None
+    overrides = yaml.safe_load(result.documents["declarations.yaml"])["overrides"]
+    assert {name: entry["bucket"] for name, entry in overrides.items()} == {
+        "Utilities": "Variable Essential",
+        "Dining": "Variable Discretionary",
+    }
+
+
+def test_a_workbook_without_a_plan_sheet_keeps_the_starter_flow(tmp_path: Path) -> None:
+    result = init_with_answers(tmp_path, four_bucket_answers())
+
+    assert result.returncode == 0, result.stderr
+    assert "plan:" not in result.stdout
+    assert "paste or import out/hfk-plan-starter.csv" in result.stdout
+    assert (tmp_path / "finances" / "out" / "hfk-plan-starter.csv").exists()
+    assert load_yaml(tmp_path / "finances" / "declarations.yaml")["overrides"] == {}
+
+
+def test_a_plan_category_in_no_sheet_is_a_doctor_error(tmp_path: Path) -> None:
+    from hfk.engine import run_doctor
+    from hfk.source.fixture import _plan_tab_rows
+
+    home = tmp_path / "instance"
+    home.mkdir()
+    for filename in ("household.yaml", "declarations.yaml", "settle_up.yaml"):
+        (home / filename).write_bytes((INSTANCE_EXAMPLE / filename).read_bytes())
+    rows = _plan_tab_rows()
+    rows[0] = {**rows[0], "Categories": "Rnet"}  # a typo for Rent
+    build_fixture(home / "data" / "Tiller-Example.xlsx", plan_rows=rows)
+
+    report = run_doctor(home, today=date(2026, 10, 1))
+
+    unknown = [d for d in report.errors() if d.code == "plan-category-unknown"]
+    assert len(unknown) == 1
+    assert 'lists category "Rnet", which is not in the Categories sheet' in unknown[0].message
+    assert "exact name from the Categories sheet" in unknown[0].fix

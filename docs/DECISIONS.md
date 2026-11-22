@@ -933,3 +933,77 @@ for people 65 and older.
 - Option 3 adds an approximation of modified adjusted gross income, which the report
   must name in its output.
 
+---
+
+## ADR-0021: `hfk init` Reads an Existing `HFK Plan` Sheet
+
+Status: accepted
+Date: 2026-11-22
+
+### Context
+
+A category's bucket is stated in two places: the group map, overrides and splits in
+`declarations.yaml` (ADR-0011), and the `Bucket` cell of each `HFK Plan` row that lists
+the category (ADR-0010, ADR-0015). `hfk doctor` requires them to agree.
+
+The `hfk init` interview read only the `Categories` sheet. It mapped every category by its
+group and always wrote `overrides: {}`, even when the workbook already had an `HFK Plan`
+sheet. On the synthetic sample workbook, whose plan puts Utilities on Variable Essential
+and Dining on Variable Discretionary, the interview therefore wrote a `declarations.yaml`
+that contradicted the workbook it had just read: `hfk doctor` reported 3 errors right
+after `hfk init`, with nothing done wrong. The example instance declares those two
+overrides, so the sample and the example agreed while an interviewed instance did not.
+`hfk init` also told the household to paste starter rows into a sheet it already had.
+Any real household with a plan sheet would hit the same wall.
+
+The maintainer asked for a fix that keeps the sample's plan sheet and the example's
+overrides, and lets a household that follows the steps reach a clean `hfk doctor`.
+
+Options:
+
+1. **Drop the example's overrides** and move the sample's plan rows to group buckets.
+   Rejected: it removes the only demonstration of overrides, and a real workbook with a
+   plan sheet still fails.
+2. **Ship the sample without a plan sheet.** Rejected: it hides the problem instead of
+   fixing it.
+3. **Downgrade the doctor check to a warning.** Rejected: a wrong row would score
+   categories against the wrong bucket, a plausible but wrong number (ADR-0002).
+4. **The interview reads the plan sheet and asks.** For each category the sheet puts
+   outside its group's bucket, the interview asks whether to keep the sheet's bucket, and
+   writes each kept one as an override with a reason naming the sheet rows.
+
+### Decision
+
+Option 4.
+
+- The interview reads the `HFK Plan` sheet read-only, through the same loader and cell
+  rules as every plan command. A row it cannot read is skipped and counted; `hfk plan
+  check` names the problem.
+- The sheet is the household's own written statement of where each category belongs, so
+  turning it into an override is a declaration, not an inference (ADR-0011 forbids
+  guessing a map from matching names, not reading what the household wrote). Every
+  override is confirmed: the question defaults to keeping the sheet's bucket, and an
+  answers file may say `plan` or `group` per category under `overrides`. A category an
+  answers file leaves out keeps the sheet's bucket, and `hfk init` prints every override
+  it records.
+- What cannot become one override is reported, never guessed: a category on lines in two
+  buckets (a split needs weights the sheet does not hold), a bucket the chosen profile
+  lacks, or a planned category in a non-spend group. `hfk doctor` then names the rows.
+- The bucket-profile question defaults to the smallest profile that has every bucket the
+  sheet names. Group questions get no default from the sheet, because a majority of rows
+  is not a declaration.
+- When the sheet exists, `hfk init` writes no `out/hfk-plan-starter.csv` and says the sheet
+  is the plan. Without one, the starter flow is unchanged.
+- Found while designing this: a plan row naming a category that is in no sheet, often a
+  typo, was flagged nowhere and showed a target against no spending. `hfk doctor` now
+  reports it as `plan-category-unknown`.
+
+### Consequences
+
+- The sample workbook, the example instance and an instance the interview builds from the
+  sample now agree, and `tests/test_init_interview.py` checks that the interview
+  reproduces the example's overrides and passes `hfk doctor` and `hfk plan check`.
+- The example's Fuel split and sharing rule remain judgement calls the interview does not
+  ask about; neither causes a doctor error.
+- Answers files gain one optional key, `overrides`.
+
