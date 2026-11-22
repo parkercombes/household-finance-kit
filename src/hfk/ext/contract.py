@@ -60,6 +60,7 @@ CORE_COMMANDS = frozenset(
         "renewals",
         "scorecard",
         "serve",
+        "setup",
     }
 )
 REQUIRES_KEYS = ("ledger_fields", "extensions")

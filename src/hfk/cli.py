@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import os
 import signal
+import subprocess
 import sys
 import webbrowser
 from collections.abc import Sequence
@@ -59,7 +60,16 @@ from hfk.ext import (
     load_extensions,
 )
 from hfk.ext.doctor import extension_doctor_hooks
-from hfk.instance import InstanceError, InstanceReport, write_instance
+from hfk.instance import (
+    LAUNCHER_BAT,
+    LAUNCHER_COMMAND,
+    InstanceError,
+    InstanceReport,
+    default_setup_folder,
+    start_menu_command,
+    write_instance,
+    write_setup_folder,
+)
 from hfk.interview import (
     InterviewError,
     Question,
@@ -690,6 +700,60 @@ def _init_interview(
     return 0
 
 
+def _setup(args: argparse.Namespace) -> int:
+    """``hfk setup``: make the household's folder and open it (M5-20, ADR-0022)."""
+
+    home = Path(args.dir).expanduser() if args.dir else default_setup_folder()
+    try:
+        report = write_setup_folder(home)
+    except InstanceError as error:
+        print(f"setup: {error.problem}", file=sys.stderr)
+        print(f"fix: {error.fix}", file=sys.stderr)
+        return 1
+    home = report.home.absolute()
+    if report.configured:
+        print(f"{home} is already set up; nothing was changed")
+    elif report.created:
+        print(f"your hfk folder is {home}")
+        for path in report.created:
+            print(f"created {path.relative_to(home)}")
+    else:
+        print(f"{home} has everything hfk setup makes; nothing was changed")
+    _add_start_menu_entry(home)
+    if report.configured:
+        if args.no_open:
+            print(f"to read reports: double-click {LAUNCHER_COMMAND} (Mac, Linux) or "
+                  f"{LAUNCHER_BAT} (Windows) in {home}")
+            return 0
+        return _open(argparse.Namespace(home=str(home), today=None, no_browser=False))
+    print(f"next: download your Tiller workbook into {home / 'data'}")
+    print("  Google Sheets: File > Download > Microsoft Excel (.xlsx)")
+    print("  Excel: copy the workbook file")
+    print(f"then: run hfk init {home}")
+    if not args.no_open:
+        _show_folder(home / "data")
+    return 0
+
+
+def _add_start_menu_entry(home: Path) -> None:
+    appdata = os.environ.get("APPDATA")
+    if os.name != "nt" or not appdata:
+        return
+    result = subprocess.run(
+        start_menu_command(home, appdata), capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        print("warning: could not add Open HFK to the Start menu; "
+              f"double-click {LAUNCHER_BAT} in {home} instead", file=sys.stderr)
+
+
+def _show_folder(folder: Path) -> None:
+    """Open ``folder`` in Finder on macOS, so the household can drop the workbook in."""
+
+    if sys.platform == "darwin":
+        subprocess.run(["open", str(folder)], check=False)
+
+
 def _init(args: argparse.Namespace) -> int:
     home = Path(args.dir)
     candidates = _init_workbooks(home)
@@ -937,6 +1001,19 @@ def _build_parser() -> argparse.ArgumentParser:
     plan_parser.set_defaults(
         func=lambda _args, plan_parser=plan_parser: _subcommand_help(plan_parser)
     )
+
+    setup_parser = subparsers.add_parser(
+        "setup", help="Make your HFK folder, ready for your Tiller workbook, and open it."
+    )
+    setup_parser.add_argument(
+        "dir",
+        nargs="?",
+        help="Folder to set up (default: HFK in your home folder).",
+    )
+    setup_parser.add_argument(
+        "--no-open", action="store_true", help="Make the folder but do not open anything."
+    )
+    setup_parser.set_defaults(func=_setup)
 
     init_parser = subparsers.add_parser(
         "init", help="Set up a private instance folder from your workbook."

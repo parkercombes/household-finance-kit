@@ -16,6 +16,7 @@ Every milestone except M0 and M5 is done, and what is left in those two waits on
 
 Working today:
 
+- `hfk setup [DIR]` makes your hfk folder, `HFK` in your home folder by default, with an empty `data` folder for your workbook and the double-click launchers, but no settings yet; running it again changes nothing. On Windows it adds Open HFK to the Start menu; on a Mac it opens the `data` folder in Finder. Then download your workbook into `data` and run `hfk init` on the folder (ADR-0022; the setup page that will replace that step is planned, `M5-21`).
 - `hfk init <dir>` interviews you from the newest workbook in `data/` and writes a private instance with `household.yaml` and `declarations.yaml`, plus the Tiller read-only hook (`--git` also sets up git and the privacy hook). If the workbook already has an `HFK Plan` sheet, the interview reads it and asks about each category the sheet puts outside its group's bucket ([ADR-0021](docs/DECISIONS.md#adr-0021-hfk-init-reads-an-existing-hfk-plan-sheet)).
 - `hfk doctor` checks config and data quality and fails loudly on stale data, unmapped categories, conflicts and undeclared closed accounts. It ends with a readiness section that says, in plain words, whether the workbook, history, category mapping and plan are ready and what to fix.
 - `hfk scorecard`, `hfk categories`, `hfk balances`, `hfk networth`, `hfk renewals` and `hfk rebaseline` report from closed months, each with `--format text|csv|html`.
