@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- Roadmap: `M0-07` (publish the repository) is done; its acceptance check passed against the public GitHub repository. New item `M0-08`, blocked on the maintainer, covers publishing the package to PyPI, which the README had tied to `M0-07`.
 - `hfk --help` now lists every core command with a one-line description. Before, the core commands had no help text, so the list showed only `settle` and `retirement`; the commands themselves always worked. A test now fails if any command or subcommand lacks help text.
 - Docs: README, AGENTS, CONTRIBUTING, ARCHITECTURE, EXTENSIONS, TILLER-SCHEMA and one line of the design brief no longer call M5 to M8 features planned. The README lists `hfk settle` and `hfk retirement` with how to turn each on, replaces "Coming Soon" with the items still waiting on the maintainer, and shows `settle_up.yaml` in the instance layout. EXTENSIONS records that `report_sections()` is checked but not yet placed in core reports.
 - Retirement tax tables (M8-04): a table must give Social Security thresholds for every filing status it lists, or it is a `ConfigError` naming `social_security.<status>`, and the report checks the household's filing status against the table before working any year. Before, a missing threshold crashed `hfk retirement` with a bare `KeyError`. Found by the independent review of 2026-11-16.
