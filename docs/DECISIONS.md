@@ -1007,3 +1007,160 @@ Option 4.
   ask about; neither causes a doctor error.
 - Answers files gain one optional key, `overrides`.
 
+---
+
+## ADR-0022: A Double-Click Path for Households That Do Not Program
+
+Status: accepted
+Date: 2026-11-22
+
+Amends the "read-only, GET only, one write path `out/`" rule for `hfk serve` in the
+design brief (sections 4 and 7) and roadmap item `M5-10`.
+
+### Context
+
+Preparing the usability session (`M5-14`) showed that the path for a new household asks
+it to think like a developer:
+
+- The README buries "how to start" below status tables and developer setup.
+- Every step is a terminal command, and nothing explains how to open a terminal.
+- The setup interview runs in a terminal, takes typed answers such as `alex=Alex`, and
+  shows defaults as text in brackets.
+- The household must type a folder name for every command; nothing creates one for it.
+- The README never says how a Google Sheets household gets its workbook, although most
+  Tiller users are on Google Sheets (ADR-0019).
+
+The maintainer asked for a path a non-programmer can follow by double-clicking, with the
+setup questions on a web page.
+
+hfk is Python and must run somewhere. The options:
+
+1. **Keep the command line and improve the words.** Rejected: it keeps the terminal,
+   which is the main obstacle.
+2. **A browser-only app.** hfk's Python would run in the browser through Pyodide, with
+   no install. Rejected: settings would live in browser storage, which can be cleared and
+   does not move between computers; folder access works only in some browsers; and it
+   breaks the private-instance folder that the household owns, backs up, and can let an
+   AI assistant edit (WORKING-WITH-AI).
+3. **A local setup page, installed by double-clicking.** Chosen.
+
+An independent pre-mortem of the first draft (2026-11-22) found six problems that had to
+change before building: a race between two setup submissions, a web request able to write
+launchers and assistant hooks, pre-filled answers the project forbids, a bare `hfk` call
+that cannot work in the window that just installed it, no statement of what loopback does
+not protect, and a default folder inside cloud-synced folders. The decision below
+includes the fixes.
+
+### Decision
+
+**The folder.** `hfk setup [DIR]` makes the household's folder. By default it is `HFK` in
+the user's home folder (`/Users/<name>/HFK`, `C:\Users\<name>\HFK`), not Documents or
+Desktop: on many computers those are synced to iCloud or OneDrive, which would upload
+financial files the household never chose to upload, and on macOS writing there asks for
+a permission the household may refuse. `hfk setup` creates the folder, an empty `data`
+folder, the `Open HFK` launchers and the assistant files (`AGENTS.md`, `CLAUDE.md`, the
+read-only guard), but no `household.yaml` or `declarations.yaml`, so the folder opens on
+the setup page. It never overwrites a file. Run on a folder that is already set up, it
+changes nothing and opens the reports; a partly made folder is reported in plain words.
+On Windows it adds an `Open HFK` entry to the Start menu; on macOS it opens the folder in
+Finder so the household can drag `Open HFK` to the Dock. Then it runs `hfk open`.
+
+**Installers.** A ZIP file attached to each GitHub release holds `Install HFK.command`
+(macOS), `Install HFK.bat` (Windows) and `Install HFK.sh` (Linux). Double-clicking one
+runs it in a terminal window:
+
+1. It downloads uv's official installer for one pinned uv version, checks it against a
+   SHA-256 digest shipped in the ZIP, and runs it, unless uv is already installed.
+2. It installs the hfk version the installer was published with: from PyPI once `M0-08`
+   is done, until then from that release's source archive checked against a shipped
+   digest; never from a moving branch. A failed check stops with a plain message and
+   installs nothing.
+3. It runs `hfk setup` by the absolute path uv reports, because the window that just
+   installed hfk cannot find it by name. The launchers also call hfk by absolute path.
+
+The installers hold no other logic, so the behaviour stays in tested Python. They are not
+code-signed yet, so each system warns the first time it runs one. The exact dialogs change
+between macOS and Windows releases, so they are checked on current releases and shown in
+the quickstart before the usability session, and described in words that survive an
+update. Signing is a later decision for the maintainer (`M5-24`), because it costs money.
+
+**The setup page.** When `hfk open` serves a folder with no `household.yaml`, it shows the
+setup page instead of the reports:
+
+1. **The workbook.** It explains how to get the workbook (Google Sheets: File > Download
+   > Microsoft Excel (.xlsx); Excel: use the file as it is) and offers a Choose file button
+   that copies the downloaded file into `data`. A copy of a download is not the household's
+   workbook, which hfk never writes (ADR-0001).
+2. **The questions,** as a form: names typed once (the short name hfk uses inside its
+   files is made from each name and shown); an owner or a split for each account; the
+   profile; a bucket for each group; the `HFK Plan` sheet's exceptions as check boxes
+   (ADR-0021); and the history start as a date. Only answers hfk already offers as
+   defaults are filled in, each saying where it came from: an account owner whose name
+   appears in the account name, the profile that fits the plan sheet, the earliest
+   transaction for the history start, and keeping each plan-sheet exception. Group
+   buckets start empty, because the group map is declared, never inferred (ADR-0011,
+   ADR-0021), and a form with any group unanswered is refused.
+3. **The same checks as the terminal.** Submitting runs the interview code `hfk init`
+   uses, with the form's answers, so the checks and the settings files are identical.
+4. **Then readiness and reports.** It shows `hfk doctor`'s readiness section in plain
+   words, then the reports.
+
+**What a web request may write.** Exactly two things:
+
+- **Settings,** once: `household.yaml`, `declarations.yaml` and `settle_up.yaml`, only
+  while `household.yaml` does not exist. Never a launcher, a script, an assistant file or
+  a hook; those come only from `hfk setup`, run on the computer itself.
+- **A workbook copy,** at any time: one `.xlsx` file into `data`, replacing a file of the
+  same name there and nothing else. This is also the monthly refresh: the doctor and
+  report pages offer the same Choose file button, and every page names the workbook it
+  read when `data` holds more than one.
+
+The settings write is single-flight: the server holds one lock for it, creates
+`household.yaml` exclusively before writing anything else, refuses every later attempt,
+and writes each file to a temporary name and renames it, so two submissions can never mix
+and a failure never leaves half a folder.
+
+**Request rules.**
+
+- The server binds `127.0.0.1` only and refuses a foreign `Host` header, as today.
+- `hfk open` makes a random token for each run and opens the browser on an address that
+  carries it; every page and action requires it, so the address bar is the key. The
+  launcher is how the household gets back after closing the window; an old address stops
+  working when hfk stops, and the setup page warns before a tab with unsent answers
+  closes.
+- Writes use POST, accepted only with the token, an `Origin` header exactly matching this
+  server's address (a missing `Origin` is refused), and a body under a fixed size limit;
+  the token is compared in constant time.
+- Every other request keeps today's rules.
+
+**What loopback does not protect.** Any program running as any user on the same computer
+can connect to `127.0.0.1`. The token stops other web pages and other people's browsers,
+but not a program that can read the household's screen or memory, and nothing stops
+another logged-in account from finding the port while hfk runs. The privacy docs say this
+plainly: on a shared computer, close hfk when you finish reading.
+
+**JavaScript.** Pages may include small inline scripts for convenience, such as noticing
+the workbook arriving or warning before closing a tab with unsent answers. Every page
+works without them; scripts come only from the page itself (a per-response CSP nonce),
+never from another site, and make no network request except to the same server.
+
+**The command line stays.** Every command keeps working for developers and scripts, and
+`hfk init` still runs the interview in a terminal.
+
+**The README.** A short quickstart for new users sits right after the introduction:
+download the ZIP, double-click the installer, approve the first-run warning, download the
+workbook from Google Sheets or Excel, choose it on the page, answer the questions, and,
+next month, choose the new download the same way. Status and developer sections move
+below it.
+
+### Consequences
+
+- Roadmap items `M5-20` to `M5-24` carry the work, and the usability session (`M5-14`)
+  waits for them, so it tests the path households will use.
+- The design brief's description of `hfk serve` changes: reports stay read-only, setup may
+  write settings once, and any page may copy in a workbook download.
+- Launchers and installers are tested with folder paths that contain spaces and non-ASCII
+  characters.
+- The installers' first-run warnings remain until they are signed (`M5-24`).
+- The household trusts uv's publisher as well as this project; the pinned version and
+  digest limit what can change without a new hfk release.

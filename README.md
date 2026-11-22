@@ -138,6 +138,7 @@ These wait on the maintainer; see [ROADMAP](docs/ROADMAP.md):
 - A usability session with a non-programmer on a clean machine (`M5-14`), then a non-programmer README rewrite (`M5-15`).
 - Publishing the package to PyPI, so `uv tool install household-finance-kit` works (`M0-08`).
 - A decision on modelling the deductions for people 65 and older in `hfk retirement` (proposed ADR-0020).
+- Planned (`M5-20` to `M5-23`, ADR-0022): a double-click installer, a default `HFK` folder, and a setup page in the browser, so a household never needs the terminal. Code-signing the installers is `M5-24`, which waits on the maintainer.
 
 ## Milestones
 
