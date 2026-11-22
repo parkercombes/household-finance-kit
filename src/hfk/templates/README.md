@@ -4,6 +4,14 @@ This folder is your private hfk instance. hfk reads your Tiller workbook and
 the three YAML files here, and writes reports to `out/`. It never changes your
 workbook.
 
+## If this folder has no `household.yaml` yet
+
+`hfk setup` made this folder without your settings. Download your Tiller
+workbook into `data/` (Google Sheets: File > Download > Microsoft Excel
+(.xlsx); Excel: copy the workbook file), then answer the setup questions:
+
+    hfk init <this folder>
+
 ## What each file and folder is
 
 - `household.yaml` — who is in the household, and which accounts belong to

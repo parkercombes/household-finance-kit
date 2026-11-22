@@ -190,7 +190,7 @@ The package names below are the approved architecture from the design brief. Sta
 | `src/hfk/render` | Presentation | Done (M5): text, CSV, and HTML renderers |
 | `src/hfk/serve.py` | Presentation | Done (M5-10): `hfk serve`, the loopback-only, GET-only web front door over the HTML renderers |
 | `src/hfk/cli.py` | Presentation | Done (M0 to M7): every core subcommand, and the subcommands installed extensions add |
-| `src/hfk/interview.py`, `src/hfk/instance.py` | Presentation | Done (M5): the `hfk init` interview and the instance files and launchers it writes |
+| `src/hfk/interview.py`, `src/hfk/instance.py` | Presentation | Done (M5): the `hfk init` interview, `hfk setup` and the default `HFK` folder (M5-20), and the instance files and launchers they write |
 
 ## Implemented vs planned
 

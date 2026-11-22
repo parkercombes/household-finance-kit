@@ -157,56 +157,101 @@ def test_init_writes_both_launchers(tmp_path):
     assert raw.count(b"\r\n") == raw.count(b"\n")
 
 
-def fake_hfk(tmp_path: Path) -> tuple[Path, Path]:
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    record = tmp_path / "argv.txt"
-    script = bin_dir / "hfk"
-    script.write_text(
+def recorder(path: Path, record: Path) -> Path:
+    """A stand-in program that writes its arguments to ``record`` and exits 0."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
         f"#!{sys.executable}\nimport sys\n"
         f"open({str(record)!r}, 'w').write('\\n'.join(sys.argv[1:]))\n",
         encoding="utf-8",
     )
-    script.chmod(0o755)
-    return bin_dir, record
+    path.chmod(0o755)
+    return path
 
 
-def test_command_launcher_runs_hfk_open_on_its_own_folder(tmp_path):
-    home = init_instance(tmp_path)
-    bin_dir, record = fake_hfk(tmp_path)
+def launcher_home(tmp_path: Path, python: Path, name: str = "My Finances") -> Path:
+    from hfk.instance import write_instance
+
+    home = tmp_path / name
+    write_instance(home, python=python)
+    return home
+
+
+def run_command_launcher(folder: Path, cwd: Path, path: str) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
-    env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["PATH"] = path
+    return subprocess.run(
+        [str(folder / "Open HFK.command")],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+
+def test_command_launcher_runs_hfk_open_by_absolute_path_on_its_own_folder(tmp_path):
+    # ADR-0022: the launcher calls the Python that wrote it, by absolute path, so a
+    # window opened by double-clicking needs no hfk on its PATH.
+    record = tmp_path / "argv.txt"
+    python = recorder(tmp_path / "py dir" / "python", record)
+    home = launcher_home(tmp_path, python)
 
     # Run from somewhere else, then again after moving the folder: the launcher
     # always opens the folder it sits in.
     for move_to in (None, tmp_path / "Moved Finances"):
         folder = home if move_to is None else home.rename(move_to)
         record.unlink(missing_ok=True)
-        result = subprocess.run(
-            [str(folder / "Open HFK.command")],
-            cwd=tmp_path,
-            env=env,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=60,
-        )
+        result = run_command_launcher(folder, tmp_path, "/usr/bin:/bin")
         assert result.returncode == 0, result.stderr
         assert record.read_text(encoding="utf-8").split("\n") == [
+            "-m",
+            "hfk",
             "open",
             "--home",
             str(folder.resolve()),
         ]
 
 
+def test_command_launcher_falls_back_to_hfk_on_path(tmp_path):
+    record = tmp_path / "argv.txt"
+    home = launcher_home(tmp_path, tmp_path / "gone" / "python")
+    bin_dir = tmp_path / "bin"
+    recorder(bin_dir / "hfk", record)
+
+    result = run_command_launcher(home, tmp_path, f"{bin_dir}{os.pathsep}/usr/bin:/bin")
+
+    assert result.returncode == 0, result.stderr
+    assert record.read_text(encoding="utf-8").split("\n") == [
+        "open",
+        "--home",
+        str(home.resolve()),
+    ]
+
+
 def test_bat_launcher_runs_only_hfk_open_on_its_own_folder(tmp_path):
-    home = init_instance(tmp_path)
+    python = tmp_path / "Jos\u00e9 Garc\u00eda" / "100% tools" / "python.exe"
+    home = launcher_home(tmp_path, python)
     lines = (home / "Open HFK.bat").read_bytes().decode("utf-8").split("\r\n")
     commands = [
-        line
+        line.strip()
         for line in lines
         if line and not line.lower().startswith("rem ") and line.lower() != "@echo off"
     ]
     # %~dp0 is the folder holding the .bat file; the trailing "." stops its
-    # trailing backslash from escaping the closing quote.
-    assert commands == ['hfk open --home "%~dp0."', "if errorlevel 1 pause"]
+    # trailing backslash from escaping the closing quote. A % in the Python's path
+    # is doubled so cmd.exe does not read it as a variable, and chcp 65001 makes
+    # cmd.exe read the accented folder name as UTF-8.
+    escaped = str(python).replace("%", "%%")
+    assert commands == [
+        "chcp 65001 >nul",
+        f'set "HFK_PYTHON={escaped}"',
+        'if exist "%HFK_PYTHON%" (',
+        '"%HFK_PYTHON%" -m hfk open --home "%~dp0."',
+        ") else (",
+        'hfk open --home "%~dp0."',
+        ")",
+        "if errorlevel 1 pause",
+    ]
