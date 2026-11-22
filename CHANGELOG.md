@@ -26,6 +26,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- Retirement: the first federal tax table, `src/hfk/ext/retirement/tax_data/us-federal-2026.yaml`. Its brackets and standard deductions come from IRS Rev. Proc. 2025-32, sections 3.01 and 3.14(1); its Social Security base amounts come from IRS Publication 915 (2026), Worksheet 1. All were retrieved from irs.gov on 2026-11-22, and the maintainer checks them before a release. `hfk retirement` now runs without `--tax-table`. Its out-of-scope note says federal tax leaves out the deductions for people 65 and older; proposed ADR-0020 sets out the options.
 - M9-01 / ADR-0019 (2026-11-16): no Google Sheets adapter. Google Sheets households download the workbook into `data/`, and hfk never signs in to Google or stores Google credentials. `M9-02` to `M9-04` are not planned; ADR-0019 supersedes the "Google Sheets later" part of ADR-0007.
 - M7-07: `hfk settle YYYY-MM --format paste` prints a tab-separated block to paste into a household's own settle-up tab. Tests show settle-up opens the workbook read-only, never saves it, and leaves it byte-identical.
 - M7-06: `hfk settle YYYY-MM --compare FILE` checks the statement against a hand-built one to the cent and names every difference, for households moving from a hand-built settle-up tab.

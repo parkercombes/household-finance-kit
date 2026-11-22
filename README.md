@@ -12,7 +12,7 @@ Background: I've used Tiller (in Excel and now transitioned to using Google Shee
 
 ## Current Status
 
-Every milestone except M0 and M5 is done, and what is left in those two waits on the maintainer. M0 lacks only publishing the package to PyPI (`M0-08`). M5 lacks the usability session (`M5-14`) and the README rewrite that follows it (`M5-15`). The `retirement` extension works, but no federal tax table ships yet, so `hfk retirement` needs one before it can run. The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
+Every milestone except M0 and M5 is done, and what is left in those two waits on the maintainer. M0 lacks only publishing the package to PyPI (`M0-08`). M5 lacks the usability session (`M5-14`) and the README rewrite that follows it (`M5-15`). The [Milestones](#milestones) table below is the single status record for the project. Other documents link to it rather than restating it, and [ROADMAP](docs/ROADMAP.md) holds item-level status.
 
 Working today:
 
@@ -24,7 +24,7 @@ Working today:
 - `hfk dev fixture --out PATH [--no-plan-tab]` writes a synthetic workbook, with the example `HFK Plan` sheet, for tests and demos.
 - `hfk plan to-sheet` converts a `plan.yaml` from before ADR-0015 to CSV rows for the `HFK Plan` sheet.
 - `hfk settle YYYY-MM` prints the two-person settle-up statement for a finished month: what each person paid and owes, and the one transfer that settles it. Turn it on with `extensions: [settle_up]` in `household.yaml` and declare who pays each shared account in `settle_up.yaml`. It also takes `--format text|csv|html|paste` and `--compare` against a hand-built statement.
-- `hfk retirement --claim-age alex=67 --claim-age sam=67` prints a calendar-year income-vs-need track in today's dollars from `retirement.yaml`, per person and for the household. Turn it on with `extensions: [retirement]`. It shows arithmetic, not advice. It needs a federal tax table: none ships yet, so pass one with `--tax-table PATH` or add one to `src/hfk/ext/retirement/tax_data/`.
+- `hfk retirement --claim-age alex=67 --claim-age sam=67` prints a calendar-year income-vs-need track in today's dollars from `retirement.yaml`, per person and for the household. Turn it on with `extensions: [retirement]`. It shows arithmetic, not advice. It uses the 2026 federal tax table that ships with hfk, cited to IRS publications, or one you name with `--tax-table PATH`. Federal tax leaves out the deductions for people 65 and older, so it is overstated for them (proposed ADR-0020).
 
 The budget plan lives only in an `HFK Plan` sheet that you add to your own workbook ([ADR-0015](docs/DECISIONS.md#adr-0015-the-plan-lives-only-in-the-hfk-plan-sheet-planyaml-is-removed)). hfk never writes the workbook, so `hfk init` writes starter rows to `out/hfk-plan-starter.csv` for you to paste in. A leftover `plan.yaml` is an error whose fix is `hfk plan to-sheet`.
 
@@ -108,7 +108,7 @@ These wait on the maintainer; see [ROADMAP](docs/ROADMAP.md):
 
 - A usability session with a non-programmer on a clean machine (`M5-14`), then a non-programmer README rewrite (`M5-15`).
 - Publishing the package to PyPI, so `uv tool install household-finance-kit` works (`M0-08`).
-- A federal tax table, cited to its IRS publication, for `hfk retirement`.
+- A decision on modelling the deductions for people 65 and older in `hfk retirement` (proposed ADR-0020).
 
 ## Milestones
 
@@ -124,7 +124,7 @@ See [ROADMAP](docs/ROADMAP.md) for item-level status and executable acceptance c
 | M5 | In progress | Instance interview, plan-in-workbook tab, renderers, local front door and launcher, one-line install, non-programmer docs; `M5-14` and `M5-15` wait on the maintainer |
 | M6 | Done | Extension API: entry-point discovery, contract, config files, doctor hooks |
 | M7 | Done | `settle_up` extension for exactly two people |
-| M8 | Done | `retirement` extension, R1 through R6 (federal tax figures still to be added) |
+| M8 | Done | `retirement` extension, R1 through R6, with the 2026 federal tax table |
 | M9 | Done | Google Sheets: households download the workbook; no adapter or Google sign-in (ADR-0019) |
 | M10 | Done | Community extensions: FSA tracking, pension add-ons, home purchase modelling |
 

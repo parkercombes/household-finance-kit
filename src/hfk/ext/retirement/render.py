@@ -25,7 +25,10 @@ DISCLAIMER = (
 )
 OUT_OF_SCOPE = (
     "Not modelled: Monte Carlo simulation, optimisation, Roth conversion strategy, product "
-    "recommendations, account balances or investment returns, and personal advice."
+    "recommendations, account balances or investment returns, and personal advice. "
+    "Federal tax leaves out the age-based deductions (the additional standard deduction "
+    "at 65 and the deduction for seniors), so it is overstated for people 65 and older "
+    "(ADR-0020)."
 )
 HOUSEHOLD_COLUMNS = (
     ("year", "year"),

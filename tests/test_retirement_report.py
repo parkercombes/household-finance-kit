@@ -233,9 +233,9 @@ def test_retirement_command(tmp_path):
     assert "\nretirement track 2035-2038, in today's dollars" in shown.stdout
     assert hfk("--claim-age", "alex=67", "--tax-table", str(table), "--format", "csv").stdout
 
-    no_table = hfk("--claim-age", "alex=67")
-    assert no_table.returncode == 1
-    assert "no federal tax table is installed" in no_table.stderr
+    shipped = hfk("--claim-age", "alex=67")
+    assert shipped.returncode == 0, shipped.stderr
+    assert "federal tax: 2026 table (IRS Rev. Proc. 2025-32" in shipped.stdout
 
     bad = hfk("--claim-age", "alex", "--tax-table", str(table))
     assert bad.returncode == 1

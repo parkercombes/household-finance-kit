@@ -1,0 +1,54 @@
+# Federal income tax figures for tax year 2026, for the retirement extension.
+#
+# Every figure is copied from an official IRS publication, named in the `source`
+# fields and in the comment above each block. Retrieved from irs.gov on 2026-11-22.
+# The toolkit maintainer checks every figure against these publications before a
+# release (src/hfk/ext/retirement/tax_data/README.md).
+#
+# Only the two filing statuses the extension supports are listed: married filing
+# jointly and single. The extension models the standard deduction and the
+# ordinary income brackets only; see ADR-0020 for the age-based deductions it
+# leaves out.
+schema_version: 1
+jurisdiction: us-federal
+tax_year: 2026
+source: >-
+  IRS Rev. Proc. 2025-32, section 3.01 (tax rate tables: Table 1, married
+  individuals filing joint returns; Table 3, unmarried individuals) and section
+  3.14(1) (standard deduction), for taxable years beginning in 2026
+filing_status:
+  # Rev. Proc. 2025-32, section 3.01, Table 1, and section 3.14(1).
+  married_joint:
+    standard_deduction: 32200
+    brackets:
+      - {over: 0, rate: 0.10}
+      - {over: 24800, rate: 0.12}
+      - {over: 100800, rate: 0.22}
+      - {over: 211400, rate: 0.24}
+      - {over: 403550, rate: 0.32}
+      - {over: 512450, rate: 0.35}
+      - {over: 768700, rate: 0.37}
+  # Rev. Proc. 2025-32, section 3.01, Table 3, and section 3.14(1).
+  single:
+    standard_deduction: 16100
+    brackets:
+      - {over: 0, rate: 0.10}
+      - {over: 12400, rate: 0.12}
+      - {over: 50400, rate: 0.22}
+      - {over: 105700, rate: 0.24}
+      - {over: 201775, rate: 0.32}
+      - {over: 256225, rate: 0.35}
+      - {over: 640600, rate: 0.37}
+social_security:
+  # IRS Publication 915 (2026), Worksheet 1: lines 9 (base amount) and 11 (added
+  # to the base amount to give adjusted_base), and lines 14 and 16 (the 50% and
+  # 85% fractions); and "Maximum taxable part" ($34,000, or $44,000 filing
+  # jointly). These amounts are set by statute and are not indexed for inflation.
+  source: >-
+    IRS Publication 915 (2026), Social Security and Equivalent Railroad
+    Retirement Benefits: Worksheet 1, lines 9, 11, 14 and 16, and "Maximum
+    taxable part"
+  first_fraction: 0.50
+  second_fraction: 0.85
+  married_joint: {base: 32000, adjusted_base: 44000}
+  single: {base: 25000, adjusted_base: 34000}
