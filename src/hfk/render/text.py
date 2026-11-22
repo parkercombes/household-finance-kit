@@ -21,6 +21,15 @@ from hfk.engine import (
 )
 
 
+def doctor_summary(errors: int, warnings: int) -> str:
+    """The last line of ``hfk doctor``, with "1 error" and "1 warning" in the singular."""
+
+    def count(number: int, word: str) -> str:
+        return f"{number} {word}" + ("" if number == 1 else "s")
+
+    return f"doctor: {count(errors, 'error')}, {count(warnings, 'warning')}"
+
+
 def money(amount: object) -> str:
     """Format an amount with exactly two decimal places."""
     return f"{amount:.2f}"

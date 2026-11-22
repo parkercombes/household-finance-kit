@@ -8,6 +8,10 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- `hfk init` on a workbook that already has an `HFK Plan` sheet (M5-19, ADR-0021). The interview used to ignore the sheet, so on the sample workbook it wrote settings that contradicted the sheet and `hfk doctor` reported 3 errors right after setup. It now reads the sheet, asks about each category the sheet puts outside its group's bucket, and writes each one kept as an override with a reason naming the rows. It no longer writes starter rows or asks you to paste them when the sheet exists. Answers files take an optional `overrides` key (`plan` or `group` per category).
+- `hfk doctor` now reports a plan row naming a category that is in no sheet (`plan-category-unknown`), which is often a typo. Before, it was flagged nowhere and showed a target against no spending.
+- `hfk doctor` says "1 error" and "1 warning" instead of "1 errors" and "1 warnings".
+- README: a draft Getting Started section for households that do not program, and an install command that works from this repository without git or Python until the package is on PyPI.
 - Roadmap: `M0-07` (publish the repository) is done; its acceptance check passed against the public GitHub repository. New item `M0-08`, blocked on the maintainer, covers publishing the package to PyPI, which the README had tied to `M0-07`.
 - `hfk --help` now lists every core command with a one-line description. Before, the core commands had no help text, so the list showed only `settle` and `retirement`; the commands themselves always worked. A test now fails if any command or subcommand lacks help text.
 - Docs: README, AGENTS, CONTRIBUTING, ARCHITECTURE, EXTENSIONS, TILLER-SCHEMA and one line of the design brief no longer call M5 to M8 features planned. The README lists `hfk settle` and `hfk retirement` with how to turn each on, replaces "Coming Soon" with the items still waiting on the maintainer, and shows `settle_up.yaml` in the instance layout. EXTENSIONS records that `report_sections()` is checked but not yet placed in core reports.

@@ -67,7 +67,7 @@ from hfk.interview import (
     load_answers,
     run_interview,
 )
-from hfk.render import money, render_csv, render_html, render_text
+from hfk.render import doctor_summary, money, render_csv, render_html, render_text
 from hfk.serve import DEFAULT_HOST, DEFAULT_PORT, ServeError, make_server, server_url
 from hfk.source import TillerFormatError, find_workbook, read_tiller
 from hfk.source.fixture import build_fixture
@@ -122,7 +122,7 @@ def _doctor(args: argparse.Namespace) -> int:
     print(f"readiness: {'ready' if report.ready else 'not ready'}")
     for check in report.readiness:
         print(check.render())
-    print(f"doctor: {len(report.errors())} errors, {len(report.warnings())} warnings")
+    print(doctor_summary(len(report.errors()), len(report.warnings())))
     return 0 if report.ok else 1
 
 
@@ -675,11 +675,18 @@ def _init_interview(
         )
     print(f"next: run hfk doctor --home {args.dir}")
     print("to read reports: double-click Open HFK.command (Mac, Linux) or Open HFK.bat (Windows)")
-    print(
-        f"then: add a sheet named {PLAN_SHEET} to your workbook, paste or import "
-        f"{STARTER_CSV} into it starting at cell A1, set your targets, download the "
-        f"workbook into data/ again, and run hfk plan check --home {args.dir}"
-    )
+    if result.plan_sheet.found:
+        print(
+            f"then: your workbook's {PLAN_SHEET} sheet is your budget plan; edit it in your "
+            f"spreadsheet, download the workbook into data/ again, and run hfk plan check "
+            f"--home {args.dir}"
+        )
+    else:
+        print(
+            f"then: add a sheet named {PLAN_SHEET} to your workbook, paste or import "
+            f"{STARTER_CSV} into it starting at cell A1, set your targets, download the "
+            f"workbook into data/ again, and run hfk plan check --home {args.dir}"
+        )
     return 0
 
 

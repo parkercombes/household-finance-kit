@@ -1,6 +1,6 @@
 # Tiller Schema
 
-Last verified: 2026-11-21
+Last verified: 2026-11-22
 
 This document describes the workbook contract for `hfk`. It is derived from [DESIGN-BRIEF](DESIGN-BRIEF.md), especially section 5. The source adapter reads a local `.xlsx` or `.xlsm` workbook into the normalized ledger model; every `hfk` report reads the workbook through it.
 
@@ -154,8 +154,10 @@ workbook.
 
 Because hfk never writes the workbook, rows reach the sheet by paste or import:
 
-- The `hfk init` interview writes starter rows to `out/hfk-plan-starter.csv`, with the
-  thirteen headers above in this order.
+- When the workbook has no `HFK Plan` sheet, the `hfk init` interview writes starter rows
+  to `out/hfk-plan-starter.csv`, with the thirteen headers above in this order. When it
+  has one, the interview reads its `Bucket` and `Categories` cells instead and writes no
+  starter rows (ADR-0021).
 - `hfk plan to-sheet` converts a `plan.yaml` from before ADR-0015 to the same CSV. It
   writes `plan.yaml`'s plan-level `effective_from` onto every row that relied on it.
 

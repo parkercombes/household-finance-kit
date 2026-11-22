@@ -304,9 +304,15 @@ The sheet is the only plan source (ADR-0015, implemented in M5-18):
 - A `plan.yaml` in the instance is an error naming the file, with the fix: convert it with
   `hfk plan to-sheet`, paste the rows into the sheet, then delete it.
 - A `plan:` key in `household.yaml` is an unknown-key error.
-- hfk never writes the workbook, so lines reach the sheet by paste or import. The
-  `hfk init` interview writes its starter lines to `out/hfk-plan-starter.csv`, and the
-  one-time `hfk plan to-sheet` converts an existing `plan.yaml` to the same CSV.
+- hfk never writes the workbook, so lines reach the sheet by paste or import. When the
+  workbook has no sheet yet, the `hfk init` interview writes starter lines to
+  `out/hfk-plan-starter.csv`; the one-time `hfk plan to-sheet` converts an existing
+  `plan.yaml` to the same CSV.
+- When the workbook already has the sheet, the interview reads it and asks about each
+  category the sheet puts outside its group's bucket, writing each one kept as an
+  override with a reason (ADR-0021).
+- `hfk doctor` reports a plan line that names a category in no sheet, which is often a
+  typo.
 - `hfk plan check` validates the sheet, and every plan command needs the workbook.
 - `hfk dev fixture` writes the example plan into the synthetic workbook's sheet by default
   (`--no-plan-tab` leaves it out).

@@ -23,6 +23,7 @@ from hfk.render.html import (
 )
 from hfk.render.text import (
     TEXT_RENDERERS,
+    doctor_summary,
     money,
     register_text_renderer,
     render_balances,
@@ -37,6 +38,7 @@ __all__ = [
     "CSV_RENDERERS",
     "HTML_RENDERERS",
     "TEXT_RENDERERS",
+    "doctor_summary",
     "money",
     "register_csv_renderer",
     "register_html_renderer",

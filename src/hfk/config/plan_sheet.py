@@ -241,6 +241,52 @@ def sheet_lines(
             yield SheetLine(index=index, row=row, line=line, error=None)
 
 
+@dataclass(frozen=True)
+class SheetBuckets:
+    """Which bucket each row of a sheet puts its categories on (read for ``hfk init``)."""
+
+    rows: tuple[tuple[int, str, tuple[str, ...]], ...]  # (row, bucket, categories)
+    unreadable_rows: tuple[int, ...]
+
+    def buckets(self) -> tuple[str, ...]:
+        """Every bucket a readable row names, in first-seen order."""
+
+        seen: list[str] = []
+        for _row, bucket, _categories in self.rows:
+            if bucket not in seen:
+                seen.append(bucket)
+        return tuple(seen)
+
+    def category_rows(self) -> dict[str, list[tuple[int, str]]]:
+        """Each category, in first-seen order, with the ``(row, bucket)`` of every row listing it."""
+
+        found: dict[str, list[tuple[int, str]]] = {}
+        for row, bucket, categories in self.rows:
+            for category in categories:
+                found.setdefault(category, []).append((row, bucket))
+        return found
+
+
+def sheet_buckets(sheet: SheetRows) -> SheetBuckets:
+    """The bucket and categories of every row, read with the same cell rules as the plan.
+
+    A row whose cells break those rules is listed in ``unreadable_rows`` and skipped;
+    ``hfk plan check`` names its problem. Nothing here decides a bucket: this only
+    reports what the household wrote in the sheet.
+    """
+
+    rows: list[tuple[int, str, tuple[str, ...]]] = []
+    unreadable: list[int] = []
+    for row, cells in sheet.rows:
+        try:
+            entry = _entry(cells, row=row, path=sheet.path)
+        except PlanSheetError:
+            unreadable.append(row)
+            continue
+        rows.append((row, entry["bucket"], tuple(entry.get("categories", ()))))
+    return SheetBuckets(rows=tuple(rows), unreadable_rows=tuple(unreadable))
+
+
 def sheet_terms(text: str) -> str:
     """Rewrite ``plan.yaml`` key names in a message as ``HFK Plan`` column names."""
 

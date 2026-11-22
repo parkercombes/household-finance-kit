@@ -573,11 +573,29 @@ def _check_plan_category_buckets(
     ledger: Ledger,
     diagnostics: list[Diagnostic],
 ) -> None:
+    known = {category.name for category in ledger.categories}
+    spent = {transaction.category for transaction in ledger.transactions}
     for index, line in enumerate(plan.lines):
         for category in line.categories:
             try:
                 resolution = resolve_category(category, ledger, declarations)
             except BucketError:
+                # A name in no sheet at all is a plan-only name, often a typo: its line
+                # would show a target against no spending. Other unresolved names are
+                # in Transactions and the orphan check already names them.
+                if category not in known and category not in spent:
+                    diagnostics.append(
+                        Diagnostic(
+                            "error",
+                            "plan-category-unknown",
+                            _plan_where(plan),
+                            f'{_plan_categories_ref(plan, index)} desc "{line.desc}" who '
+                            f'"{line.who}" lists category "{category}", which is not in the '
+                            "Categories sheet",
+                            "use the category's exact name from the Categories sheet, or "
+                            "remove it from the line",
+                        )
+                    )
                 continue
 
             mapped_buckets = tuple(portion.bucket for portion in resolution.portions)
