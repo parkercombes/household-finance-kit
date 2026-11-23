@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- README: Getting Started now starts with `hfk setup` and uses the `HFK` folder it makes, says how to get the workbook from Google Sheets or Excel and what its file name must contain, how to type the folder on Windows, how to get back to the reports, and how to refresh the workbook each month. Before, it made a separate `my-finances` folder and never mentioned `hfk setup`.
 - `hfk init` no longer writes the example Alex and Sam settings into a folder made by `hfk setup` when `data/` has no workbook yet. Before, running it too early left the folder with made-up settings that `hfk setup` then called set up and `hfk init` refused. It now stops and says to download the workbook first.
 - `hfk init` names a workbook in `data/` that it does not recognise by name, such as `Budget.xlsx`, and says to rename it or pass `--workbook`, instead of writing the example settings and asking for a workbook that is already there.
 - `hfk setup DIR` with a relative folder name no longer crashes with a traceback after making the folder.
