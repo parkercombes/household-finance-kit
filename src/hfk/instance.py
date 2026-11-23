@@ -20,6 +20,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -187,6 +188,69 @@ def write_instance(
     if git:
         _install_hook(home, root)
     return InstanceReport(home=home, created=tuple(created), git_initialised=git)
+
+
+_SETTINGS_LOCK = threading.Lock()
+
+
+def write_settings(
+    target: Path, *, documents: Mapping[str, str], starter_plan: str | None = None
+) -> tuple[Path, ...]:
+    """Write only the settings files into a folder from ``hfk setup`` (ADR-0022).
+
+    This is the one settings write a web request may make: ``household.yaml``,
+    ``declarations.yaml`` and ``settle_up.yaml``, plus the starter plan under
+    ``out/``; never a launcher, script, assistant file or hook. It is
+    single-flight: one lock, then ``household.yaml`` is created exclusively before
+    anything else is written, so a second attempt, in this process or another, is
+    refused. Each file is written to a temporary name and renamed; on a failure
+    every file this call made is removed, so no half-written folder is left.
+    """
+
+    home = Path(target)
+    if set(documents) != set(_INSTANCE_DOCUMENTS):
+        raise InstanceError(
+            "the settings need household.yaml and declarations.yaml",
+            file=home,
+            fix="answer every question, then send the form again",
+        )
+    root = _templates_root()
+    texts = {
+        "declarations.yaml": documents["declarations.yaml"],
+        "settle_up.yaml": (root / "settle_up.yaml").read_text(encoding="utf-8"),
+    }
+    household = home / "household.yaml"
+    with _SETTINGS_LOCK:
+        _require_free_target(home)
+        try:
+            claim = os.open(household, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            raise InstanceError(
+                "the settings were already written",
+                file=household,
+                fix="open the reports; to start again, move household.yaml out of the folder",
+            ) from None
+        os.close(claim)
+        written: list[Path] = [household]
+        try:
+            for name, text in texts.items():
+                written.append(_replace_text(home / name, text))
+            if starter_plan is not None:
+                (home / "out").mkdir(exist_ok=True)
+                written.append(_replace_text(home / _STARTER_PLAN, starter_plan))
+            _replace_text(household, documents["household.yaml"])
+        except BaseException:
+            for path in written:
+                path.unlink(missing_ok=True)
+            raise
+    return tuple(written)
+
+
+def _replace_text(destination: Path, text: str) -> Path:
+    temporary = destination.with_name(f".{destination.name}.hfk-tmp")
+    temporary.write_text(text, encoding="utf-8")
+    os.replace(temporary, destination)
+    return destination
 
 
 def _write_launchers(home: Path, python: Path, *, keep: bool = False) -> list[Path]:

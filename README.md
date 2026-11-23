@@ -16,12 +16,12 @@ Every milestone except M0 and M5 is done, and what is left in those two waits on
 
 Working today:
 
-- `hfk setup [DIR]` makes your hfk folder, `HFK` in your home folder by default, with an empty `data` folder for your workbook and the double-click launchers, but no settings yet; running it again changes nothing. On Windows it adds Open HFK to the Start menu; on a Mac it opens the `data` folder in Finder. Then download your workbook into `data` and run `hfk init` on the folder (ADR-0022; the setup page that will replace that step is planned, `M5-21`).
+- `hfk setup [DIR]` makes your hfk folder, `HFK` in your home folder by default, with an empty `data` folder for your workbook and the double-click launchers, but no settings yet; running it again changes nothing. On Windows it adds Open HFK to the Start menu; on a Mac it opens the folder in Finder. Then it opens the setup page in your browser (ADR-0022): choose your workbook download, answer the questions, and it saves the settings and shows whether the reports are ready.
 - `hfk init <dir>` interviews you from the newest workbook in `data/` and writes a private instance with `household.yaml` and `declarations.yaml`, plus the Tiller read-only hook (`--git` also sets up git and the privacy hook). If the workbook already has an `HFK Plan` sheet, the interview reads it and asks about each category the sheet puts outside its group's bucket ([ADR-0021](docs/DECISIONS.md#adr-0021-hfk-init-reads-an-existing-hfk-plan-sheet)).
 - `hfk doctor` checks config and data quality and fails loudly on stale data, unmapped categories, conflicts and undeclared closed accounts. It ends with a readiness section that says, in plain words, whether the workbook, history, category mapping and plan are ready and what to fix.
 - `hfk scorecard`, `hfk categories`, `hfk balances`, `hfk networth`, `hfk renewals` and `hfk rebaseline` report from closed months, each with `--format text|csv|html`.
 - `hfk plan check` validates the budget plan.
-- `hfk serve` shows the reports as a local read-only web page on `127.0.0.1`, with a month picker and a Regenerate button. `hfk open` starts it on a free port and opens your browser, and `hfk init` writes double-click launchers (`Open HFK.command`, `Open HFK.bat`) that run `hfk open` for you.
+- `hfk serve` shows the reports as a local read-only web page on `127.0.0.1`, with a month picker, a Regenerate button, and a Choose file button that copies a new workbook download into `data`. On a folder with no settings yet it shows the setup page instead. Each run's address starts with a random token, so an old address stops working when hfk stops ([PRIVACY](docs/PRIVACY.md#the-browser-pages-and-a-shared-computer)). `hfk open` starts it on a free port and opens your browser, and `hfk init` writes double-click launchers (`Open HFK.command`, `Open HFK.bat`) that run `hfk open` for you.
 - `hfk dev fixture --out PATH [--no-plan-tab]` writes a synthetic workbook, with the example `HFK Plan` sheet, for tests and demos.
 - `hfk plan to-sheet` converts a `plan.yaml` from before ADR-0015 to CSV rows for the `HFK Plan` sheet.
 - `hfk settle YYYY-MM` prints the two-person settle-up statement for a finished month: what each person paid and owes, and the one transfer that settles it. Turn it on with `extensions: [settle_up]` in `household.yaml` and declare who pays each shared account in `settle_up.yaml`. It also takes `--format text|csv|html|paste` and `--compare` against a hand-built statement.
@@ -91,7 +91,7 @@ Check the install with `hfk --version`. If the terminal says `hfk` is not found,
 
 ## Getting Started
 
-This is the draft path for a household that does not program; the usability session (`M5-14`) tests it. Each step is one command typed in a terminal (Terminal on a Mac, PowerShell on Windows). A double-click installer and a setup page in the browser are planned (`M5-21` to `M5-23`) so that no terminal is needed.
+This is the draft path for a household that does not program; the usability session (`M5-14`) tests it. Each step is one command typed in a terminal (Terminal on a Mac, PowerShell on Windows). A double-click installer is planned (`M5-22`, `M5-23`) so that no terminal is needed. Steps 3 and 4 can already be done in the browser instead: double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows) in the `HFK` folder, choose the workbook download, and answer the same questions there.
 
 1. Install hfk as shown in [Install](#install).
 2. Make your hfk folder:
@@ -148,7 +148,7 @@ These wait on the maintainer; see [ROADMAP](docs/ROADMAP.md):
 - A usability session with a non-programmer on a clean machine (`M5-14`), then a non-programmer README rewrite (`M5-15`).
 - Publishing the package to PyPI, so `uv tool install household-finance-kit` works (`M0-08`).
 - A decision on modelling the deductions for people 65 and older in `hfk retirement` (proposed ADR-0020).
-- Planned (`M5-20` to `M5-23`, ADR-0022): a double-click installer, a default `HFK` folder, and a setup page in the browser, so a household never needs the terminal. Code-signing the installers is `M5-24`, which waits on the maintainer.
+- Planned (`M5-22`, `M5-23`, ADR-0022): a double-click installer and a quickstart built on it, so a household never needs the terminal; the default `HFK` folder (`M5-20`) and the setup page (`M5-21`) are done. Code-signing the installers is `M5-24`, which waits on the maintainer.
 
 ## Milestones
 

@@ -111,9 +111,9 @@ household-finance-kit/
    CLI subcommands, and optional report sections. Settle-up and retirement are the first.
 6. **Presentation** (`hfk.cli`, `hfk.render`). CLI first; renderers: text, CSV, HTML.
    A local web front door (127.0.0.1 only) is `hfk serve` (M5-10); its reports are
-   read-only. `hfk setup` (M5-20, ADR-0022) makes the default `HFK` folder. Planned
-   (M5-21 to M5-23): a setup page that asks the interview's questions as a form, and a
-   double-click installer.
+   read-only. `hfk setup` (M5-20, ADR-0022) makes the default `HFK` folder, and its setup
+   page (M5-21) asks the interview's questions as a form. Planned (M5-22, M5-23): a
+   double-click installer and a quickstart built on it.
 
 Rule: a layer imports only from layers below it. Extensions may import engine, ledger,
 config; never the reverse.
@@ -338,13 +338,14 @@ lines. The sheet is ADR-0013, implemented in M5-08; the single source is ADR-001
   sheets, finished months since `history_start`, unmapped expense categories, plan loads),
   each with a plain-language fix; readiness never changes the exit code.
 - `hfk serve` — the reports as a local read-only web page bound to `127.0.0.1` only, with a
-  month picker and a Regenerate action that re-reads the workbook; GET only, and its one
-  write path is `out/`. `hfk open` starts it on a free port and opens the browser; the
-  instance's `Open HFK.command` and `Open HFK.bat` launchers run `hfk open` on their own folder.
-  Planned (M5-21, ADR-0022): on a folder with no `household.yaml` it serves a setup page,
-  which may write the settings files once, and any page may copy a workbook download into
-  `data/`; every page and action then needs a per-run token, and writes need POST with an
-  exact `Origin` match. The workbook itself is still never written.
+  month picker and a Regenerate action that re-reads the workbook and saves pages under
+  `out/`. `hfk open` starts it on a free port and opens the browser; the instance's
+  `Open HFK.command` and `Open HFK.bat` launchers run `hfk open` on their own folder. On a
+  folder with no `household.yaml` it serves the setup page (M5-21, ADR-0022), which writes
+  the settings files once, through the `hfk init` interview code; any page may copy a
+  workbook download into `data/`. Every address starts with a per-run token, and the two
+  writes are POSTs with an exact `Origin` match and a size limit. The workbook itself is
+  never written.
 - `hfk init`, `hfk plan check`, `hfk plan to-sheet` (one-time `plan.yaml` conversion),
   `hfk dev fixture` (generate synthetic Tiller workbook).
 - Hard invariant: any analysis window is clamped to `history_start`.

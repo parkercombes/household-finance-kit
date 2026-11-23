@@ -8,10 +8,15 @@ changes your workbook.
 ## If this folder has no `household.yaml` yet
 
 `hfk setup` made this folder without your settings. Download your Tiller
-workbook into `data/` (Google Sheets: File > Download > Microsoft Excel
-(.xlsx); Excel: copy the workbook file). hfk finds a file whose name starts
-with `Tiller` or contains `Tiller Spreadsheet`, as Tiller's downloads do, so
-if you rename it, keep `Tiller` at the start. Then answer the setup questions:
+workbook (Google Sheets: File > Download > Microsoft Excel (.xlsx); Excel: use
+the workbook file). hfk finds a file whose name starts with `Tiller` or
+contains `Tiller Spreadsheet`, as Tiller's downloads do, so if you rename it,
+keep `Tiller` at the start.
+
+Then double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows). The
+setup page opens in your browser: choose the download, answer the questions,
+and it saves your settings. Or put the download in `data/` and answer the
+same questions in a terminal:
 
     hfk init <this folder>
 

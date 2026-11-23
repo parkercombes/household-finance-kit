@@ -30,6 +30,8 @@ ROOT = Path(__file__).resolve().parents[1]
 INSTANCE_EXAMPLE = ROOT / "examples" / "instance"
 PYTHONPATH = str(ROOT / "src")
 TODAY = date(2026, 9, 15)
+TOKEN = "test-token"
+PREFIX = f"/{TOKEN}"
 
 
 def make_instance(tmp_path: Path) -> Path:
@@ -43,7 +45,7 @@ def make_instance(tmp_path: Path) -> Path:
 
 @contextmanager
 def running(home: Path) -> Iterator[int]:
-    server = make_server(home, port=0, today=lambda: TODAY)
+    server = make_server(home, port=0, today=lambda: TODAY, token=TOKEN)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -60,7 +62,7 @@ def request(
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
     try:
         headers = {"Host": host} if host is not None else {}
-        connection.request(method, path, body=b"x" if method in {"POST", "PUT"} else None,
+        connection.request(method, PREFIX + path, body=b"x" if method in {"POST", "PUT"} else None,
                            headers=headers)
         response = connection.getresponse()
         body = response.read().decode("utf-8")
@@ -149,20 +151,20 @@ def test_root_is_scorecard_with_text_render_totals(tmp_path):
         "total left": match.group(3),
     }
     assert '<input type="month" name="month" value="2026-08" />' in page
-    assert 'action="/regenerate"' in page
+    assert f'action="{PREFIX}/regenerate"' in page
     assert "<script" not in page
     assert "http://" not in page and "https://" not in page
 
 
 @pytest.mark.parametrize(
-    "method", ["POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT", "BREW"]
+    "method", ["PUT", "DELETE", "PATCH", "HEAD", "OPTIONS", "TRACE", "CONNECT", "BREW"]
 )
-def test_every_non_get_request_is_405(tmp_path, method):
+def test_every_other_method_is_405(tmp_path, method):
     home = make_instance(tmp_path)
     with running(home) as port:
         connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
         try:
-            connection.putrequest(method, "/", skip_accept_encoding=True)
+            connection.putrequest(method, f"{PREFIX}/", skip_accept_encoding=True)
             connection.putheader("Content-Length", "0")
             connection.endheaders()
             response = connection.getresponse()
@@ -172,7 +174,7 @@ def test_every_non_get_request_is_405(tmp_path, method):
         finally:
             connection.close()
     assert status == 405
-    assert allow == "GET"
+    assert allow == "GET, POST"
 
 
 def test_foreign_host_header_is_refused(tmp_path):
@@ -247,7 +249,7 @@ def test_regenerate_rereads_the_workbook(tmp_path):
         _status, _headers, after = request(port, "GET", "/scorecard?month=2026-08&who=alex")
     assert first == cached
     assert status == 303
-    assert headers["Location"] == "/scorecard?month=2026-08&who=alex"
+    assert headers["Location"] == f"{PREFIX}/scorecard?month=2026-08&who=alex"
     assert "not available" in after
     assert "workbook" in after.lower()
 

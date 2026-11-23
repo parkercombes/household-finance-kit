@@ -26,7 +26,7 @@ from hfk.source.fixture import build_fixture
 ROOT = Path(__file__).resolve().parents[1]
 INSTANCE_EXAMPLE = ROOT / "examples" / "instance"
 PYTHONPATH = str(ROOT / "src")
-URL = re.compile(r"http://127\.0\.0\.1:(\d+)/")
+URL = re.compile(r"http://127\.0\.0\.1:(\d+)(/[A-Za-z0-9_-]+/)")
 
 
 def environment(**extra: str) -> dict[str, str]:
@@ -55,12 +55,13 @@ def start_open(home: Path, *args: str, env: dict[str, str] | None = None) -> sub
     )
 
 
-def read_url(process: subprocess.Popen[str]) -> tuple[str, int]:
+def read_url(process: subprocess.Popen[str]) -> tuple[str, int, str]:
+    """Return the printed address, its port, and its per-run token path."""
     assert process.stdout is not None
     line = process.stdout.readline()
     match = URL.search(line)
     assert match, line
-    return match.group(0), int(match.group(1))
+    return match.group(0), int(match.group(1)), match.group(2)
 
 
 def get(port: int, path: str = "/") -> int:
@@ -79,10 +80,11 @@ def test_open_no_browser_prints_url_and_exits_zero_when_stopped(tmp_path, stop):
     home = make_instance(tmp_path)
     process = start_open(home, "--no-browser")
     try:
-        url, port = read_url(process)
-        assert url == f"http://127.0.0.1:{port}/"
+        url, port, prefix = read_url(process)
+        assert url == f"http://127.0.0.1:{port}{prefix}"
         assert port != 0
-        assert get(port) == 200
+        assert get(port, prefix) == 200
+        assert get(port) == 404
         process.send_signal(stop)
         stdout, stderr = process.communicate(timeout=30)
     finally:
@@ -103,7 +105,7 @@ def test_open_launches_the_browser_on_the_url(tmp_path):
     browser.chmod(0o755)
     process = start_open(home, env=environment(BROWSER=f"{browser} %s"))
     try:
-        url, _port = read_url(process)
+        url, _port, _prefix = read_url(process)
         deadline = time.monotonic() + 30
         while not record.exists() and time.monotonic() < deadline:
             time.sleep(0.1)
