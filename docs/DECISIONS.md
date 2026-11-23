@@ -1164,3 +1164,41 @@ below it.
 - The installers' first-run warnings remain until they are signed (`M5-24`).
 - The household trusts uv's publisher as well as this project; the pinned version and
   digest limit what can change without a new hfk release.
+
+## ADR-0023: Plain-Word Answers in the `hfk init` Interview
+
+Status: accepted
+Date: 2026-11-22
+
+Amends the interview in roadmap item `M3-14` and ADR-0021; answers files are unchanged.
+
+### Context
+
+The interview asked people to type the file's own forms: `alex=Alex, sam=Sam` for the
+household, `shared: alex=0.5, sam=0.5` for a joint account, a profile or bucket name spelled
+exactly, and a full `YYYY-MM-DD` date. Households that do not program (ADR-0022) stall on
+these forms, and a slug such as `alex` means nothing to them until they meet the HFK Plan
+sheet's Who column.
+
+### Decision
+
+- Questions with a fixed set of answers number their choices. A person may type the number,
+  the choice's words, or the older value; all three give the same answer.
+- The household question takes first names separated by commas, `;`, `&`, or `and`. hfk
+  derives each slug from the name (ASCII, lowercase, `_` for other characters, `_2` on a
+  clash) and the summary prints the slug beside the name. The older `slug=Name` form still
+  works; two people with the same name is an error.
+- An account owner is a person's number or name. A shared account is "Shared equally" when
+  an equal split is exact, or shares typed in percent (`Alex 60, Sam 40`) that must total
+  100; fractions that total 1 still work.
+- The history start accepts a month (`2026-01`) as that month's first day.
+- `--answers` files keep the stored forms; only typed answers gain the friendly forms.
+
+### Consequences
+
+- Slugs come from names, so a household that wants a different slug uses `slug=Name` or
+  edits `household.yaml` afterwards; the summary shows the slugs so nobody is surprised.
+- Percent shares are converted to exact decimals; shares that do not total 100 are asked
+  again with the total named, never rounded.
+- Answers files and the stored YAML stay as they were, so existing instances and tests of
+  the answers path are unaffected.

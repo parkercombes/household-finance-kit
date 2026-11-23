@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import importlib.resources
 import json
+import re
+import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import date, datetime
@@ -55,12 +57,47 @@ class InterviewError(Exception):
 
 
 @dataclass(frozen=True)
+class Choice:
+    """One numbered choice: the words shown, and the answer it stands for."""
+
+    label: str
+    value: str
+
+
+@dataclass(frozen=True)
 class Question:
-    """One interview question: its answers key, plain text, and default."""
+    """One interview question: its answers key, plain text, default and choices.
+
+    ``default`` and each choice's ``value`` are answers in the interview's own
+    form (such as ``alex=0.5, sam=0.5``); a household picks a choice by its
+    number or its words instead of typing that form (ADR-0023).
+    """
 
     key: str
     text: str
     default: str | None = None
+    choices: tuple[Choice, ...] = ()
+    hint: str | None = None  # what else may be typed, shown after the choices
+
+    def resolve(self, text: str) -> str:
+        """The answer for ``text``: a choice's value when it names one, else ``text``."""
+
+        stripped = text.strip()
+        if stripped.isdigit() and 1 <= int(stripped) <= len(self.choices):
+            return self.choices[int(stripped) - 1].value
+        folded = stripped.casefold()
+        for choice in self.choices:
+            if folded in (choice.label.casefold(), choice.value.casefold()):
+                return choice.value
+        return stripped
+
+    def default_label(self) -> str | None:
+        """The default as the household reads it: its choice's words, if it has one."""
+
+        for choice in self.choices:
+            if choice.value == self.default:
+                return choice.label
+        return self.default
 
 
 @dataclass(frozen=True)
@@ -243,8 +280,12 @@ def run_interview(
         f"history_start: {history_start.isoformat()} "
         f"({'answered' if answered else 'earliest transaction'})"
     )
+    people_line = "people: " + ", ".join(f"{name} ({slug})" for slug, name in people)
+    if len(people) > 1 or people[0][0] != people[0][1]:
+        people_line += f"; the short name in brackets is what the {PLAN_SHEET} sheet's Who column uses"
     summary = (
         f"workbook: {proposal.workbook.name}",
+        people_line,
         accounts_line,
         groups_line,
         history_line,
@@ -278,10 +319,13 @@ def _exception_question(found: PlanOverride) -> Question:
         text=(
             f'The {PLAN_SHEET} sheet puts "{found.category}" on {found.plan_bucket} '
             f"(row{'s' if len(found.rows) > 1 else ''} {rows}), but the \"{found.group}\" group "
-            f"is {found.group_bucket}. Keep {found.category} on {found.plan_bucket} "
-            f"({KEEP_PLAN}), or move it with its group ({FOLLOW_GROUP})?"
+            f"is {found.group_bucket}. Which bucket should {found.category} be on?"
         ),
         default=KEEP_PLAN,
+        choices=(
+            Choice(label=f"Keep it on {found.plan_bucket}", value=KEEP_PLAN),
+            Choice(label=f"Move it with its group to {found.group_bucket}", value=FOLLOW_GROUP),
+        ),
     )
 
 
@@ -464,8 +508,8 @@ def _group_facts(
 def _people_question() -> Question:
     return Question(
         key="people",
-        text="Who is in the household, as slug=Name pairs separated by commas "
-        "(like alex=Alex, sam=Sam)?",
+        text="Who is in the household? Type each person's first name, separated by "
+        "commas (like Alex, Sam).",
     )
 
 
@@ -475,13 +519,37 @@ def _account_question(facts: AccountFacts, people: tuple[tuple[str, str], ...]) 
     closed = ""
     if _is_closed_status(facts.status) and facts.last_balance is not None:
         closed = f", closed, last balance {facts.last_balance.isoformat()}"
+    choices = [Choice(label=name, value=slug) for slug, name in people]
+    equal = _equal_split(people)
+    if equal is not None:
+        choices.append(Choice(label="Shared equally", value=equal))
+    example = _share_example(people)
     return Question(
         key=f"account:{facts.name}",
         text=f'Who owns "{facts.name}" (Type {account_type}, Class {account_class}{closed} in '
-        "Balance History): one person's slug, or slug=weight pairs separated by commas "
-        "(like alex=0.5, sam=0.5) for a shared account?",
+        "Balance History)?",
         default=_account_default(facts.name, people),
+        choices=tuple(choices),
+        hint=f"or, for an account shared another way, type each person's share in percent, "
+        f"like {example}",
     )
+
+
+def _equal_split(people: tuple[tuple[str, str], ...]) -> str | None:
+    """Equal shares as weights, when they are exact decimals that sum to 1."""
+
+    share = Decimal(1) / len(people)
+    if share * len(people) != 1 or len(people) < 2:
+        return None
+    return ", ".join(f"{slug}={_plain(share)}" for slug, _name in people)
+
+
+def _example_shares(count: int) -> list[str]:
+    if count == 2:
+        return ["60", "40"]
+    shares = [100 // count] * count
+    shares[0] += 100 - sum(shares)
+    return [str(share) for share in shares]
 
 
 def _account_default(name: str, people: tuple[tuple[str, str], ...]) -> str | None:
@@ -493,12 +561,21 @@ def _account_default(name: str, people: tuple[tuple[str, str], ...]) -> str | No
 
 
 def _profile_question(default: str | None = None) -> Question:
-    names = ", ".join(available_profiles())
     return Question(
         key="profile",
-        text=f"Which bucket profile should the budget use: {names}?",
+        text="Which set of budget buckets should the budget use?",
         default=default,
+        choices=tuple(
+            Choice(label=f"{name}: {_profile_description(name)}", value=name)
+            for name in available_profiles()
+        ),
     )
+
+
+def _profile_description(profile: str) -> str:
+    root = Path(str(importlib.resources.files("hfk.profiles")))
+    description = load_mapping(root / f"{profile}.yaml").get("description")
+    return str(description).rstrip(".") if description else profile
 
 
 def _profile_for_plan(plan_sheet: PlanSheetFacts) -> str | None:
@@ -524,21 +601,28 @@ def _profile_for_plan(plan_sheet: PlanSheetFacts) -> str | None:
 
 def _group_question(facts: GroupFacts, buckets: tuple[str, ...]) -> Question:
     categories = ", ".join(facts.categories)
-    names = ", ".join(buckets)
     return Question(
         key=f"group:{facts.name}",
-        text=f'Which bucket covers the "{facts.name}" group (categories {categories}): {names}, '
-        f"or {NON_SPEND} if it is not spending (such as transfers or business costs)?",
+        text=f'Which bucket covers the "{facts.name}" group (categories {categories})?',
+        choices=(
+            *(Choice(label=bucket, value=bucket) for bucket in buckets),
+            Choice(label="Not spending (such as transfers or business costs)", value=NON_SPEND),
+        ),
     )
 
 
 def _history_start_question(earliest: date | None) -> Question:
     if earliest is None:
-        return Question(key="history_start", text="From which date should reports start (YYYY-MM-DD)?")
+        return Question(
+            key="history_start",
+            text="From which date should reports start? Type a date like 2026-01-01, or a "
+            "month like 2026-01 for its first day.",
+        )
     return Question(
         key="history_start",
-        text="From which date should reports start (YYYY-MM-DD), leaving it empty to use "
-        f"the earliest transaction in the workbook ({earliest.isoformat()})?",
+        text="From which date should reports start? Press Enter for the earliest transaction "
+        f"in the workbook ({earliest.isoformat()}), or type a date like 2026-01-01, or a "
+        "month like 2026-01 for its first day.",
         default=earliest.isoformat(),
     )
 
@@ -576,7 +660,7 @@ def _prompt_answer(
     asked = question
     while True:
         text = ask(asked)
-        value = "" if text is None else str(text).strip()
+        value = question.resolve("" if text is None else str(text))
         if not value and question.default is not None:
             value = question.default
         if not value:
@@ -614,15 +698,7 @@ def _resolve_people(
 def _parse_people(raw: object) -> tuple[tuple[str, str], ...]:
     pairs: list[tuple[object, object]] = []
     if isinstance(raw, str):
-        for part in raw.split(","):
-            slug, separator, name = part.partition("=")
-            if not separator or not slug.strip() or not name.strip():
-                raise InterviewError(
-                    f"invalid people answer {raw!r}",
-                    question="people",
-                    fix="write slug=Name pairs separated by commas, like alex=Alex, sam=Sam",
-                )
-            pairs.append((slug.strip(), name.strip()))
+        pairs.extend(_people_from_text(raw))
     elif isinstance(raw, list):
         for entry in raw:
             if not isinstance(entry, dict) or set(entry) != {"slug", "name"}:
@@ -663,6 +739,68 @@ def _parse_people(raw: object) -> tuple[tuple[str, str], ...]:
         seen.add(slug)
         result.append((slug, name.strip()))
     return tuple(result)
+
+
+# "Alex, Sam", "Alex and Sam" and "Alex & Sam" all list two people.
+_PEOPLE_SEPARATORS = re.compile(r"\s*(?:,|;|&|\band\b)\s*", re.IGNORECASE)
+
+
+def _people_from_text(raw: str) -> list[tuple[str, str]]:
+    """People from typed text: first names, or the older slug=Name pairs (ADR-0023).
+
+    A name alone gets a short name (slug) made from it: lowercase, accents
+    dropped, other characters as underscores, and a number added when two would
+    match. The summary shows each one, because the HFK Plan sheet's Who column
+    uses it.
+    """
+
+    parts = [part.strip() for part in _PEOPLE_SEPARATORS.split(raw) if part.strip()]
+    if not parts:
+        raise InterviewError(
+            "this question needs at least one name",
+            question="people",
+            fix="type each person's first name, separated by commas, like Alex, Sam",
+        )
+    typed: list[tuple[str | None, str]] = []
+    for part in parts:
+        slug, separator, name = part.partition("=")
+        if separator:
+            if not slug.strip() or not name.strip():
+                raise InterviewError(
+                    f"{part!r} is not a name",
+                    question="people",
+                    fix="type each person's first name, separated by commas, like Alex, Sam",
+                )
+            typed.append((slug.strip(), name.strip()))
+        else:
+            typed.append((None, part))
+    names = [name.casefold() for _slug, name in typed]
+    repeated = sorted({name for name in names if names.count(name) > 1})
+    if repeated:
+        raise InterviewError(
+            f"two people are named {typed[names.index(repeated[0])][1]}",
+            question="people",
+            fix="give each person a different name, such as a last initial: Alex B, Alex C",
+        )
+    taken = {slug for slug, _name in typed if slug is not None}
+    result: list[tuple[str, str]] = []
+    for slug, name in typed:
+        if slug is None:
+            slug = _slug_for(name, taken)
+            taken.add(slug)
+        result.append((slug, name))
+    return result
+
+
+def _slug_for(name: str, taken: set[str]) -> str:
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    base = re.sub(r"[^a-z0-9]+", "_", ascii_name.lower()).strip("_")
+    if not base or not base[0].isalpha():
+        base = f"person_{base}" if base else "person"
+    slug, number = base, 2
+    while slug in taken:
+        slug, number = f"{base}_{number}", number + 1
+    return slug
 
 
 def _validate_slug(value: object, *, question: str) -> str:
@@ -710,7 +848,7 @@ def _resolve_accounts(
                 _account_question(facts, people),
                 ask,
                 lambda text, name=facts.name: _validate_account_entry(
-                    name, _parse_account_text(text, name), known
+                    name, _parse_account_text(text, name, people), known
                 ),
             )
 
@@ -732,25 +870,80 @@ def _resolve_accounts(
             )
         raw = entries[name]
         if isinstance(raw, str) and answers is None:
-            raw = _parse_account_text(raw, name)
+            raw = _parse_account_text(raw, name, people)
         ownership[name] = _validate_account_entry(name, raw, known)
     return ownership
 
 
-def _parse_account_text(text: str, name: str) -> dict[str, object]:
-    if "=" not in text:
-        return {"owner": text}
-    shares: dict[str, str] = {}
-    for part in text.split(","):
-        slug, separator, weight = part.partition("=")
-        if not separator or not slug.strip() or not weight.strip():
+# One share: a person, then a number, optionally after = or : and before %.
+_SHARE = re.compile(r"^(?P<who>.*?)\s*[=:]?\s*(?P<number>\d+(?:\.\d+)?)\s*(?P<percent>%?)$")
+
+
+def _parse_account_text(
+    text: str, name: str, people: tuple[tuple[str, str], ...]
+) -> dict[str, object]:
+    """An owner or shares from typed text (ADR-0023).
+
+    One person, by name or short name, owns the account. Shares are a person and
+    a number each: weights such as ``alex=0.5, sam=0.5``, or percentages such as
+    ``Alex 60, Sam 40`` (any ``%`` or any number above 1 means percent), which
+    must add up to 100.
+    """
+
+    question = f"account:{name}"
+    names = ", ".join(person for _slug, person in people)
+    parts = [part.strip() for part in _PEOPLE_SEPARATORS.split(text) if part.strip()]
+    if len(parts) == 1 and _SHARE.match(parts[0]) is None:
+        return {"owner": _person_slug(parts[0], people, question)}
+    shares: list[tuple[str, Decimal]] = []
+    percent = False
+    for part in parts:
+        match = _SHARE.match(part)
+        if match is None or not match["who"].strip():
             raise InterviewError(
-                f"invalid answer {text!r} for account {name!r}",
-                question=f"account:{name}",
-                fix="write one slug, or slug=weight pairs separated by commas",
+                f"{part!r} is not a person and a share",
+                question=question,
+                fix=f"type one of {names}, or each person's share, like "
+                f"{_share_example(people)}",
             )
-        shares[slug.strip()] = weight.strip()
-    return {"shared": shares}
+        shares.append((_person_slug(match["who"], people, question), Decimal(match["number"])))
+        percent = percent or bool(match["percent"])
+    percent = percent or any(share > 1 for _slug, share in shares)
+    if percent:
+        total = sum((share for _slug, share in shares), Decimal(0))
+        if total != 100:
+            raise InterviewError(
+                f"the shares add up to {_plain(total)}%, not 100%",
+                question=question,
+                fix=f"make the shares add up to 100, like {_share_example(people)}",
+            )
+        shares = [(slug, share / 100) for slug, share in shares]
+    return {"shared": {slug: _plain(share) for slug, share in shares}}
+
+
+def _plain(number: Decimal) -> str:
+    """A Decimal written out in full, such as 90 or 0.6, never 9E+1."""
+
+    return format(number.normalize(), "f")
+
+
+def _person_slug(text: str, people: tuple[tuple[str, str], ...], question: str) -> str:
+    folded = text.strip().casefold()
+    for slug, person in people:
+        if folded in (slug.casefold(), person.casefold()):
+            return slug
+    raise InterviewError(
+        f"{text.strip()!r} is not one of the people in the household",
+        question=question,
+        fix=f"use one of: {', '.join(person for _slug, person in people)}",
+    )
+
+
+def _share_example(people: tuple[tuple[str, str], ...]) -> str:
+    return ", ".join(
+        f"{person} {share}"
+        for (_slug, person), share in zip(people, _example_shares(len(people)))
+    )
 
 
 def _validate_account_entry(
@@ -959,7 +1152,7 @@ def _resolve_history_start(
     if answers is not None:
         raw = answers.get("history_start")
     else:
-        raw = _prompt_answer(question, ask, _check_iso_date)
+        return (_check_iso_date(_prompt_answer(question, ask, _check_iso_date)), True)
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         if question.default is None:
             raise InterviewError(
@@ -983,13 +1176,18 @@ def _resolve_history_start(
 
 
 def _check_iso_date(text: str) -> date:
+    """A typed start date: ``YYYY-MM-DD``, or ``YYYY-MM`` for the month's first day."""
+
+    text = text.strip()
     try:
+        if re.fullmatch(r"\d{4}-\d{2}", text):
+            return date.fromisoformat(f"{text}-01")
         return date.fromisoformat(text)
     except ValueError:
         raise InterviewError(
             f"{text!r} is not a date",
             question="history_start",
-            fix="write it as YYYY-MM-DD, like 2026-01-01",
+            fix="type it as year-month-day, like 2026-01-01, or year-month, like 2026-01",
         ) from None
 
 

@@ -190,8 +190,112 @@ def test_prompt_mode_asks_again_after_a_bad_or_empty_answer(tmp_path: Path) -> N
     assert "needs an answer" in retries[0].text
     assert "sum to" in retries[1].text
     assert "Fixed Essentail" in retries[2].text
-    assert "YYYY-MM-DD" in retries[3].text
+    assert "2026-01-01" in retries[3].text
     assert "Joint Card" in result.documents["household.yaml"]
+
+
+def test_prompt_mode_takes_plain_names_numbers_and_percentages(tmp_path: Path) -> None:
+    # ADR-0023: no slug=Name or weight syntax is needed at the prompt.
+    home = make_home(tmp_path)
+    replies = {
+        "people": "Alex and Sam",
+        "account:Alex Checking": "",  # the default, Alex
+        "account:Joint Card": "3",  # the third choice: shared equally
+        "account:Sam Checking": "sam",  # a choice's words, in any case
+        "account:Savings": "Alex 60%, Sam 40%",
+        "profile": "four-bucket",
+        "group:Housing": "1",
+        "group:Food": "2",
+        "group:Transportation": "variable essential",
+        "group:Subscriptions": "5",  # not spending
+        "history_start": "2026-05",
+    }
+    scripted = ScriptedAsk(replies)
+
+    result = run_interview(home / "data" / "Tiller-Example.xlsx", answers=None, ask=scripted)
+
+    household = yaml.safe_load(result.documents["household.yaml"])
+    assert household["people"] == [{"slug": "alex", "name": "Alex"}, {"slug": "sam", "name": "Sam"}]
+    assert household["accounts"]["Alex Checking"] == {"owner": "alex", "kind": "checking"}
+    assert household["accounts"]["Joint Card"]["shared"] == {"alex": 0.5, "sam": 0.5}
+    assert household["accounts"]["Sam Checking"]["owner"] == "sam"
+    assert household["accounts"]["Savings"]["shared"] == {"alex": 0.6, "sam": 0.4}
+    assert household["history_start"] == date(2026, 5, 1)
+    declarations = yaml.safe_load(result.documents["declarations.yaml"])
+    assert declarations["groups"]["Housing"] == "Fixed Essential"
+    assert declarations["groups"]["Food"] == "Variable Essential"
+    assert declarations["groups"]["Transportation"] == "Variable Essential"
+    assert "Subscriptions" in declarations["non_spend_groups"]
+    assert "people: Alex (alex), Sam (sam)" in result.summary[1]
+    joint = next(q for q in scripted.asked if q.key == "account:Joint Card")
+    assert [choice.label for choice in joint.choices] == ["Alex", "Sam", "Shared equally"]
+    assert "Alex 60, Sam 40" in joint.hint
+
+
+def test_shares_that_do_not_add_up_are_asked_again(tmp_path: Path) -> None:
+    home = make_home(tmp_path)
+    replies = {key: [value] for key, value in prompt_replies().items()}
+    replies["account:Savings"] = ["Alex 60, Sam 30", "Pat", "Alex 60, Sam 40"]
+    asked: list[Question] = []
+
+    def ask(question: Question) -> str:
+        asked.append(question)
+        return replies[question.key].pop(0)
+
+    run_interview(home / "data" / "Tiller-Example.xlsx", answers=None, ask=ask)
+
+    retries = [q.text for q in asked if q.text.startswith("That answer")]
+    assert "add up to 90%, not 100%" in retries[0]
+    assert "'Pat' is not one of the people" in retries[1]
+    assert "use one of: Alex, Sam" in retries[1]
+
+
+@pytest.mark.parametrize(
+    ("typed", "expected"),
+    [
+        ("Alex, Sam", (("alex", "Alex"), ("sam", "Sam"))),
+        ("Alex & Sam", (("alex", "Alex"), ("sam", "Sam"))),
+        ("José; Zoë", (("jose", "José"), ("zoe", "Zoë"))),
+        ("Alex B, Alex.B", (("alex_b", "Alex B"), ("alex_b_2", "Alex.B"))),
+        ("Mary Ann", (("mary_ann", "Mary Ann"),)),
+        ("7 of 9", (("person_7_of_9", "7 of 9"),)),
+        ("alex=Alex, sam=Sam", (("alex", "Alex"), ("sam", "Sam"))),
+    ],
+)
+def test_people_are_typed_as_plain_names(typed: str, expected: tuple[tuple[str, str], ...]) -> None:
+    from hfk.interview import _parse_people
+
+    assert _parse_people(typed) == expected
+
+
+def test_two_people_with_the_same_name_is_an_error() -> None:
+    from hfk.interview import InterviewError, _parse_people
+
+    with pytest.raises(InterviewError, match="two people are named Alex"):
+        _parse_people("Alex, alex")
+
+
+def test_the_prompt_numbers_its_choices_and_names_the_default(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from hfk import cli
+    from hfk.interview import Choice
+
+    monkeypatch.setattr("builtins.input", lambda prompt: "")
+    question = Question(
+        key="account:Joint Card",
+        text='Who owns "Joint Card"?',
+        default="alex",
+        choices=(Choice("Alex", "alex"), Choice("Sam", "sam")),
+        hint="or type each person's share",
+    )
+
+    cli._prompt(question)
+
+    shown = capsys.readouterr().out
+    assert "  1. Alex\n  2. Sam\n" in shown
+    assert "Type a number, or type each person's share." in shown
+    assert "Press Enter for: Alex" in shown
 
 
 def test_ctrl_d_in_the_interview_stops_cleanly_and_writes_nothing(
@@ -694,7 +798,8 @@ def test_non_spend_answer_is_offered_in_the_prompt(tmp_path: Path) -> None:
         home / "data" / "Tiller-Example.xlsx", answers=None, ask=scripted
     )
     question = next(q for q in scripted.asked if q.key == "group:Subscriptions")
-    assert "or non-spend" in question.text
+    assert [choice.value for choice in question.choices][-1] == "non-spend"
+    assert question.choices[-1].label.startswith("Not spending")
     assert '"Subscriptions"' in result.documents["declarations.yaml"]
     assert "Subscriptions starter" not in result.starter_plan
 
@@ -877,9 +982,12 @@ def test_interactive_interview_offers_the_plan_sheet_as_defaults(tmp_path: Path)
     assert utilities.default == "plan"
     assert utilities.text == (
         'The HFK Plan sheet puts "Utilities" on Variable Essential (rows 3, 4), but the '
-        '"Housing" group is Fixed Essential. Keep Utilities on Variable Essential (plan), '
-        "or move it with its group (group)?"
+        '"Housing" group is Fixed Essential. Which bucket should Utilities be on?'
     )
+    assert [(choice.label, choice.value) for choice in utilities.choices] == [
+        ("Keep it on Variable Essential", "plan"),
+        ("Move it with its group to Fixed Essential", "group"),
+    ]
     assert result.starter_plan is None
     overrides = yaml.safe_load(result.documents["declarations.yaml"])["overrides"]
     assert {name: entry["bucket"] for name, entry in overrides.items()} == {
