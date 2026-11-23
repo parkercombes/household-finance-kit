@@ -406,7 +406,7 @@ def _serve(args: argparse.Namespace) -> int:
     except (ServeError, OSError) as error:
         print(f"serve: {error}", file=sys.stderr)
         return 1
-    print(f"serving {server_url(server)} (read-only; press Ctrl+C to stop)", flush=True)
+    print(f"serving {server_url(server)} (press Ctrl+C to stop)", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -779,12 +779,16 @@ def _setup(args: argparse.Namespace) -> int:
                   f"{LAUNCHER_BAT} (Windows) in {home}")
             return 0
         return _open(argparse.Namespace(home=str(home), today=None, no_browser=False))
+    if not args.no_open:
+        print("opening the setup page in your browser; it asks for your Tiller workbook "
+              "download, then a few questions")
+        _show_folder(home)
+        return _open(argparse.Namespace(home=str(home), today=None, no_browser=False))
     print(f"next: download your Tiller workbook into {home / 'data'}")
     print("  Google Sheets: File > Download > Microsoft Excel (.xlsx)")
     print("  Excel: copy the workbook file")
-    print(f"then: run hfk init {home}")
-    if not args.no_open:
-        _show_folder(home / "data")
+    print(f"then: double-click {LAUNCHER_COMMAND} (Mac, Linux) or {LAUNCHER_BAT} (Windows) "
+          f"in {home} to answer the setup questions in your browser, or run hfk init {home}")
     return 0
 
 
@@ -801,7 +805,7 @@ def _add_start_menu_entry(home: Path) -> None:
 
 
 def _show_folder(folder: Path) -> None:
-    """Open ``folder`` in Finder on macOS, so the household can drop the workbook in."""
+    """Open ``folder`` in Finder on macOS, so the household can drag Open HFK to the Dock."""
 
     if sys.platform == "darwin":
         subprocess.run(["open", str(folder)], check=False)

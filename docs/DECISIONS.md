@@ -1164,6 +1164,11 @@ below it.
 - The installers' first-run warnings remain until they are signed (`M5-24`).
 - The household trusts uv's publisher as well as this project; the pinned version and
   digest limit what can change without a new hfk release.
+- Added 2026-11-22 with `M5-21`: the per-run token is the first part of every page's path,
+  so an address from an earlier run gets a plain 404. The setup page asks in rounds: names
+  first, then the questions that depend on them, and saves only when every shown answer is
+  valid. Pages send `Referrer-Policy: same-origin`, because with `no-referrer` browsers send
+  `Origin: null` on form posts and the exact `Origin` check would refuse every form.
 
 ## ADR-0023: Plain-Word Answers in the `hfk init` Interview
 

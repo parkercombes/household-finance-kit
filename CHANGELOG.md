@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ## [Unreleased]
 
+### Added
+
+- The setup page (`M5-21`, ADR-0022): `hfk setup`, `hfk open` and `hfk serve` on a folder with no settings show a page to choose the workbook download and answer the `hfk init` questions in the browser, then save the settings and show the doctor page. The doctor and report pages gain a Choose file button that copies a new workbook download into `data`. Every address now starts with a random per-run token, and forms are checked for the page's own origin and a size limit.
+
 ### Changed
 
 - `hfk init` takes plain answers: first names separated by commas, numbered choices, "Shared equally" or percent shares for accounts, and a month for the history start; the summary shows each person's short name (ADR-0023). Answers files are unchanged.

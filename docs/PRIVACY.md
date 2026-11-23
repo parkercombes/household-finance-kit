@@ -1,6 +1,6 @@
 # Privacy
 
-Last verified: 2026-11-13
+Last verified: 2026-11-22
 
 household-finance-kit ("hfk") is a public toolkit for building and checking household finance workflows without exposing any real household data. This document describes the privacy rules for the toolkit repository, private instance repositories, contributors, and LLM agents that help with the project.
 
@@ -43,6 +43,14 @@ Privacy is not a single control. hfk relies on simple repo rules, automated scan
 The hook only sees the text of a command or a file path. It fires when that text names a file matching `tiller*.xls[xm]` and contains a save call, a write-style verb, a redirect, or a copy or move whose destination is that file. It does not see a path held in a variable, a workbook with a different name, or a save inside a script the command merely runs. The `# guardrail-ok` marker disables it for one command and is visible in the command itself. Treat the hook as a tripwire that catches the common accident, not as a boundary. The instance copy installed by `hfk init` has the same limits and only takes effect for assistants that honour `.claude/settings.json`.
 
 The boundary is the reader: `hfk.source` opens workbooks with `read_only=True` and the toolkit contains no save path for them, which the static test checks on every run.
+
+## The browser pages and a shared computer
+
+`hfk open` and `hfk serve` answer only on `127.0.0.1`, the computer itself, and every address starts with a random token made for that run, so other web pages and other computers cannot read the reports or send the setup form (ADR-0022). An old address stops working when hfk stops; the `Open HFK` launcher opens a new one.
+
+Loopback does not keep out programs on the same computer. Any program running as any user there can connect to `127.0.0.1` while hfk runs, and a program that can read your screen or your browser's memory can read the token. On a computer that other people use, close the hfk window when you finish reading.
+
+From a page, hfk writes only two things: the settings files, once, while `household.yaml` does not exist, and a copy of a workbook download into `data/`. It never writes your Tiller workbook, a launcher, a script or a hook from a page.
 
 ## The privacy scan
 

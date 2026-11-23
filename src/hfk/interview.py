@@ -78,6 +78,7 @@ class Question:
     default: str | None = None
     choices: tuple[Choice, ...] = ()
     hint: str | None = None  # what else may be typed, shown after the choices
+    problem: str | None = None  # why the last answer did not work, on a repeated question
 
     def resolve(self, text: str) -> str:
         """The answer for ``text``: a choice's value when it names one, else ``text``."""
@@ -667,7 +668,7 @@ def _prompt_answer(
             problem = InterviewError(
                 "this question needs an answer",
                 question=question.key,
-                fix="type an answer; only a question with a [default] takes an empty answer",
+                fix="choose or type an answer",
             )
         elif check is None:
             return value
@@ -679,8 +680,10 @@ def _prompt_answer(
             else:
                 return value
         asked = replace(
-            question, text=f"That answer did not work: {problem.problem}. Fix: {problem.fix}.\n"
-            f"{question.text}"
+            question,
+            text=f"That answer did not work: {problem.problem}. Fix: {problem.fix}.\n"
+            f"{question.text}",
+            problem=f"{problem.problem}. Fix: {problem.fix}.",
         )
 
 
@@ -692,6 +695,18 @@ def _resolve_people(
         raw = _file_answer(question, answers, fix="add people to the answers file")
     else:
         raw = _prompt_answer(question, ask, _parse_people)
+    return _parse_people(raw)
+
+
+def people_question() -> Question:
+    """The first interview question, before any answer is known."""
+
+    return _people_question()
+
+
+def parse_people(raw: object) -> tuple[tuple[str, str], ...]:
+    """Each person's slug and name from a people answer, as the interview reads it."""
+
     return _parse_people(raw)
 
 
