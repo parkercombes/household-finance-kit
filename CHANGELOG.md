@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- The README that `hfk setup` and `hfk init` put in a household's folder no longer says settle-up is unreleased or that there are three YAML files. It now lists `settle_up.yaml`, says which workbook file names hfk finds, and says `out/hfk-plan-starter.csv` is written only when the workbook has no `HFK Plan` sheet.
 - README: Getting Started now starts with `hfk setup` and uses the `HFK` folder it makes, says how to get the workbook from Google Sheets or Excel and what its file name must contain, how to type the folder on Windows, how to get back to the reports, and how to refresh the workbook each month. Before, it made a separate `my-finances` folder and never mentioned `hfk setup`.
 - `hfk init` no longer writes the example Alex and Sam settings into a folder made by `hfk setup` when `data/` has no workbook yet. Before, running it too early left the folder with made-up settings that `hfk setup` then called set up and `hfk init` refused. It now stops and says to download the workbook first.
 - `hfk init` names a workbook in `data/` that it does not recognise by name, such as `Budget.xlsx`, and says to rename it or pass `--workbook`, instead of writing the example settings and asking for a workbook that is already there.
