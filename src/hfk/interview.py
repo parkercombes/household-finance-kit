@@ -16,7 +16,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -381,18 +381,12 @@ def _resolve_plan_exceptions(
         if answers is not None:
             answer: object = chosen.get(item.category, KEEP_PLAN)
         else:
-            answer = _prompt_answer(_exception_question(item), ask)
-        text = str(answer).strip().lower()
-        if text in (KEEP_PLAN, "yes", "y"):
-            keep = True
-        elif text in (FOLLOW_GROUP, "no", "n"):
-            keep = False
-        else:
-            raise InterviewError(
-                f"invalid answer {answer!r} for {item.category}",
-                question=f"override:{item.category}",
-                fix=f"answer {KEEP_PLAN} or {FOLLOW_GROUP}",
+            answer = _prompt_answer(
+                _exception_question(item),
+                ask,
+                lambda text, category=item.category: _parse_keep(text, category),
             )
+        keep = _parse_keep(answer, item.category)
         resolved.append(PlanOverride(**{**item.__dict__, "keep": keep}))
 
     kept = [item for item in resolved if item.keep]
@@ -555,18 +549,55 @@ def _file_answer(question: Question, answers: Mapping[str, object], *, fix: str)
     return answers[question.key]
 
 
-def _prompt_answer(question: Question, ask: Callable[[Question], str]) -> str:
-    text = ask(question)
-    value = "" if text is None else str(text).strip()
-    if value:
-        return value
-    if question.default is not None:
-        return question.default
+def _parse_keep(answer: object, category: str) -> bool:
+    text = str(answer).strip().lower()
+    if text in (KEEP_PLAN, "yes", "y"):
+        return True
+    if text in (FOLLOW_GROUP, "no", "n"):
+        return False
     raise InterviewError(
-        "missing answer",
-        question=question.key,
-        fix="type an answer; an empty answer only takes the shown default",
+        f"invalid answer {answer!r} for {category}",
+        question=f"override:{category}",
+        fix=f"answer {KEEP_PLAN} or {FOLLOW_GROUP}",
     )
+
+
+def _prompt_answer(
+    question: Question,
+    ask: Callable[[Question], str],
+    check: Callable[[str], object] | None = None,
+) -> str:
+    """Ask until the answer passes ``check``, so one typo does not lose the interview.
+
+    An empty answer takes the shown default; with no default it is asked again.
+    The repeated question starts with what was wrong and how to fix it.
+    """
+
+    asked = question
+    while True:
+        text = ask(asked)
+        value = "" if text is None else str(text).strip()
+        if not value and question.default is not None:
+            value = question.default
+        if not value:
+            problem = InterviewError(
+                "this question needs an answer",
+                question=question.key,
+                fix="type an answer; only a question with a [default] takes an empty answer",
+            )
+        elif check is None:
+            return value
+        else:
+            try:
+                check(value)
+            except InterviewError as error:
+                problem = error
+            else:
+                return value
+        asked = replace(
+            question, text=f"That answer did not work: {problem.problem}. Fix: {problem.fix}.\n"
+            f"{question.text}"
+        )
 
 
 def _resolve_people(
@@ -576,7 +607,7 @@ def _resolve_people(
     if answers is not None:
         raw = _file_answer(question, answers, fix="add people to the answers file")
     else:
-        raw = _prompt_answer(question, ask)
+        raw = _prompt_answer(question, ask, _parse_people)
     return _parse_people(raw)
 
 
@@ -675,7 +706,13 @@ def _resolve_accounts(
         entries = {name: {"owner": people[0][0]} for name in open_names}
     else:
         for facts in every_account:
-            entries[facts.name] = _prompt_answer(_account_question(facts, people), ask)
+            entries[facts.name] = _prompt_answer(
+                _account_question(facts, people),
+                ask,
+                lambda text, name=facts.name: _validate_account_entry(
+                    name, _parse_account_text(text, name), known
+                ),
+            )
 
     for name in entries:
         if name not in open_set:
@@ -789,7 +826,11 @@ def _resolve_profile(
     if answers is not None:
         raw = _file_answer(question, answers, fix="add profile to the answers file")
     else:
-        raw = _prompt_answer(question, ask)
+        raw = _prompt_answer(question, ask, _check_profile)
+    return _check_profile(raw)
+
+
+def _check_profile(raw: object) -> str:
     if not isinstance(raw, str) or not raw.strip():
         raise InterviewError(
             f"invalid profile answer {raw!r}",
@@ -871,7 +912,11 @@ def _resolve_groups(
         raw_groups = dict(raw)
     else:
         for facts in proposal.expense_groups:
-            raw_groups[facts.name] = _prompt_answer(_group_question(facts, buckets), ask)
+            raw_groups[facts.name] = _prompt_answer(
+                _group_question(facts, buckets),
+                ask,
+                lambda text, name=facts.name: _check_bucket(name, text, profile, buckets),
+            )
 
     result: dict[str, str] = {}
     for facts in proposal.expense_groups:
@@ -881,25 +926,27 @@ def _resolve_groups(
                 question=f"group:{facts.name}",
                 fix=f"add {facts.name} under groups in the answers file",
             )
-        bucket = raw_groups[facts.name]
-        if not isinstance(bucket, str) or not bucket.strip():
-            raise InterviewError(
-                f"the bucket for {facts.name!r} must be a bucket name",
-                question=f"group:{facts.name}",
-                fix=f"use one of the {profile} buckets: {', '.join(buckets)}",
-            )
-        bucket = bucket.strip()
-        if bucket.lower() == NON_SPEND:
-            result[facts.name] = NON_SPEND
-            continue
-        if bucket not in buckets:
-            raise InterviewError(
-                f"bucket {bucket!r} is not one of the {profile} buckets",
-                question=f"group:{facts.name}",
-                fix=f"use one of: {', '.join(buckets)}, or {NON_SPEND}",
-            )
-        result[facts.name] = bucket
+        result[facts.name] = _check_bucket(facts.name, raw_groups[facts.name], profile, buckets)
     return result
+
+
+def _check_bucket(group: str, bucket: object, profile: str, buckets: tuple[str, ...]) -> str:
+    if not isinstance(bucket, str) or not bucket.strip():
+        raise InterviewError(
+            f"the bucket for {group!r} must be a bucket name",
+            question=f"group:{group}",
+            fix=f"use one of the {profile} buckets: {', '.join(buckets)}",
+        )
+    bucket = bucket.strip()
+    if bucket.lower() == NON_SPEND:
+        return NON_SPEND
+    if bucket not in buckets:
+        raise InterviewError(
+            f"bucket {bucket!r} is not one of the {profile} buckets",
+            question=f"group:{group}",
+            fix=f"use one of: {', '.join(buckets)}, or {NON_SPEND}",
+        )
+    return bucket
 
 
 def _resolve_history_start(
@@ -912,7 +959,7 @@ def _resolve_history_start(
     if answers is not None:
         raw = answers.get("history_start")
     else:
-        raw = _prompt_answer(question, ask)
+        raw = _prompt_answer(question, ask, _check_iso_date)
     if raw is None or (isinstance(raw, str) and not raw.strip()):
         if question.default is None:
             raise InterviewError(
@@ -933,6 +980,17 @@ def _resolve_history_start(
         question="history_start",
         fix="write it as YYYY-MM-DD",
     )
+
+
+def _check_iso_date(text: str) -> date:
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise InterviewError(
+            f"{text!r} is not a date",
+            question="history_start",
+            fix="write it as YYYY-MM-DD, like 2026-01-01",
+        ) from None
 
 
 def _quote(value: str) -> str:

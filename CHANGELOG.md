@@ -8,6 +8,10 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Fixed
 
+- `hfk init` no longer writes the example Alex and Sam settings into a folder made by `hfk setup` when `data/` has no workbook yet. Before, running it too early left the folder with made-up settings that `hfk setup` then called set up and `hfk init` refused. It now stops and says to download the workbook first.
+- `hfk init` names a workbook in `data/` that it does not recognise by name, such as `Budget.xlsx`, and says to rename it or pass `--workbook`, instead of writing the example settings and asking for a workbook that is already there.
+- `hfk setup DIR` with a relative folder name no longer crashes with a traceback after making the folder.
+- The `hfk init` interview asks a question again when its answer does not work or is empty with no default, saying what was wrong, instead of stopping and losing every answer. A bad answer is caught when it is typed, not after the last question. Ctrl-D now stops the interview with a one-line message instead of a traceback.
 - The `Open HFK` launchers now call hfk through the absolute path of the Python that wrote them, falling back to `hfk` on the PATH, so a double-clicked window that cannot find `hfk` still works. The `.bat` file switches to UTF-8 so folder names with accents work.
 - `hfk init` now completes a folder made by `hfk setup`: it keeps the files already there and adds the settings files. It still refuses a folder that already has settings.
 - Design: ADR-0022 plans a double-click path for households that do not program: double-click installers, a default `HFK` folder in the home folder, and a local setup page that asks the interview's questions as a form and copies in the workbook download. Roadmap items `M5-20` to `M5-24` carry it, and the usability session (`M5-14`) now waits for them. An independent pre-mortem of the first draft shaped it: single-flight settings writes, no launchers or hooks written from a web request, no pre-filled group buckets, hfk called by absolute path, a per-run token on every page, and a folder outside cloud-synced Documents and Desktop.

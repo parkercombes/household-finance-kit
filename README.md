@@ -107,7 +107,7 @@ This is the draft path for a household that does not program; the usability sess
    hfk init my-finances
    ```
 
-   Pressing Enter takes the answer shown in brackets. The sample's `HFK Plan` sheet puts two categories, Utilities and Dining, in a different bucket from the rest of their group; the interview asks whether to keep each one there.
+   Pressing Enter takes the answer shown in brackets. If an answer does not work, or a question with no brackets gets an empty answer, the interview says what was wrong and asks that question again; your earlier answers are kept. The sample's `HFK Plan` sheet puts two categories, Utilities and Dining, in a different bucket from the rest of their group; the interview asks whether to keep each one there.
 4. Check that everything is ready:
 
    ```bash

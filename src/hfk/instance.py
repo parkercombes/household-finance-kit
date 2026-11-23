@@ -223,6 +223,13 @@ class SetupReport:
     configured: bool  # household.yaml and declarations.yaml were already there
 
 
+def is_setup_folder(home: Path) -> bool:
+    """True when ``home`` holds anything ``hfk setup`` writes besides the empty folders."""
+
+    names = (*(relative for relative, _template in _SETUP_FILES), *_LAUNCHER_NAMES)
+    return any((Path(home) / name).exists() for name in names)
+
+
 def default_setup_folder() -> Path:
     """``HFK`` in the home folder: not Documents or Desktop, which are often synced."""
 
