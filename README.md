@@ -114,7 +114,7 @@ This is the draft path for a household that does not program; the usability sess
    hfk init ~/HFK
    ```
 
-   Pressing Enter takes the answer shown in brackets. If an answer does not work, or a question with no brackets gets an empty answer, the interview says what was wrong and asks that question again; your earlier answers are kept. The sample's `HFK Plan` sheet puts two categories, Utilities and Dining, in a different bucket from the rest of their group; the interview asks whether to keep each one there.
+   Type the people's first names separated by commas, like `Alex, Sam`. For a question with numbered choices, type the number. For an account two people share unevenly, type each person's share in percent, like `Alex 60, Sam 40`. Pressing Enter takes the answer shown after "Press Enter for:" ([ADR-0023](docs/DECISIONS.md#adr-0023-plain-word-answers-in-the-hfk-init-interview)). If an answer does not work, or a question with no Enter answer gets an empty answer, the interview says what was wrong and asks that question again; your earlier answers are kept. The sample's `HFK Plan` sheet puts two categories, Utilities and Dining, in a different bucket from the rest of their group; the interview asks whether to keep each one there.
 5. Check that everything is ready:
 
    ```bash

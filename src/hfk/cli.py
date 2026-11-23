@@ -587,8 +587,17 @@ def _dev_fixture(args: argparse.Namespace) -> int:
 
 
 def _prompt(question: Question) -> str:
-    default = f" [{question.default}]" if question.default is not None else ""
-    print(f"{question.text}{default}")
+    print()
+    print(question.text)
+    for number, choice in enumerate(question.choices, start=1):
+        print(f"  {number}. {choice.label}")
+    if question.choices:
+        print("Type a number" + (f", {question.hint}." if question.hint else "."))
+    elif question.hint:
+        print(f"Type the answer, {question.hint}.")
+    label = question.default_label()
+    if label is not None:
+        print(f"Press Enter for: {label}")
     return input("> ")
 
 

@@ -6,6 +6,10 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ## [Unreleased]
 
+### Changed
+
+- `hfk init` takes plain answers: first names separated by commas, numbered choices, "Shared equally" or percent shares for accounts, and a month for the history start; the summary shows each person's short name (ADR-0023). Answers files are unchanged.
+
 ### Fixed
 
 - The README that `hfk setup` and `hfk init` put in a household's folder no longer says settle-up is unreleased or that there are three YAML files. It now lists `settle_up.yaml`, says which workbook file names hfk finds, and says `out/hfk-plan-starter.csv` is written only when the workbook has no `HFK Plan` sheet.
