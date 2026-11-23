@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project is expected to use sem
 
 ### Added
 
+- Double-click installers (`M5-22`, ADR-0022): `scripts/build_installers.py` makes `Install HFK.command`, `Install HFK.bat` and `Install HFK.sh` in a ZIP, and a release workflow attaches the ZIP and the hfk wheel to each published GitHub release. Each installer installs a pinned uv version unless uv is already installed, installs that release's hfk, checking a SHA-256 digest for each download, and runs `hfk setup` by absolute path. Not yet run on macOS or Windows.
 - The setup page (`M5-21`, ADR-0022): `hfk setup`, `hfk open` and `hfk serve` on a folder with no settings show a page to choose the workbook download and answer the `hfk init` questions in the browser, then save the settings and show the doctor page. The doctor and report pages gain a Choose file button that copies a new workbook download into `data`. Every address now starts with a random per-run token, and forms are checked for the page's own origin and a size limit.
 
 ### Changed

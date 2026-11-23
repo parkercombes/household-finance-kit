@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-Last verified: 2026-11-22
+Last verified: 2026-11-23
 
 This file is the Architecture Decision Record (ADR) log for `hfk`, the public
 `household-finance-kit` Python toolkit. An ADR records a choice where a real alternative
@@ -1169,6 +1169,14 @@ below it.
   first, then the questions that depend on them, and saves only when every shown answer is
   valid. Pages send `Referrer-Policy: same-origin`, because with `no-referrer` browsers send
   `Origin: null` on form posts and the exact `Origin` check would refuse every form.
+- Added 2026-11-23 with `M5-22`: until `M0-08`, the installers download the hfk wheel that
+  the release workflow builds once and attaches to the release, not GitHub's generated
+  source archive. GitHub does not promise that a generated archive keeps the same bytes, so
+  its digest could stop matching, and a wheel needs no build step on the household's
+  computer. The release must be tagged `v<version>`; the workflow refuses any other tag.
+  uv goes into `~/.local/bin` (`%USERPROFILE%\.local\bin` on Windows) without changes to
+  shell profiles or the Windows PATH, because the installers and launchers call uv and hfk
+  by absolute path.
 
 ## ADR-0023: Plain-Word Answers in the `hfk init` Interview
 

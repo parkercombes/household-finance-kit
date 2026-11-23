@@ -1,0 +1,136 @@
+@echo off
+rem Install HFK @HFK_VERSION@ and open its setup page (ADR-0022, M5-22).
+rem
+rem scripts/build_installers.py made this file for one hfk release from
+rem installers/install.bat.in. Change the template, not this file.
+rem
+rem It does three things and nothing else:
+rem   1. Installs uv @UV_VERSION@ into %USERPROFILE%\.local\bin, unless uv is
+rem      already installed, after checking uv's installer against the digest below.
+rem   2. Installs hfk @HFK_VERSION@ with uv, after checking the download against
+rem      the digest below.
+rem   3. Runs hfk setup by the absolute path uv reports.
+rem A failed check stops before anything is installed.
+
+setlocal EnableExtensions DisableDelayedExpansion
+
+set "HFK_VERSION=@HFK_VERSION@"
+set "HFK_WHEEL_NAME=@HFK_WHEEL_NAME@"
+set "HFK_WHEEL_URL=@HFK_WHEEL_URL@"
+set "HFK_WHEEL_SHA256=@HFK_WHEEL_SHA256@"
+set "UV_VERSION=@UV_VERSION@"
+set "UV_INSTALLER_URL=https://github.com/astral-sh/uv/releases/download/@UV_VERSION@/uv-installer.ps1"
+set "UV_INSTALLER_SHA256=@UV_INSTALLER_SHA256@"
+set "HELP_URL=@HFK_PROJECT_URL@/issues"
+
+set "UV_DIR=%USERPROFILE%\.local\bin"
+set "WORK=%TEMP%\hfk-install-%RANDOM%%RANDOM%"
+
+echo Installing HFK %HFK_VERSION%.
+echo.
+
+mkdir "%WORK%" 2>nul
+if not exist "%WORK%\" (
+    set "PROBLEM=The installer could not make a temporary folder."
+    goto :stop
+)
+
+set "UV=%UV_DIR%\uv.exe"
+if exist "%UV%" goto :have_uv
+set "UV_FOUND="
+for /f "delims=" %%P in ('where uv.exe 2^>nul') do if not defined UV_FOUND set "UV_FOUND=%%P"
+if defined UV_FOUND (
+    set "UV=%UV_FOUND%"
+    goto :have_uv
+)
+
+echo Downloading uv %UV_VERSION%, the tool that installs HFK.
+call :download "%UV_INSTALLER_URL%" "%WORK%\uv-installer.ps1"
+if errorlevel 1 (
+    set "PROBLEM=The download of uv did not finish. Check your internet connection and try again."
+    goto :stop
+)
+call :check "%WORK%\uv-installer.ps1" "%UV_INSTALLER_SHA256%"
+if errorlevel 1 (
+    set "PROBLEM=The downloaded uv installer is not the expected file, so nothing was installed. Try again later."
+    goto :stop
+)
+set "UV_INSTALL_DIR=%UV_DIR%"
+set "UV_NO_MODIFY_PATH=1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%WORK%\uv-installer.ps1"
+if errorlevel 1 (
+    set "PROBLEM=uv did not install. The messages above say why."
+    goto :stop
+)
+set "UV=%UV_DIR%\uv.exe"
+if not exist "%UV%" (
+    set "PROBLEM=uv reported success, but uv.exe is not in %UV_DIR%."
+    goto :stop
+)
+
+:have_uv
+echo Downloading HFK %HFK_VERSION%.
+call :download "%HFK_WHEEL_URL%" "%WORK%\%HFK_WHEEL_NAME%"
+if errorlevel 1 (
+    set "PROBLEM=The download of HFK did not finish. Check your internet connection and try again."
+    goto :stop
+)
+call :check "%WORK%\%HFK_WHEEL_NAME%" "%HFK_WHEEL_SHA256%"
+if errorlevel 1 (
+    set "PROBLEM=The downloaded HFK is not the expected file, so nothing was installed. Try again later."
+    goto :stop
+)
+
+set "HFK_BIN="
+for /f "delims=" %%B in ('call "%UV%" tool dir --bin') do set "HFK_BIN=%%B"
+if not defined HFK_BIN (
+    set "PROBLEM=uv could not say where it puts programs."
+    goto :stop
+)
+set "PATH=%HFK_BIN%;%PATH%"
+"%UV%" tool install --force "%WORK%\%HFK_WHEEL_NAME%"
+if errorlevel 1 (
+    set "PROBLEM=uv could not install HFK. The messages above say why."
+    goto :stop
+)
+set "HFK=%HFK_BIN%\hfk.exe"
+if not exist "%HFK%" (
+    set "PROBLEM=uv reported success, but hfk.exe is not in %HFK_BIN%."
+    goto :stop
+)
+
+rmdir /s /q "%WORK%" 2>nul
+echo.
+echo HFK %HFK_VERSION% is installed. Making your HFK folder and opening it in your browser.
+echo Keep this window open while you use HFK; closing it stops HFK.
+echo.
+"%HFK%" setup
+set "STATUS=%ERRORLEVEL%"
+echo.
+pause
+exit /b %STATUS%
+
+:stop
+if exist "%WORK%\" rmdir /s /q "%WORK%" 2>nul
+echo.
+echo HFK was not installed.
+echo %PROBLEM%
+echo If this keeps happening, ask for help at %HELP_URL%
+echo.
+pause
+exit /b 1
+
+rem Download %1 to %2 over HTTPS. Values travel in environment variables so that
+rem folder names with spaces or other characters reach PowerShell unchanged.
+:download
+set "HFK_FROM=%~1"
+set "HFK_TO=%~2"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference = 'SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest -UseBasicParsing -Uri $env:HFK_FROM -OutFile $env:HFK_TO } catch { Write-Host $_.Exception.Message; exit 1 }"
+exit /b %ERRORLEVEL%
+
+rem Exit 0 only when the SHA-256 digest of %1 is %2.
+:check
+set "HFK_FILE=%~1"
+set "HFK_SHA256=%~2"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "if ((Get-FileHash -Algorithm SHA256 -LiteralPath $env:HFK_FILE).Hash -ne $env:HFK_SHA256) { exit 1 }"
+exit /b %ERRORLEVEL%

@@ -1,0 +1,50 @@
+name: Release
+
+# Attaches the hfk wheel and the double-click installer ZIP (M5-22, ADR-0022)
+# to a GitHub release when it is published. The installers download that exact
+# wheel from the release and check its SHA-256 digest, so the release must be
+# tagged v<version>, where <version> is the version in pyproject.toml.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .[dev]
+      - run: python -m pytest -q
+      - run: python scripts/privacy_scan.py --root .
+      - name: Build the wheel
+        run: python -m build --wheel --outdir dist
+      - name: Check the tag names the wheel's version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          wheel="$(ls dist/household_finance_kit-*-py3-none-any.whl)"
+          version="$(basename "$wheel" | cut -d - -f 2)"
+          if [ "$TAG" != "v$version" ]; then
+            echo "The release tag is $TAG, but the wheel is version $version; tag it v$version." >&2
+            exit 1
+          fi
+      - name: Build the installer ZIP
+        run: >-
+          python scripts/build_installers.py
+          --wheel dist/household_finance_kit-*-py3-none-any.whl
+          --base-url "${{ github.server_url }}/${{ github.repository }}"
+          --out dist
+      - name: Attach the wheel and the ZIP to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/*.whl dist/Install-HFK-*.zip --repo "${{ github.repository }}"
