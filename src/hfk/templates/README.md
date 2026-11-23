@@ -1,14 +1,17 @@
 # My Household Finances
 
 This folder is your private hfk instance. hfk reads your Tiller workbook and
-the three YAML files here, and writes reports to `out/`. It never changes your
-workbook.
+the settings files here (`household.yaml`, `declarations.yaml`, and
+`settle_up.yaml` if you use settle-up), and writes reports to `out/`. It never
+changes your workbook.
 
 ## If this folder has no `household.yaml` yet
 
 `hfk setup` made this folder without your settings. Download your Tiller
 workbook into `data/` (Google Sheets: File > Download > Microsoft Excel
-(.xlsx); Excel: copy the workbook file), then answer the setup questions:
+(.xlsx); Excel: copy the workbook file). hfk finds a file whose name starts
+with `Tiller` or contains `Tiller Spreadsheet`, as Tiller's downloads do, so
+if you rename it, keep `Tiller` at the start. Then answer the setup questions:
 
     hfk init <this folder>
 
@@ -18,15 +21,20 @@ workbook into `data/` (Google Sheets: File > Download > Microsoft Excel
   whom.
 - `declarations.yaml` — your judgement calls: which Tiller groups go into
   which buckets, and any exceptions you decide.
+- `settle_up.yaml` — who pays each shared account's bill, for the two-person
+  settle-up report (`hfk settle`). hfk reads it only when `settle_up` is
+  listed under `extensions` in `household.yaml`.
 - `README.md` — this note.
 - `Open HFK.command` (Mac, Linux) and `Open HFK.bat` (Windows) — double-click
   one to see your reports in your web browser. Close the window it opens to
   stop.
-- `shared-items/` — for shared costs that are not in the workbook. Leave it
-  empty until the settle-up report is released.
+- `shared-items/` — shared costs that are not in the workbook, one file per
+  month, for the settle-up report. Leave it empty if you do not use settle-up;
+  its own README shows the format.
 - `data/` — where your Tiller workbook export goes. hfk only reads it.
-- `out/` — where generated reports land. After the `hfk init` interview it
-  also holds `hfk-plan-starter.csv`, starter rows for your budget plan.
+- `out/` — where generated reports land. If your workbook had no `HFK Plan`
+  sheet when `hfk init` ran, it also holds `hfk-plan-starter.csv`, starter
+  rows for your budget plan.
 - `.gitignore` — keeps workbooks and reports out of git.
 - `AGENTS.md` and `CLAUDE.md` — instructions for an AI assistant you open in
   this folder. The main rule: it may read your settings, but never your
@@ -45,9 +53,10 @@ hfk reads your budget plan from a sheet named `HFK Plan` that you add to your
 own Tiller workbook. Row 1 holds these headers: Description, Who, Bucket,
 Monthly, Categories, Paced, Effective From, Effective Until, Annual Bill,
 Annual Full, Account, Due Month, Due Day. Each later row is one person's
-share of one budget item. hfk never writes the workbook, so after the
-interview, paste or import `out/hfk-plan-starter.csv` into that sheet and
-set your targets there.
+share of one budget item. hfk never writes the workbook. If your workbook
+already has that sheet, hfk uses it as it is. If not, add the sheet, paste
+or import `out/hfk-plan-starter.csv` into it starting at cell A1, and set
+your targets there.
 
 ## The YAML files may start as example data
 

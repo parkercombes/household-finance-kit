@@ -164,6 +164,57 @@ class ScriptedAsk:
         return self.replies[question.key]
 
 
+def test_prompt_mode_asks_again_after_a_bad_or_empty_answer(tmp_path: Path) -> None:
+    home = make_home(tmp_path)
+    replies = {key: [value] for key, value in prompt_replies().items()}
+    # An empty answer with no default, then a bucket typo, then valid answers.
+    replies["account:Joint Card"] = ["", "alex=0.5, sam=0.4", "alex=0.5, sam=0.5"]
+    replies["group:Housing"] = ["Fixed Essentail", "Fixed Essential"]
+    replies["history_start"] = ["April", ""]
+    asked: list[Question] = []
+
+    def ask(question: Question) -> str:
+        asked.append(question)
+        return replies[question.key].pop(0)
+
+    result = run_interview(home / "data" / "Tiller-Example.xlsx", answers=None, ask=ask)
+
+    assert all(not left for left in replies.values()), replies
+    retries = [question for question in asked if question.text.startswith("That answer")]
+    assert [question.key for question in retries] == [
+        "account:Joint Card",
+        "account:Joint Card",
+        "group:Housing",
+        "history_start",
+    ]
+    assert "needs an answer" in retries[0].text
+    assert "sum to" in retries[1].text
+    assert "Fixed Essentail" in retries[2].text
+    assert "YYYY-MM-DD" in retries[3].text
+    assert "Joint Card" in result.documents["household.yaml"]
+
+
+def test_ctrl_d_in_the_interview_stops_cleanly_and_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from hfk import cli
+
+    home = make_home(tmp_path)
+
+    def end_of_input(question: Question) -> str:
+        raise EOFError
+
+    monkeypatch.setattr(cli, "_prompt", end_of_input)
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+
+    assert cli.main(["init", str(home)]) == 1
+    error = capsys.readouterr().err
+    assert "nothing was written" in error
+    assert "Traceback" not in error
+    for filename in ("household.yaml", "declarations.yaml"):
+        assert not (home / filename).exists(), filename
+
+
 def test_interview_writes_household_naming_every_fixture_account(tmp_path: Path) -> None:
     result = init_with_answers(tmp_path, four_bucket_answers())
 

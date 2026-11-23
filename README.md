@@ -91,31 +91,40 @@ Check the install with `hfk --version`. If the terminal says `hfk` is not found,
 
 ## Getting Started
 
-This is the draft path for a household that does not program; the usability session (`M5-14`) tests it. It uses a sample workbook with made-up data, so you can try hfk before using your own.
+This is the draft path for a household that does not program; the usability session (`M5-14`) tests it. Each step is one command typed in a terminal (Terminal on a Mac, PowerShell on Windows). A double-click installer and a setup page in the browser are planned (`M5-21` to `M5-23`) so that no terminal is needed.
 
 1. Install hfk as shown in [Install](#install).
-2. Make a folder for your finances with a sample workbook in it:
+2. Make your hfk folder:
 
    ```bash
-   hfk dev fixture --out my-finances/data/Tiller-Example.xlsx
+   hfk setup
    ```
 
-   To use your own data instead, put your Tiller workbook download in `my-finances/data/`.
-3. Answer the setup questions about the people, accounts and categories in the workbook:
+   This makes a folder named `HFK` in your home folder, with an empty `data` folder inside it, and prints where the folder is. On a Mac it also opens the `data` folder in Finder. The commands below write the folder as `~/HFK`. On Windows, type the path `hfk setup` printed instead, such as `C:\Users\<you>\HFK`.
+3. Put a workbook in `data`. To try hfk first with a sample workbook of made-up data:
 
    ```bash
-   hfk init my-finances
+   hfk dev fixture --out ~/HFK/data/Tiller-Example.xlsx
    ```
 
-   Pressing Enter takes the answer shown in brackets. The sample's `HFK Plan` sheet puts two categories, Utilities and Dining, in a different bucket from the rest of their group; the interview asks whether to keep each one there.
-4. Check that everything is ready:
+   To use your own data, download your Tiller workbook into `~/HFK/data`. In Google Sheets, use File > Download > Microsoft Excel (.xlsx). In Excel, copy the workbook file. hfk looks for a file whose name starts with `Tiller` or contains `Tiller Spreadsheet`, which Tiller's downloads do. If you rename the file, keep `Tiller` at the start of its name.
+4. Answer the setup questions about the people, accounts and categories in the workbook:
 
    ```bash
-   hfk doctor --home my-finances
+   hfk init ~/HFK
+   ```
+
+   Pressing Enter takes the answer shown in brackets. If an answer does not work, or a question with no brackets gets an empty answer, the interview says what was wrong and asks that question again; your earlier answers are kept. The sample's `HFK Plan` sheet puts two categories, Utilities and Dining, in a different bucket from the rest of their group; the interview asks whether to keep each one there.
+5. Check that everything is ready:
+
+   ```bash
+   hfk doctor --home ~/HFK
    ```
 
    It prints a readiness section and ends with a count of errors and warnings. With the sample workbook, the last line is `doctor: 0 errors, 1 warning`: the warning says the latest transaction is old, because the sample's made-up transactions stop in September 2026. Each problem it finds names the file or sheet row to fix.
-5. Open your reports: double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows) in the `my-finances` folder. Your browser opens the scorecard. Keep the window that opens with it while you read; close it to stop.
+6. Open your reports: double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows) in the `HFK` folder. Your browser opens the scorecard. Keep the window that opens with it while you read; close it to stop. To see them again later, double-click the same file; on Windows, `Open HFK` is also in the Start menu.
+
+Each month, download the workbook into `data` again the same way. hfk reads the newest one.
 
 ## Quickstart
 

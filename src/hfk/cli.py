@@ -66,11 +66,13 @@ from hfk.instance import (
     InstanceError,
     InstanceReport,
     default_setup_folder,
+    is_setup_folder,
     start_menu_command,
     write_instance,
     write_setup_folder,
 )
 from hfk.interview import (
+    WORKBOOK_GLOBS,
     InterviewError,
     Question,
     find_interview_workbooks,
@@ -597,6 +599,41 @@ def _init_workbooks(home: Path) -> tuple[Path, ...]:
     return find_interview_workbooks(data_dir)
 
 
+def _missing_workbook_problem(home: Path) -> str | None:
+    """Why ``hfk init`` must stop rather than write the example settings, if it must.
+
+    Plain ``hfk init`` writes example settings for a new folder. That is wrong
+    when ``data/`` holds a workbook hfk does not recognise by name, or when the
+    folder came from ``hfk setup``, which exists only to be completed from the
+    household's own workbook (ADR-0022).
+    """
+
+    if any((home / name).exists() for name in ("household.yaml", "declarations.yaml")):
+        return None  # write_instance refuses a folder with settings, in its own words
+    data_dir = home / "data"
+    others = sorted(
+        path.name
+        for path in (data_dir.iterdir() if data_dir.is_dir() else ())
+        if path.is_file()
+        and not path.name.startswith("~$")
+        and path.suffix.lower() in (".xlsx", ".xlsm")
+    )
+    if others:
+        patterns = " or ".join(WORKBOOK_GLOBS)
+        return (
+            f"{data_dir} has {', '.join(others)}, but hfk only finds a workbook whose name "
+            f"matches {patterns}: fix=rename it so its name starts with Tiller, like "
+            f"Tiller-{others[0]}, or pass --workbook {others[0]}"
+        )
+    if is_setup_folder(home):
+        return (
+            f"no Tiller workbook in {data_dir}: fix=download your Tiller workbook into "
+            "data/ (Google Sheets: File > Download > Microsoft Excel (.xlsx)), "
+            f"then run hfk init {home} again"
+        )
+    return None
+
+
 def _chosen_workbook(home: Path, option: str) -> Path:
     """The ``--workbook`` path, which must be a file inside the instance's ``data/``."""
 
@@ -663,6 +700,13 @@ def _init_interview(
     except (InterviewError, ConfigError, TillerFormatError) as error:
         print(f"init: {error}", file=sys.stderr)
         return 1
+    except (EOFError, KeyboardInterrupt):
+        print(
+            "\ninit: the interview stopped before the last question; nothing was written: "
+            f"fix=run hfk init {args.dir} again to start over",
+            file=sys.stderr,
+        )
+        return 1
 
     try:
         report = write_instance(
@@ -703,7 +747,7 @@ def _init_interview(
 def _setup(args: argparse.Namespace) -> int:
     """``hfk setup``: make the household's folder and open it (M5-20, ADR-0022)."""
 
-    home = Path(args.dir).expanduser() if args.dir else default_setup_folder()
+    home = (Path(args.dir).expanduser() if args.dir else default_setup_folder()).absolute()
     try:
         report = write_setup_folder(home)
     except InstanceError as error:
@@ -774,6 +818,10 @@ def _init(args: argparse.Namespace) -> int:
         )
         return 1
     if workbook is None:
+        problem = _missing_workbook_problem(home)
+        if problem is not None:
+            print(f"init: {problem}", file=sys.stderr)
+            return 1
         return _init_plain(args)
     return _init_interview(args, home, workbook, candidates)
 

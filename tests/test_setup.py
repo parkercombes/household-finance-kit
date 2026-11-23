@@ -35,14 +35,16 @@ SETUP_FILES = {
 SETTINGS_FILES = ("household.yaml", "declarations.yaml", "settle_up.yaml")
 
 
-def run_hfk(*args: str, home: Path) -> subprocess.CompletedProcess[str]:
+def run_hfk(
+    *args: str, home: Path, cwd: Path = ROOT
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PYTHONPATH"] = PYTHONPATH
     env["HOME"] = str(home)
     env.pop("APPDATA", None)
     return subprocess.run(
         [sys.executable, "-m", "hfk", *args],
-        cwd=ROOT,
+        cwd=cwd,
         env=env,
         text=True,
         capture_output=True,
@@ -205,6 +207,50 @@ def test_init_still_refuses_a_folder_that_has_settings(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "already contains household.yaml" in result.stderr
+
+
+def test_init_before_the_workbook_is_downloaded_writes_no_settings(tmp_path: Path) -> None:
+    # Run too early, init used to fill the folder with the example household, and
+    # then setup called it set up and init refused it.
+    folder = tmp_path / "HFK"
+    write_setup_folder(folder)
+
+    result = run_hfk("init", str(folder), home=tmp_path)
+
+    assert result.returncode == 1
+    assert "no Tiller workbook" in result.stderr
+    assert "File > Download" in result.stderr
+    for name in SETTINGS_FILES:
+        assert not (folder / name).exists(), name
+    again = run_hfk("setup", "--no-open", str(folder), home=tmp_path)
+    assert "already set up" not in again.stdout
+
+
+@pytest.mark.parametrize("from_setup", [True, False])
+def test_init_names_a_workbook_it_does_not_recognise(tmp_path: Path, from_setup: bool) -> None:
+    folder = tmp_path / "HFK"
+    if from_setup:
+        write_setup_folder(folder)
+    else:
+        (folder / "data").mkdir(parents=True)
+    build_fixture(folder / "data" / "Budget.xlsx")
+
+    result = run_hfk("init", str(folder), home=tmp_path)
+
+    assert result.returncode == 1
+    assert "Budget.xlsx" in result.stderr
+    assert "--workbook Budget.xlsx" in result.stderr
+    for name in SETTINGS_FILES:
+        assert not (folder / name).exists(), name
+
+
+def test_setup_takes_a_folder_name_relative_to_the_current_folder(tmp_path: Path) -> None:
+    result = run_hfk("setup", "--no-open", "My HFK", home=tmp_path, cwd=tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    folder = tmp_path / "My HFK"
+    assert f"your hfk folder is {folder}" in result.stdout
+    assert (folder / "Open HFK.command").is_file()
 
 
 def test_launcher_opens_a_folder_with_spaces_and_accents(tmp_path: Path) -> None:
