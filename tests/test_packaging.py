@@ -134,10 +134,16 @@ def test_installed_open_no_browser(installed, instance):
     try:
         assert process.stdout is not None
         line = process.stdout.readline()
-        match = re.search(r"http://127\.0\.0\.1:(\d+)/", line)
+        # The address carries a per-run token as its first path part (ADR-0022).
+        match = re.search(r"http://127\.0\.0\.1:(\d+)(/[A-Za-z0-9_-]+/)", line)
         assert match, line
-        connection = http.client.HTTPConnection("127.0.0.1", int(match.group(1)), timeout=30)
+        port, prefix = int(match.group(1)), match.group(2)
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
         connection.request("GET", "/")
+        bare = connection.getresponse()
+        bare.read()
+        assert bare.status == 404
+        connection.request("GET", prefix)
         response = connection.getresponse()
         page = response.read().decode("utf-8")
         connection.close()
