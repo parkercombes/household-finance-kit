@@ -1169,6 +1169,15 @@ below it.
   first, then the questions that depend on them, and saves only when every shown answer is
   valid. Pages send `Referrer-Policy: same-origin`, because with `no-referrer` browsers send
   `Origin: null` on form posts and the exact `Origin` check would refuse every form.
+- Added 2026-11-22 with `M5-22`: until `M0-08`, the installers install the wheel attached
+  to the same release, not its source archive: a wheel needs no build step on the
+  household's computer, and its SHA-256 is computed when the ZIP is built, so the
+  installer checks it the same way. `.github/workflows/release.yml` builds the wheel and
+  the ZIP on each `v*` tag and refuses a tag that differs from the wheel's version. The
+  wheel's own dependencies (openpyxl, PyYAML) still come from PyPI through uv with no
+  shipped digest. The Windows installer runs its checks in PowerShell, passes every value
+  through environment variables so folder names cannot break its quoting, and checks the
+  exit code of each program it runs, since Windows PowerShell does not stop on a failed one.
 
 ## ADR-0023: Plain-Word Answers in the `hfk init` Interview
 

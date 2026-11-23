@@ -112,8 +112,8 @@ household-finance-kit/
 6. **Presentation** (`hfk.cli`, `hfk.render`). CLI first; renderers: text, CSV, HTML.
    A local web front door (127.0.0.1 only) is `hfk serve` (M5-10); its reports are
    read-only. `hfk setup` (M5-20, ADR-0022) makes the default `HFK` folder, and its setup
-   page (M5-21) asks the interview's questions as a form. Planned (M5-22, M5-23): a
-   double-click installer and a quickstart built on it.
+   page (M5-21) asks the interview's questions as a form. The double-click installers
+   (M5-22) are built and wait on a first release; planned (M5-23): a quickstart built on them.
 
 Rule: a layer imports only from layers below it. Extensions may import engine, ledger,
 config; never the reverse.

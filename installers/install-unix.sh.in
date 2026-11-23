@@ -1,0 +1,74 @@
+#!/bin/sh
+set -eu
+
+# Install household-finance-kit (hfk) by double-clicking. This script only
+# downloads uv and hfk, checks their SHA-256 digests, and runs hfk setup.
+# Generated from installers/install-unix.sh.in; do not edit the rendered file.
+
+HFK_VERSION="@HFK_VERSION@"
+HFK_WHEEL="@HFK_WHEEL@"
+HFK_WHEEL_SHA256="@HFK_WHEEL_SHA256@"
+HFK_WHEEL_URL="@HFK_WHEEL_URL@"
+UV_VERSION="@UV_VERSION@"
+UV_INSTALLER_URL="@UV_INSTALLER_URL@"
+UV_INSTALLER_SHA256="@UV_INSTALLER_SHA256@"
+REPO_URL="@REPO_URL@"
+
+fail() {
+    echo "hfk installer: $1" >&2
+    if [ -t 0 ]; then
+        printf 'Press Enter to close this window... '
+        read -r _line || true
+    fi
+    exit 1
+}
+
+digest() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+tmpdir=$(mktemp -d) || fail "could not create a temporary folder; try again, or report it at $REPO_URL/issues"
+trap 'rm -rf "$tmpdir"' EXIT
+
+# 1. Find uv on the PATH or in ~/.local/bin; otherwise download and run its installer.
+uv=""
+if command -v uv >/dev/null 2>&1; then
+    uv=$(command -v uv)
+elif [ -x "$HOME/.local/bin/uv" ]; then
+    uv="$HOME/.local/bin/uv"
+fi
+
+if [ -z "$uv" ]; then
+    echo "Installing uv $UV_VERSION..."
+    installer="$tmpdir/uv-installer.sh"
+    curl --proto '=https' --tlsv1.2 -fsSL -o "$installer" "$UV_INSTALLER_URL" \
+        || fail "could not download the uv installer; check your internet and try again, or report it at $REPO_URL/issues"
+    actual=$(digest "$installer")
+    if [ "$actual" != "$UV_INSTALLER_SHA256" ]; then
+        fail "uv-installer.sh's checksum did not match and nothing was installed. Try again, or report it at $REPO_URL/issues"
+    fi
+    UV_INSTALL_DIR="$HOME/.local/bin" sh "$installer" \
+        || fail "installing uv failed; try again, or report it at $REPO_URL/issues"
+    uv="$HOME/.local/bin/uv"
+fi
+
+# 2. Download this release's hfk wheel, check it, and install it.
+echo "Installing hfk $HFK_VERSION..."
+wheelfile="$tmpdir/$HFK_WHEEL"
+curl --proto '=https' --tlsv1.2 -fsSL -o "$wheelfile" "$HFK_WHEEL_URL" \
+    || fail "could not download hfk $HFK_VERSION; check your internet and try again, or report it at $REPO_URL/issues"
+actual=$(digest "$wheelfile")
+if [ "$actual" != "$HFK_WHEEL_SHA256" ]; then
+    fail "$HFK_WHEEL's checksum did not match and nothing was installed. Try again, or report it at $REPO_URL/issues"
+fi
+"$uv" tool install --force "$wheelfile" \
+    || fail "installing hfk failed; try again, or report it at $REPO_URL/issues"
+
+# 3. Run hfk setup by absolute path (this window has no hfk on its PATH yet).
+echo "Opening the setup page..."
+hfk="$("$uv" tool dir --bin)/hfk"
+"$hfk" setup || fail "setup did not start; try again, or report it at $REPO_URL/issues"

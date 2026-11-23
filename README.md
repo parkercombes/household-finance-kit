@@ -91,7 +91,7 @@ Check the install with `hfk --version`. If the terminal says `hfk` is not found,
 
 ## Getting Started
 
-This is the draft path for a household that does not program; the usability session (`M5-14`) tests it. Each step is one command typed in a terminal (Terminal on a Mac, PowerShell on Windows). A double-click installer is planned (`M5-22`, `M5-23`) so that no terminal is needed. Steps 3 and 4 can already be done in the browser instead: double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows) in the `HFK` folder, choose the workbook download, and answer the same questions there.
+This is the draft path for a household that does not program; the usability session (`M5-14`) tests it. Each step is one command typed in a terminal (Terminal on a Mac, PowerShell on Windows). Double-click installers are built (`M5-22`) but not yet published with a release or tried on a Mac or Windows, so for now steps 1 and 2 still use the terminal. Steps 3 and 4 can already be done in the browser instead: double-click `Open HFK.command` (Mac) or `Open HFK.bat` (Windows) in the `HFK` folder, choose the workbook download, and answer the same questions there.
 
 1. Install hfk as shown in [Install](#install).
 2. Make your hfk folder:
@@ -148,7 +148,7 @@ These wait on the maintainer; see [ROADMAP](docs/ROADMAP.md):
 - A usability session with a non-programmer on a clean machine (`M5-14`), then a non-programmer README rewrite (`M5-15`).
 - Publishing the package to PyPI, so `uv tool install household-finance-kit` works (`M0-08`).
 - A decision on modelling the deductions for people 65 and older in `hfk retirement` (proposed ADR-0020).
-- Planned (`M5-22`, `M5-23`, ADR-0022): a double-click installer and a quickstart built on it, so a household never needs the terminal; the default `HFK` folder (`M5-20`) and the setup page (`M5-21`) are done. Code-signing the installers is `M5-24`, which waits on the maintainer.
+- The default `HFK` folder (`M5-20`) and the setup page (`M5-21`) are done (ADR-0022). The double-click installers (`M5-22`) are built: `scripts/build_installers.py` makes the release ZIP and `.github/workflows/release.yml` attaches it to each tagged release. They wait on the maintainer's first release and a run on a current Mac and Windows. Planned (`M5-23`): a quickstart built on them, so a household never needs the terminal. Code-signing the installers is `M5-24`, which waits on the maintainer.
 
 ## Milestones
 
