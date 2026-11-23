@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Last verified: 2026-11-21
+Last verified: 2026-11-23
 
 This is the LLM entry point for `household-finance-kit` (`hfk`). Read it before changing code, docs, tests, examples, hooks, or workflows. The repository is public, and real user data belongs only in private instances. Implementation status is recorded once, in the [README milestone table](README.md#milestones); do not restate it in other docs.
 
@@ -89,6 +89,7 @@ household-finance-kit/
   profiles/
   tests/
   scripts/
+  installers/
   hooks/
   .github/workflows/
 ```

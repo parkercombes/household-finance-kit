@@ -1,0 +1,114 @@
+#!/bin/sh
+# Install HFK @HFK_VERSION@ and open its setup page (ADR-0022, M5-22).
+#
+# scripts/build_installers.py made this file for one hfk release from
+# installers/install.sh.in. It is both "Install HFK.command" (macOS) and
+# "Install HFK.sh" (Linux). Change the template, not this file.
+#
+# It does three things and nothing else:
+#   1. Installs uv @UV_VERSION@ into ~/.local/bin, unless uv is already
+#      installed, after checking uv's installer against the digest below.
+#   2. Installs hfk @HFK_VERSION@ with uv, after checking the download against
+#      the digest below.
+#   3. Runs hfk setup by the absolute path uv reports.
+# A failed check stops before anything is installed.
+
+set -u
+
+HFK_VERSION='@HFK_VERSION@'
+HFK_WHEEL_NAME='@HFK_WHEEL_NAME@'
+HFK_WHEEL_URL='@HFK_WHEEL_URL@'
+HFK_WHEEL_SHA256='@HFK_WHEEL_SHA256@'
+UV_VERSION='@UV_VERSION@'
+UV_INSTALLER_URL='https://github.com/astral-sh/uv/releases/download/@UV_VERSION@/uv-installer.sh'
+UV_INSTALLER_SHA256='@UV_INSTALLER_SHA256@'
+HELP_URL='@HFK_PROJECT_URL@/issues'
+
+UV_DIR="$HOME/.local/bin"
+WORK=''
+
+finish() {
+    if [ -n "$WORK" ]; then
+        rm -rf "$WORK"
+    fi
+    if [ -t 0 ]; then
+        printf '\nPress Return to close this window. '
+        read -r _ || true
+    fi
+    exit "$1"
+}
+
+stop() {
+    printf '\nHFK was not installed.\n%s\n' "$1" >&2
+    printf 'If this keeps happening, ask for help at %s\n' "$HELP_URL" >&2
+    finish 1
+}
+
+download() {
+    if command -v curl >/dev/null 2>&1; then
+        curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --output "$2" "$1"
+    elif command -v wget >/dev/null 2>&1; then
+        wget --https-only --quiet --output-document="$2" "$1"
+    else
+        stop "This computer has neither curl nor wget, which the installer needs to download HFK."
+    fi
+}
+
+sha256_of() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d ' ' -f 1
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | cut -d ' ' -f 1
+    else
+        return 1
+    fi
+}
+
+check() {
+    actual="$(sha256_of "$1")" || stop "This computer has no tool to check the download (sha256sum or shasum)."
+    [ "$actual" = "$2" ]
+}
+
+printf 'Installing HFK %s.\n\n' "$HFK_VERSION"
+
+WORK="$(mktemp -d)" || stop "The installer could not make a temporary folder."
+
+if [ -x "$UV_DIR/uv" ]; then
+    UV="$UV_DIR/uv"
+elif command -v uv >/dev/null 2>&1; then
+    UV="$(command -v uv)"
+else
+    printf 'Downloading uv %s, the tool that installs HFK.\n' "$UV_VERSION"
+    download "$UV_INSTALLER_URL" "$WORK/uv-installer.sh" \
+        || stop "The download of uv did not finish. Check your internet connection and try again."
+    check "$WORK/uv-installer.sh" "$UV_INSTALLER_SHA256" \
+        || stop "The downloaded uv installer is not the expected file, so nothing was installed. Try again later."
+    UV_INSTALL_DIR="$UV_DIR" UV_NO_MODIFY_PATH=1 sh "$WORK/uv-installer.sh" \
+        || stop "uv did not install. The messages above say why."
+    UV="$UV_DIR/uv"
+    [ -x "$UV" ] || stop "uv reported success, but $UV is not there."
+fi
+
+printf 'Downloading HFK %s.\n' "$HFK_VERSION"
+download "$HFK_WHEEL_URL" "$WORK/$HFK_WHEEL_NAME" \
+    || stop "The download of HFK did not finish. Check your internet connection and try again."
+check "$WORK/$HFK_WHEEL_NAME" "$HFK_WHEEL_SHA256" \
+    || stop "The downloaded HFK is not the expected file, so nothing was installed. Try again later."
+
+HFK_BIN="$("$UV" tool dir --bin)" || stop "uv could not say where it puts programs."
+PATH="$HFK_BIN:$PATH"
+export PATH
+"$UV" tool install --force "$WORK/$HFK_WHEEL_NAME" \
+    || stop "uv could not install HFK. The messages above say why."
+HFK="$HFK_BIN/hfk"
+[ -x "$HFK" ] || stop "uv reported success, but $HFK is not there."
+
+rm -rf "$WORK"
+WORK=''
+
+printf '\nHFK %s is installed. Making your HFK folder and opening it in your browser.\n' \
+    "$HFK_VERSION"
+printf 'Keep this window open while you use HFK; closing it stops HFK.\n\n'
+"$HFK" setup
+finish "$?"
