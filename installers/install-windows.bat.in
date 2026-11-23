@@ -1,0 +1,23 @@
+@echo off
+setlocal
+rem Install household-finance-kit (hfk) by double-clicking. This batch file only
+rem downloads uv and hfk, checks their SHA-256 digests, and runs hfk setup.
+rem Generated from installers/install-windows.bat.in; do not edit the rendered file.
+rem UTF-8, so folder names with accents work.
+chcp 65001 >nul
+
+set "HFK_VERSION=@HFK_VERSION@"
+set "HFK_WHEEL=@HFK_WHEEL@"
+set "HFK_WHEEL_SHA256=@HFK_WHEEL_SHA256@"
+set "HFK_WHEEL_URL=@HFK_WHEEL_URL@"
+set "UV_VERSION=@UV_VERSION@"
+set "UV_INSTALLER_URL=@UV_INSTALLER_URL@"
+set "HFK_UV_INSTALLER_SHA256=@UV_INSTALLER_SHA256@"
+set "HFK_REPO_URL=@REPO_URL@"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; $ErrorActionPreference='Stop'; try { $tmp=$env:TEMP; $repo=$env:HFK_REPO_URL; $uv=(Get-Command uv -ErrorAction SilentlyContinue).Source; if (-not $uv) { $c=Join-Path $env:USERPROFILE '.local\bin\uv.exe'; if (Test-Path $c) { $uv=$c } }; if (-not $uv) { Write-Output ('Installing uv '+$env:UV_VERSION+'...'); $i=Join-Path $tmp 'uv-installer.ps1'; Invoke-WebRequest -Uri $env:UV_INSTALLER_URL -UseBasicParsing -OutFile $i; if ((Get-FileHash -Algorithm SHA256 -Path $i).Hash -ne $env:HFK_UV_INSTALLER_SHA256) { throw ('uv-installer.ps1 checksum did not match and nothing was installed. Try again, or report it at '+$repo+'/issues') }; $env:UV_INSTALL_DIR=Join-Path $env:USERPROFILE '.local\bin'; & $i; $uv=Join-Path $env:USERPROFILE '.local\bin\uv.exe'; if (-not (Test-Path $uv)) { throw ('installing uv failed; try again, or report it at '+$repo+'/issues') } }; Write-Output ('Installing hfk '+$env:HFK_VERSION+'...'); $w=Join-Path $tmp $env:HFK_WHEEL; Invoke-WebRequest -Uri $env:HFK_WHEEL_URL -UseBasicParsing -OutFile $w; if ((Get-FileHash -Algorithm SHA256 -Path $w).Hash -ne $env:HFK_WHEEL_SHA256) { throw ($env:HFK_WHEEL+' checksum did not match and nothing was installed. Try again, or report it at '+$repo+'/issues') }; & $uv tool install --force $w; if ($LASTEXITCODE -ne 0) { throw ('installing hfk failed; try again, or report it at '+$repo+'/issues') }; Write-Output 'Opening the setup page...'; $bin=(& $uv tool dir --bin); $hfk=Join-Path $bin 'hfk.exe'; & $hfk setup; if ($LASTEXITCODE -ne 0) { throw ('setup did not start; try again, or report it at '+$repo+'/issues') } } catch { Write-Output ('hfk installer: '+$_.Exception.Message); exit 1 }"
+
+if errorlevel 1 (
+  pause
+  exit /b 1
+)
